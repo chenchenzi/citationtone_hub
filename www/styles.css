@@ -1,0 +1,9 @@
+/* Make all h5 elements bold */
+h5 {
+  font-weight: bold;
+}
+
+/* Make all input labels bold */
+label {
+  font-weight: bold;
+}

@@ -1,0 +1,17 @@
+# R-specific files
+.Rhistory
+.RData
+.Rproj.user
+.Rproj
+
+# Shiny log files
+shiny.log
+
+# macOS specific files
+.DS_Store
+
+# Cache and temporary files
+.Rcache/
+__pycache__/
+*.RData
+*.Rhistory
