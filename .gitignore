@@ -15,3 +15,6 @@ shiny.log
 __pycache__/
 *.RData
 *.Rhistory
+
+# Ignore the rsconnect deployment folder
+rsconnect/
