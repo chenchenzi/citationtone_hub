@@ -43,7 +43,7 @@ visualise_ui <- function(input, output, session, dataset) {
     p <- ggplot(plot_data, 
                 aes_string(x = input$x_var, y = input$y_var, color = input$tone_var)) +
       geom_point(alpha = 0.75) +
-      scale_color_brewer(palette = "Pastel2") +  
+      scale_color_brewer(palette = "Set3") +  
       labs(x = input$x_var, y = input$y_var, color = input$tone_var)
     
     # If faceting is enabled, add faceting by speaker

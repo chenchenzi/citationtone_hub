@@ -1,4 +1,3 @@
-
 # # Define server logic required to draw a histogram
 # server <- function(input, output) {
 #  
@@ -28,7 +27,7 @@ options(shiny.maxRequestSize = 20 * 1024^2)
 
 # Enable thematic
 thematic::thematic_shiny(font = "auto")
-theme_set(theme_minimal(base_size = 16))
+theme_set(theme_bw(base_size = 16))
 
 server <- function(input, output, session) {
   

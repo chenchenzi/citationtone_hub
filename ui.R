@@ -1,3 +1,4 @@
+library(bslib)
 
 # Define UI for data upload----
 ui <- fluidPage(
