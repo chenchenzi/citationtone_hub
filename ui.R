@@ -28,6 +28,8 @@ ui <- fluidPage(
                                            uiOutput("ui_datasets")),
                           conditionalPanel("input.tabs_data == 'View'", 
                                            uiOutput("ui_View")),
+                          conditionalPanel("input.tabs_data == 'Normalise'", 
+                                           uiOutput("ui_normalise")),
                           conditionalPanel("input.tabs_data == 'Visualise'", 
                                            uiOutput("ui_visualise"))
                           #conditionalPanel("input.tabs_data == 'Transform'", uiOutput("ui_Transform"))
@@ -39,6 +41,8 @@ ui <- fluidPage(
                                                uiOutput("man_example")),
                                       tabPanel("View",
                                                DT::dataTableOutput("dataviewer")),
+                                      tabPanel("Normalise",
+                                               DT::dataTableOutput("normalised_data")),
                                       tabPanel("Visualise",
                                                plotOutput("ggplot_output",height = "auto", width = "auto"))
                           )

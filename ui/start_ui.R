@@ -9,7 +9,7 @@ output$ui_fileUpload <- renderUI({
     fileInput("uploadfile", "Choose a CSV File",
               multiple = FALSE,
               accept = c("text/csv", "text/comma-separated-values,text/plain", ".csv")),
-    checkboxInput("convert_to_factor", "String variables as factors", FALSE)
+    checkboxInput("convert_to_factor", "String variables as factors (recommended)", FALSE)
   )
 
 })

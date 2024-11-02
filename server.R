@@ -22,6 +22,7 @@ library(thematic)
 source("ui/start_ui.R")
 source("ui/view_ui.R")
 source("ui/visualise_ui.R")
+source("ui/normalise_ui.R")
 options(shiny.maxRequestSize = 20 * 1024^2) 
 #options(shiny.useragg = TRUE)
 
@@ -47,6 +48,7 @@ server <- function(input, output, session) {
   # Call the Start tab UI and server logic (start_ui function)
   start_ui(input, output, session, dataset)
   view_ui(input, output, session, dataset)
+  normalised_ui(input, output, session, dataset)
   visualise_ui(input, output, session, dataset)
  
 }
