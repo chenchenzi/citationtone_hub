@@ -14,36 +14,33 @@ normalised_ui <- function(input, output, session, dataset) {
                     choices = setNames(vars, var_types), selected = vars[1], multiple = FALSE),
         selectInput("speaker_var", "Select Speaker variable:", 
                     choices = setNames(vars, var_types), selected = vars[2], multiple = FALSE),
-        checkboxInput("convert_speaker_to_factor", "Convert Speaker to factor", FALSE),
         selectInput("tone_var", "Select Tone category variable:", 
                     choices = setNames(vars, var_types), selected = vars[3], multiple = FALSE),
-        checkboxInput("convert_tone_to_factor", "Convert Tone category to factor", FALSE),
         tags$hr(),
-        h5("Speaker Mean f0 Options"),
-        radioButtons("mean_calc_method", "",
+        radioButtons("mean_calc_method", "Speaker Mean f0 Options",
                      choices = list("Simple average" = "simple", 
                                     "Equally weighted by each tone" = "weighted"), 
                      selected = "simple"),
         tags$hr(),
-        h5("F0 Normalisation Options"),
+        radioButtons("normalisation_method", "F0 Normalisation Options",
+                     choices = list("By-speaker Z-score" = "zscore",
+                                    "Semitone referenced on speaker mean" = "semitone"), 
+                     selected = "zscore"),
+        actionButton("normalise_button", "Normalise f0 (Hz)"),
+        tags$hr(),
+        h5("Download"),
+        textInput("output_filename", "Enter filename (without extension):", value = "normalised_data"),
+        downloadButton("download_data", "Download Normalised Data")
       )
     )
   })
   
   # Generate the normalised dataset
   output$normalised_data <- DT::renderDataTable({
+    req(input$normalise_button > 0)
     req(input$f0_var, input$speaker_var, input$tone_var)
     
     data <- dataset()
-    
-    # Convert to factors if checkboxes are selected
-    if (input$convert_speaker_to_factor) {
-      data[[input$speaker_var]] <- as.factor(data[[input$speaker_var]])
-    }
-    if (input$convert_tone_to_factor) {
-      data[[input$tone_var]] <- as.factor(data[[input$tone_var]])
-    }
-    
     
     # Calculate the speaker mean
     if (input$mean_calc_method == "simple") {
@@ -58,12 +55,33 @@ normalised_ui <- function(input, output, session, dataset) {
         summarise(speaker_mean = mean(tone_mean, na.rm = TRUE),.groups = "drop")
     }
     
-    # Append the speaker mean column
+    # Append the speaker mean
     data <- data %>%
       left_join(speaker_means, by = input$speaker_var)
     
+    # Add normalised f0
+    if (input$normalisation_method == "zscore") {
+      data <- data %>%
+        group_by(.data[[input$speaker_var]]) %>%
+        mutate(f0_normalised = (.data[[input$f0_var]] - speaker_mean) / sd(.data[[input$f0_var]], na.rm = TRUE)) %>%
+        ungroup()
+    } else if (input$normalisation_method == "semitone") {
+      data <- data %>%
+        mutate(f0_normalised = 12 * log2(.data[[input$f0_var]] / speaker_mean))
+    }
+    
     data <- data %>%
-      select(all_of(input$f0_var), all_of(input$speaker_var), all_of(input$tone_var), speaker_mean)
+      select(all_of(input$f0_var), all_of(input$speaker_var), all_of(input$tone_var), speaker_mean, f0_normalised)
+    
+    # Store the updated dataset for download
+    output$download_data <- downloadHandler(
+      filename = function() {
+        paste(input$output_filename, ".csv", sep = "")
+      },
+      content = function(file) {
+        write.csv(data, file, row.names = FALSE)
+      }
+    )
     
     # Display the updated dataset
     DT::datatable(data)

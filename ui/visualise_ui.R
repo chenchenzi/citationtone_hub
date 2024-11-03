@@ -22,14 +22,16 @@ visualise_ui <- function(input, output, session, dataset) {
                     choices = setNames(vars, var_types), selected = vars[4], multiple = FALSE), 
         tags$hr(),
         h5("Graph options"),
-        checkboxInput("facet_by_speaker", "By-Speaker by-Tone plot", FALSE)
+        checkboxInput("facet_by_speaker", "By-Speaker by-Tone plot", FALSE),
+        actionButton("plot_button", "Visualise f0 Contours")
       )
     )
   })
   
   
-  # Generate the ggplot based on selected inputs
+  # Generate the ggplot based on selected inputs and button state
   output$ggplot_output <- renderPlot({
+    req(input$plot_button > 0)
     req(input$x_var, input$y_var, input$tone_var, input$speaker_var)
     
     # Prepare the dataset for plotting
