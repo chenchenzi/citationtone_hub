@@ -37,6 +37,7 @@ ui <- fluidPage(
                         mainPanel(
                           tabsetPanel(id = "tabs_data",
                                       tabPanel("Start",
+                                               uiOutput("instruction_text"),
                                                h2(textOutput("preview_title")),
                                                uiOutput("man_example")),
                                       tabPanel("View",

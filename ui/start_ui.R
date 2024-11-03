@@ -14,6 +14,18 @@ output$ui_fileUpload <- renderUI({
 
 })
 
+# Render instructional texts
+output$instruction_text <- renderUI({
+  if (is.null(input$uploadfile)) {
+    tagList(
+      h2("Instructions"),
+      p("Please upload a CSV file to start. The file should be structured with column headers. 
+        Ideally, it should contain columns for time, f0, tone category, and speaker variables."),
+      p("Once the file is uploaded, you will see a preview of the first 10 rows here.")
+    )
+  }
+})
+
 # Observe when the file is uploaded and set the dataset name
 observe({
   req(input$uploadfile)
@@ -52,7 +64,9 @@ output$preview_title <- renderText({
 
 # Display preview (first 10 rows), structure, or summary based on user selection
 output$man_example <- renderUI({
-  req(input$uploadfile)  # Ensure file is uploaded
+  if (is.null(input$uploadfile)) {
+    return(NULL)
+  }
   
   if (input$dman_preview == "preview") {
     tagList(
@@ -68,19 +82,23 @@ output$man_example <- renderUI({
 
 
 output$data_preview <- renderPrint({
+  req(input$uploadfile)
   head(dataset(), 10)
 })
 
 output$row_count_info <- renderText({
+  req(input$uploadfile)
   total_rows <- nrow(dataset())
   paste("10 of", total_rows, "rows shown. See View-tab for details.")
 })
 
 output$data_structure <- renderPrint({
+  req(input$uploadfile)
   str(dataset())
 })
 
 output$data_summary <- renderPrint({
+  req(input$uploadfile)
   summary(dataset())
 })
 

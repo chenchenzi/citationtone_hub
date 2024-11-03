@@ -34,7 +34,10 @@ server <- function(input, output, session) {
   
   # Reactive dataset storage
   dataset <- reactive({
-    req(input$uploadfile)
+    #req(input$uploadfile)
+    if (is.null(input$uploadfile)) {
+      return(NULL)
+    }
     dat <-read.csv(input$uploadfile$datapath, stringsAsFactors = FALSE)
     
     if (input$convert_to_factor) {

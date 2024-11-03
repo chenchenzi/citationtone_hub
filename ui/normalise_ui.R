@@ -2,20 +2,20 @@ normalised_ui <- function(input, output, session, dataset) {
   
   # Render UI for selecting f0, speaker, and tone variables
   output$ui_normalise <- renderUI({
-    vars <- names(dataset())
-    req(vars)
-    data_types <- sapply(dataset(), class)
+    vars <- if (!is.null(dataset())) names(dataset()) else c("No dataset available")
+    #req(vars)
+    data_types <- if (!is.null(dataset())) sapply(dataset(), class) else rep("NA", length(vars))
     var_types <- paste0(vars, " {", data_types, "}")
     
     tagList(
       wellPanel(
-        h5(paste("Dataset:", input$dataset_name)),  # Display the dataset name
+        h5(paste("Dataset:", input$dataset_name)),
         selectInput("f0_var", "Select f0 (Hz) variable:", 
                     choices = setNames(vars, var_types), selected = vars[1], multiple = FALSE),
         selectInput("speaker_var", "Select Speaker variable:", 
-                    choices = setNames(vars, var_types), selected = vars[2], multiple = FALSE),
+                    choices = setNames(vars, var_types), selected = ifelse(length(vars) > 1, vars[2], vars[1]), multiple = FALSE),
         selectInput("tone_var", "Select Tone category variable:", 
-                    choices = setNames(vars, var_types), selected = vars[3], multiple = FALSE),
+                    choices = setNames(vars, var_types), selected = ifelse(length(vars) > 2, vars[3], vars[1]), multiple = FALSE),
         tags$hr(),
         radioButtons("mean_calc_method", "Speaker Mean f0 Options",
                      choices = list("Simple average" = "simple", 
@@ -28,7 +28,7 @@ normalised_ui <- function(input, output, session, dataset) {
                      selected = "zscore"),
         actionButton("normalise_button", "Normalise f0 (Hz)"),
         tags$hr(),
-        h5("Download"),
+        h5("Download:"),
         textInput("output_filename", "Enter filename (without extension):", value = "normalised_data"),
         downloadButton("download_data", "Download Normalised Data")
       )

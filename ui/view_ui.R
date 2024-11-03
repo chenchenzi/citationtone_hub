@@ -5,9 +5,9 @@
 view_ui <- function(input, output, session, dataset) {
 # Render UI for selecting variables to show in the table
 output$ui_view_vars <- renderUI({
-  vars <- names(dataset())  # Get the variable names from the dataset
+  vars <- names(dataset()) 
   req(vars)  # Ensure the dataset is available
-  data_types <- sapply(dataset(), class)  # Get data types for each column
+  data_types <- sapply(dataset(), class)
   var_types <- paste0(vars, " {", data_types, "}")  # Create "x {type}" labels
   
   selectInput(
