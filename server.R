@@ -23,6 +23,7 @@ source("ui/start_ui.R")
 source("ui/view_ui.R")
 source("ui/visualise_ui.R")
 source("ui/normalise_ui.R")
+source("ui/inspect_ui.R")
 options(shiny.maxRequestSize = 20 * 1024^2) 
 #options(shiny.useragg = TRUE)
 
@@ -53,5 +54,6 @@ server <- function(input, output, session) {
   view_ui(input, output, session, dataset)
   normalised_ui(input, output, session, dataset)
   visualise_ui(input, output, session, dataset)
- 
+  inspect_ui(input, output, session, dataset)
+
 }
