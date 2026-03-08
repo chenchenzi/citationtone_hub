@@ -3,6 +3,20 @@
 #############################################
 
 view_ui <- function(input, output, session, dataset) {
+
+# Guide text for the View tab
+output$view_guide <- renderUI({
+  tagList(
+    tags$div(style = "background-color: #f0faf7; border-left: 4px solid #78c2ad; padding: 10px 14px; margin-bottom: 12px; border-radius: 4px; font-size: 0.88rem; color: #555;",
+      tags$p(style = "margin-bottom: 0;",
+        "Upload a CSV file in the ",
+        tags$strong(style = "color: #78c2ad;", "Start"),
+        " tab to view it here. Use the sidebar to select which variables to display and set decimal rounding."
+      )
+    )
+  )
+})
+
 # Render UI for selecting variables to show in the table
 output$ui_view_vars <- renderUI({
   vars <- names(dataset()) 

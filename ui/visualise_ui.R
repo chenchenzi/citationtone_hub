@@ -1,25 +1,40 @@
 visualise_ui <- function(input, output, session, dataset) {
-  
+
+  # Variable guide box on the right panel
+  output$visualise_guide <- renderUI({
+    tagList(
+      tags$div(style = "background-color: #f0faf7; border-left: 4px solid #78c2ad; padding: 10px 14px; margin-bottom: 12px; border-radius: 4px; font-size: 0.88rem; color: #555;",
+        tags$strong("Plotting guide:"),
+        tags$ul(style = "margin-bottom: 0; padding-left: 18px;",
+          tags$li(tags$strong("X (time):"), " A time-related or index variable, e.g., normalised time points within a syllable."),
+          tags$li(tags$strong("Y (f0):"), " An f0-related variable, e.g., raw Hz or normalised (z-score, semitone)."),
+          tags$li(tags$strong("Tone category:"), " The column labelling tone types (e.g., T1, T2, T3, T4)."),
+          tags$li(tags$strong("Speaker*:"), " A speaker ID column, used for faceting. *Optional.")
+        )
+      )
+    )
+  })
+
   # Render the UI for selecting X, Y, tone category, and speaker variables
   output$ui_visualise <- renderUI({
     vars <- if (!is.null(dataset())) names(dataset()) else c("No dataset available")  # Get variable names from the dataset
     #req(vars)  # Ensure the dataset is available
     data_types <- if (!is.null(dataset())) sapply(dataset(), class) else rep("NA", length(vars))  # Get data types for each column
     var_types <- paste0(vars, " {", data_types, "}")  # Create "x {type}" labels
-    
+
     tagList(
       wellPanel(
         h5(paste("Dataset:", input$dataset_name)),  # Display the dataset name
-        selectInput("x_var", "Select X (time) variable:", 
-                    choices = setNames(vars, var_types), selected = vars[1], multiple = FALSE), 
-        selectInput("y_var", "Select Y (f0) variable:", 
+        selectInput("x_var", "Select X (time) variable:",
+                    choices = setNames(vars, var_types), selected = vars[1], multiple = FALSE),
+        selectInput("y_var", "Select Y (f0) variable:",
                     choices = setNames(vars, var_types), selected = ifelse(length(vars) > 1, vars[2], vars[1]), multiple = FALSE),
         tags$hr(),
-        selectInput("tone_var", "Select Tone category variable:", 
+        selectInput("tone_var", "Select Tone category variable:",
                     choices = setNames(vars, var_types), selected = ifelse(length(vars) > 2, vars[3], vars[1]), multiple = FALSE),
         checkboxInput("convert_tone_to_factor", "Convert Tone category as factors", FALSE),
-        selectInput("speaker_var", "Select Speaker variable:", 
-                    choices = setNames(vars, var_types), selected = ifelse(length(vars) > 3, vars[4], vars[1]), multiple = FALSE), 
+        selectInput("speaker_var", "Select Speaker variable:",
+                    choices = setNames(vars, var_types), selected = ifelse(length(vars) > 3, vars[4], vars[1]), multiple = FALSE),
         tags$hr(),
         h5("Graph options"),
         checkboxInput("facet_by_speaker", "By-Speaker by-Tone plot", FALSE),
@@ -30,8 +45,8 @@ visualise_ui <- function(input, output, session, dataset) {
       )
     )
   })
-  
-  
+
+
   # Shared reactive to build the plot
   current_plot <- reactive({
     req(input$plot_button > 0)
@@ -142,12 +157,14 @@ visualise_ui <- function(input, output, session, dataset) {
       "p",
       "",
       "# If you would like to save it as a PNG",
-      'ggsave("my_plot.png", plot = p, width = 8, height = 6, dpi = 300)'
+      paste0('ggsave("my_plot.png", plot = p, width = ', plot_width() / 100, ', height = ', plot_height() / 100, ', dpi = 300)')
     )
 
     code_text <- paste(code_lines, collapse = "\n")
 
     tagList(
+      tags$p(style = "text-align: center; color: #999; font-style: italic; margin-top: 8px;",
+             icon("arrow-down"), " Scroll down to see the R code"),
       tags$hr(),
       tags$div(
         style = "position: relative;",

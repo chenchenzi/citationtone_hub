@@ -1,5 +1,29 @@
 normalised_ui <- function(input, output, session, dataset) {
-  
+
+  # Guide text for the Normalise tab
+  output$normalise_guide <- renderUI({
+    tagList(
+      tags$div(style = "background-color: #f0faf7; border-left: 4px solid #78c2ad; padding: 10px 14px; margin-bottom: 12px; border-radius: 4px; font-size: 0.88rem; color: #555;",
+        tags$strong("Variables:"),
+        tags$ul(style = "margin-bottom: 8px; padding-left: 18px;",
+          tags$li(tags$strong("f0 (Hz):"), " The raw fundamental frequency column in Hertz."),
+          tags$li(tags$strong("Speaker:"), " A speaker ID column for by-speaker normalisation."),
+          tags$li(tags$strong("Tone category:"), " The column labelling tone types.")
+        ),
+        tags$strong("Speaker mean calculation:"),
+        tags$ul(style = "margin-bottom: 8px; padding-left: 18px;",
+          tags$li(tags$strong("Simple average:"), " Mean f0 across all data points for each speaker."),
+          tags$li(tags$strong("Equally weighted by tone:"), " Compute per-tone means first, then average those \u2014 prevents tones with more data points from dominating.")
+        ),
+        tags$strong("F0 normalisation methods:"),
+        tags$ul(style = "margin-bottom: 0; padding-left: 18px;",
+          tags$li(tags$strong("Z-score:"), tags$code(style = "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;", "z = (f0 \u2212 \u03bc) / \u03c3"), " \u2014 centres on 0, scaled by speaker SD."),
+          tags$li(tags$strong("Semitone:"), tags$code(style = "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;", "ST = 12 \u00d7 log\u2082(f0 / \u03bc)"), " \u2014 perceptually uniform scale referenced on speaker mean.")
+        )
+      )
+    )
+  })
+
   # Render UI for selecting f0, speaker, and tone variables
   output$ui_normalise <- renderUI({
     vars <- if (!is.null(dataset())) names(dataset()) else c("No dataset available")
