@@ -24,6 +24,7 @@ source("ui/view_ui.R")
 source("ui/visualise_ui.R")
 source("ui/normalise_ui.R")
 source("ui/inspect_ui.R")
+source("ui/model_ui.R")
 options(shiny.maxRequestSize = 20 * 1024^2) 
 #options(shiny.useragg = TRUE)
 
@@ -49,11 +50,15 @@ server <- function(input, output, session) {
     return(dat)
   })
   
+  # Shared storage for normalised dataset (written by Normalise tab, read by Model tab)
+  normalised_data <- reactiveVal(NULL)
+
   # Call the Start tab UI and server logic (start_ui function)
   start_ui(input, output, session, dataset)
   view_ui(input, output, session, dataset)
-  normalised_ui(input, output, session, dataset)
+  normalised_ui(input, output, session, dataset, normalised_data)
   visualise_ui(input, output, session, dataset)
   inspect_ui(input, output, session, dataset)
+  model_ui(input, output, session, dataset, normalised_data)
 
 }

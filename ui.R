@@ -15,22 +15,26 @@ ui <- fluidPage(
     tags$style("
       #plot_button, #show_code_button { display: block; }
       #save_plot_button { display: block; margin-top: 4px; width: fit-content; }
-      #visualise_guide strong, #normalise_guide strong, #view_guide strong, #inspect_guide strong { font-weight: 900; color: #3a3a3a; }
+      #visualise_guide strong, #normalise_guide strong, #view_guide strong, #inspect_guide strong, #model_guide strong { font-weight: 900; color: #3a3a3a; }
     "),
     tags$script(HTML("
       document.addEventListener('DOMContentLoaded', function() {
-        var target = document.getElementById('r_code_output');
-        if (!target) return;
-        var observer = new MutationObserver(function() {
-          var codeEls = target.querySelectorAll('pre code');
-          codeEls.forEach(function(el) {
-            if (!el.classList.contains('hljs')) {
-              el.classList.add('language-r');
-              hljs.highlightElement(el);
-            }
+        function watchForCode(id) {
+          var target = document.getElementById(id);
+          if (!target) return;
+          var observer = new MutationObserver(function() {
+            var codeEls = target.querySelectorAll('pre code');
+            codeEls.forEach(function(el) {
+              if (!el.classList.contains('hljs')) {
+                el.classList.add('language-r');
+                hljs.highlightElement(el);
+              }
+            });
           });
-        });
-        observer.observe(target, { childList: true, subtree: true });
+          observer.observe(target, { childList: true, subtree: true });
+        }
+        watchForCode('r_code_output');
+        watchForCode('model_r_code');
       });
     "))
   ),
@@ -61,8 +65,9 @@ ui <- fluidPage(
                           conditionalPanel("input.tabs_data == 'Visualise'",
                                            uiOutput("ui_visualise")),
                           conditionalPanel("input.tabs_data == 'Inspect'",
-                                           uiOutput("ui_inspect"))
-                          #conditionalPanel("input.tabs_data == 'Transform'", uiOutput("ui_Transform"))
+                                           uiOutput("ui_inspect")),
+                          conditionalPanel("input.tabs_data == 'Model: Polynomials'",
+                                           uiOutput("ui_model"))
                         ),
                         mainPanel(
                           tabsetPanel(id = "tabs_data",
@@ -83,7 +88,12 @@ ui <- fluidPage(
                                       tabPanel("Inspect",
                                                uiOutput("inspect_guide"),
                                                uiOutput("inspect_summary"),
-                                               DT::dataTableOutput("inspect_data"))
+                                               DT::dataTableOutput("inspect_data")),
+                                      tabPanel("Model: Polynomials",
+                                               uiOutput("model_guide"),
+                                               uiOutput("model_summary"),
+                                               DT::dataTableOutput("model_data"),
+                                               uiOutput("model_r_code"))
                           )
                         )
                       )
