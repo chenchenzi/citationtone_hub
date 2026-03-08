@@ -16,14 +16,22 @@ output$ui_fileUpload <- renderUI({
 
 # Render instructional texts
 output$instruction_text <- renderUI({
-  if (is.null(input$uploadfile)) {
-    tagList(
-      h2("Instructions"),
-      p("Please upload a CSV file to start. The file should be structured with column headers. 
-        Ideally, it should contain columns for time, f0, tone category, and speaker variables."),
-      p("Once the file is uploaded, you will see a preview of the first 10 rows here.")
+  tagList(
+    h2("Welcome!"),
+    p("Upload a CSV file to get started. Your file should have column headers and ideally contain
+      columns for time, f0, tone category, and speaker."),
+    if (is.null(input$uploadfile)) {
+      p("Once uploaded, a preview of the first 10 rows will appear below.")
+    },
+    tags$hr(),
+    h4("What each tab does"),
+    tags$ul(
+      tags$li(HTML("&#128194; "), tags$strong(style = "color: #78c2ad;", "Start"), " Upload your CSV data and preview its structure."),
+      tags$li(HTML("&#128269; "), tags$strong(style = "color: #78c2ad;", "View"), " Browse the full dataset in an interactive table with sorting and search."),
+      tags$li(HTML("&#128200; "), tags$strong(style = "color: #78c2ad;", "Normalise"), " Apply f0 normalisation (z-score or semitone) by speaker, and download the result."),
+      tags$li(HTML("&#127912; "), tags$strong(style = "color: #78c2ad;", "Visualise"), " Plot f0 contours coloured by tone category, with optional faceting by speaker. Save the plot or view the corresponding R code.")
     )
-  }
+  )
 })
 
 # Observe when the file is uploaded and set the dataset name

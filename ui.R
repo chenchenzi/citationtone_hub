@@ -6,6 +6,32 @@ ui <- fluidPage(
   # tags$head(
   #   tags$link(rel = "stylesheet", type = "text/css", href = "styles.css")
   # ),
+  # Syntax highlighting for R code blocks
+  tags$head(
+    tags$link(rel = "stylesheet", href = "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"),
+    tags$script(src = "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"),
+    tags$script(src = "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/r.min.js"),
+    tags$style("
+      #plot_button, #show_code_button { display: block; }
+      #save_plot_button { display: block; margin-top: 1px; width: fit-content; }
+    "),
+    tags$script(HTML("
+      document.addEventListener('DOMContentLoaded', function() {
+        var target = document.getElementById('r_code_output');
+        if (!target) return;
+        var observer = new MutationObserver(function() {
+          var codeEls = target.querySelectorAll('pre code');
+          codeEls.forEach(function(el) {
+            if (!el.classList.contains('hljs')) {
+              el.classList.add('language-r');
+              hljs.highlightElement(el);
+            }
+          });
+        });
+        observer.observe(target, { childList: true, subtree: true });
+      });
+    "))
+  ),
   #Navbar structure for UI
   navbarPage("Citation tones", 
              theme = bs_theme(version = 5, bootswatch = "minty",
@@ -45,7 +71,8 @@ ui <- fluidPage(
                                       tabPanel("Normalise",
                                                DT::dataTableOutput("normalised_data")),
                                       tabPanel("Visualise",
-                                               plotOutput("ggplot_output",height = "auto", width = "auto"))
+                                               plotOutput("ggplot_output",height = "auto", width = "auto"),
+                                               uiOutput("r_code_output"))
                           )
                         )
                       )
