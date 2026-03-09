@@ -9,7 +9,7 @@ visualise_ui <- function(input, output, session, dataset) {
           tags$li(tags$strong("X (time):"), " A time-related or index variable, e.g., normalised time points within a syllable."),
           tags$li(tags$strong("Y (f0):"), " An f0-related variable, e.g., raw Hz or normalised (z-score, semitone)."),
           tags$li(tags$strong("Tone category:"), " The column labelling tone types (e.g., T1, T2, T3, T4)."),
-          tags$li(tags$strong("Speaker*:"), " A speaker ID column, used for faceting. *Optional.")
+          tags$li(tags$strong("Speaker* (optional):"), " A speaker ID column, used for faceting.")
         )
       )
     )

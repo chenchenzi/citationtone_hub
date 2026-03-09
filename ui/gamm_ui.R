@@ -21,7 +21,7 @@ gamm_ui <- function(input, output, session, dataset, normalised_data) {
           tags$li(tags$strong("Speaker:"), " Grouping variable for by-speaker random effects."),
           tags$li(tags$strong("Item:"), " The word or syllable type (e.g. different segmental compositions). Grouping variable for by-item random effects."),
           tags$li(tags$strong("Tone category:"), " Fixed effect factor. Used to model f0 contour differences across tone categories."),
-          tags$li(tags$strong("Duration*:"), " Syllable or token duration. Included as a smooth covariate if selected. *Optional.")
+          tags$li(tags$strong("Duration* (optional):"), " Syllable or token duration. Included as a smooth covariate if selected.")
         ),
         tags$strong("How GAMMs work:"),
         tags$p(style = "margin-bottom: 8px;",
@@ -35,6 +35,21 @@ gamm_ui <- function(input, output, session, dataset, normalised_data) {
           tags$li(tags$strong("Difference smooths:"), " Fits a reference smooth + difference smooths: ",
             tags$code(style = code_style, "s(time) + s(time, by = tone.ord)"),
             ". Tone is converted to an ordered factor internally. The difference smooths directly test whether each non-reference tone differs in shape from the reference (Sóskuthy, 2017).")
+        ),
+        tags$strong("Random smooths (speaker):"),
+        tags$ul(style = "margin-bottom: 8px; padding-left: 18px;",
+          tags$li(tags$strong("Speaker:"), " Basic random smooth by speaker ",
+            tags$code(style = code_style, "s(time, speaker, bs = \"fs\")"),
+            ". Cannot capture speaker-level variation in the tone effect."),
+          tags$li(tags$strong("Speaker \u00d7 Tone:"), " Separate smooth per speaker\u2013tone combination ",
+            tags$code(style = code_style, "s(time, speaker.tone, bs = \"fs\")"),
+            ". Treats tokens from different tones within the same speaker as independent."),
+          tags$li(tags$strong("Speaker by Tone:"), " Random smooth by speaker, separately for each tone level ",
+            tags$code(style = code_style, "s(time, speaker, by = tone, bs = \"fs\")"),
+            ". Behaves similarly to Speaker \u00d7 Tone."),
+          tags$li(tags$strong("Speaker + Speaker by Tone:"), " Reference + difference random smooths ",
+            tags$code(style = code_style, "s(time, speaker, bs = \"fs\") + s(time, speaker, by = tone.ord, bs = \"fs\")"),
+            ". Recommended for difference smooths. Mirrors the fixed-effects structure in the random effects for well-calibrated Type I error (S\u00f3skuthy, 2021).")
         ),
         tags$strong("Key settings:"),
         tags$ul(style = "margin-bottom: 0; padding-left: 18px;",
@@ -122,10 +137,18 @@ gamm_ui <- function(input, output, session, dataset, normalised_data) {
                      selected = "tp", inline = TRUE),
         tags$hr(),
         tags$strong("Random intercepts:"),
-        checkboxInput("gamm_ri_speaker", "Speaker", value = TRUE),
+        checkboxInput("gamm_ri_speaker", "Speaker", value = FALSE),
         checkboxInput("gamm_ri_item", "Item", value = TRUE),
-        tags$strong("Random smooths:"),
-        checkboxInput("gamm_rs_speaker", "Speaker", value = FALSE),
+        tags$strong("Random smooths (speaker):"),
+        radioButtons("gamm_rs_type", NULL,
+                     choices = list(
+                       "None" = "none",
+                       "Speaker" = "speaker",
+                       "Speaker \u00d7 Tone" = "speaker_tone",
+                       "Speaker by Tone" = "speaker_by_tone",
+                       "Speaker + Speaker by Tone" = "ref_diff"
+                     ),
+                     selected = "ref_diff"),
         tags$hr(),
         tags$strong("Autocorrelation:"),
         checkboxInput("gamm_ar1", "Include AR1 correction", value = FALSE),
@@ -143,10 +166,10 @@ gamm_ui <- function(input, output, session, dataset, normalised_data) {
     )
   })
 
-  # --- Auto-uncheck Speaker random intercept when random smooths Speaker is enabled ---
+  # --- Auto-uncheck Speaker random intercept when any random smooth is enabled ---
   # (bs = "fs" already includes random intercepts, so separate intercept is redundant)
-  observeEvent(input$gamm_rs_speaker, {
-    if (isTRUE(input$gamm_rs_speaker)) {
+  observeEvent(input$gamm_rs_type, {
+    if (!is.null(input$gamm_rs_type) && input$gamm_rs_type != "none") {
       updateCheckboxInput(session, "gamm_ri_speaker", value = FALSE)
     }
   })
@@ -177,7 +200,7 @@ gamm_ui <- function(input, output, session, dataset, normalised_data) {
     bs_type     <- input$gamm_bs
     ri_speaker  <- input$gamm_ri_speaker
     ri_item     <- input$gamm_ri_item
-    rs_speaker  <- input$gamm_rs_speaker
+    rs_type     <- input$gamm_rs_type
     use_ar1     <- input$gamm_ar1
     smooth_type <- input$gamm_smooth_type
     dur_var     <- input$gamm_dur_var
@@ -233,6 +256,11 @@ gamm_ui <- function(input, output, session, dataset, normalised_data) {
       contrasts(dat$.tone_ord) <- "contr.treatment"
     }
 
+    # Interaction factor for speaker × tone random smooths (strategy #3)
+    if (rs_type == "speaker_tone") {
+      dat$.speaker_tone <- interaction(dat$.speaker, dat$.tone, drop = TRUE)
+    }
+
     # --- Build formula dynamically ---
     if (smooth_type == "separate") {
       # Separate smooths: s(time, by = tone)
@@ -253,11 +281,37 @@ gamm_ui <- function(input, output, session, dataset, normalised_data) {
 
     # Random effects
     random_parts <- c()
-    # Speaker: random smooth includes random intercept, so skip separate intercept
-    if (rs_speaker) {
+    # Speaker random smooths (strategies from Sóskuthy 2021)
+    if (rs_type == "speaker") {
+      # Strategy 1: basic random smooth by speaker
       random_parts <- c(random_parts,
         paste0("s(.time_norm, .speaker, bs = \"fs\", m = 1, k = ", k_val, ")"))
+    } else if (rs_type == "speaker_tone") {
+      # Strategy 3: item × effect — separate smooth per speaker-tone combo
+      random_parts <- c(random_parts,
+        paste0("s(.time_norm, .speaker_tone, bs = \"fs\", m = 1, k = ", k_val, ")"))
+    } else if (rs_type == "speaker_by_tone") {
+      # Strategy 4: item-by-effect — random smooth by speaker, separately per tone
+      if (smooth_type == "separate") {
+        random_parts <- c(random_parts,
+          paste0("s(.time_norm, .speaker, by = .tone, bs = \"fs\", m = 1, k = ", k_val, ")"))
+      } else {
+        random_parts <- c(random_parts,
+          paste0("s(.time_norm, .speaker, by = .tone, bs = \"fs\", m = 1, k = ", k_val, ")"))
+      }
+    } else if (rs_type == "ref_diff") {
+      # Strategy 5: reference + difference random smooths
+      random_parts <- c(random_parts,
+        paste0("s(.time_norm, .speaker, bs = \"fs\", m = 1, k = ", k_val, ")"))
+      if (smooth_type == "difference") {
+        random_parts <- c(random_parts,
+          paste0("s(.time_norm, .speaker, by = .tone_ord, bs = \"fs\", m = 1, k = ", k_val, ")"))
+      } else {
+        random_parts <- c(random_parts,
+          paste0("s(.time_norm, .speaker, by = .tone, bs = \"fs\", m = 1, k = ", k_val, ")"))
+      }
     } else if (ri_speaker) {
+      # No random smooth — just random intercept
       random_parts <- c(random_parts, 's(.speaker, bs = "re")')
     }
     if (ri_item) {
@@ -282,10 +336,21 @@ gamm_ui <- function(input, output, session, dataset, normalised_data) {
       display_formula <- paste0(display_formula, " + s(", dur_var, ")")
     }
     random_display <- c()
-    # Speaker: random smooth includes random intercept, so skip separate intercept
-    if (rs_speaker) {
+    tone_display <- if (smooth_type == "difference") paste0(tone_var, ".ord") else tone_var
+    if (rs_type == "speaker") {
       random_display <- c(random_display,
         paste0("s(", time_var, ", ", speaker_var, ', bs = "fs", m = 1, k = ', k_val, ")"))
+    } else if (rs_type == "speaker_tone") {
+      random_display <- c(random_display,
+        paste0("s(", time_var, ", ", speaker_var, ".", tone_var, ', bs = "fs", m = 1, k = ', k_val, ")"))
+    } else if (rs_type == "speaker_by_tone") {
+      random_display <- c(random_display,
+        paste0("s(", time_var, ", ", speaker_var, ", by = ", tone_display, ', bs = "fs", m = 1, k = ', k_val, ")"))
+    } else if (rs_type == "ref_diff") {
+      random_display <- c(random_display,
+        paste0("s(", time_var, ", ", speaker_var, ', bs = "fs", m = 1, k = ', k_val, ")"))
+      random_display <- c(random_display,
+        paste0("s(", time_var, ", ", speaker_var, ", by = ", tone_display, ', bs = "fs", m = 1, k = ', k_val, ")"))
     } else if (ri_speaker) {
       random_display <- c(random_display, paste0('s(', speaker_var, ', bs = "re")'))
     }
@@ -366,6 +431,7 @@ gamm_ui <- function(input, output, session, dataset, normalised_data) {
     s_table$Smooth <- gsub("\\.time_norm", time_var, s_table$Smooth)
     s_table$Smooth <- gsub("\\.tone_ord", paste0(tone_var, ".ord"), s_table$Smooth)
     s_table$Smooth <- gsub("\\.tone", tone_var, s_table$Smooth)
+    s_table$Smooth <- gsub("\\.speaker_tone", paste0(speaker_var, ".", tone_var), s_table$Smooth)
     s_table$Smooth <- gsub("\\.speaker", speaker_var, s_table$Smooth)
     s_table$Smooth <- gsub("\\.item", item_var, s_table$Smooth)
     s_table$Smooth <- gsub("\\.duration", dur_var, s_table$Smooth)
@@ -383,7 +449,13 @@ gamm_ui <- function(input, output, session, dataset, normalised_data) {
 
     # Identify random effect terms to exclude from prediction
     exclude_terms <- c()
-    if (rs_speaker) {
+    if (rs_type == "speaker") {
+      exclude_terms <- c(exclude_terms, "s(.time_norm,.speaker)")
+    } else if (rs_type == "speaker_tone") {
+      exclude_terms <- c(exclude_terms, "s(.time_norm,.speaker_tone)")
+    } else if (rs_type == "speaker_by_tone") {
+      exclude_terms <- c(exclude_terms, "s(.time_norm,.speaker)")
+    } else if (rs_type == "ref_diff") {
       exclude_terms <- c(exclude_terms, "s(.time_norm,.speaker)")
     } else if (ri_speaker) {
       exclude_terms <- c(exclude_terms, "s(.speaker)")
@@ -406,6 +478,16 @@ gamm_ui <- function(input, output, session, dataset, normalised_data) {
         # Use ordered() with explicit levels — as.ordered() drops unused levels
         nd$.tone_ord <- ordered(rep(tone, length(time_seq)), levels = tone_levels)
         contrasts(nd$.tone_ord) <- "contr.treatment"
+        # Strategy #4 random smooth uses by = .tone (regular factor), so add it to newdata
+        if (rs_type == "speaker_by_tone") {
+          nd$.tone <- factor(rep(tone, length(time_seq)), levels = tone_levels)
+        }
+      }
+      # Interaction factor for speaker × tone (strategy #3)
+      if (rs_type == "speaker_tone") {
+        nd$.speaker_tone <- interaction(nd$.speaker,
+          factor(rep(tone, length(time_seq)), levels = tone_levels), drop = FALSE)
+        nd$.speaker_tone <- factor(nd$.speaker_tone, levels = levels(dat$.speaker_tone))
       }
       if (use_dur) {
         nd$.duration <- rep(mean(dat$.duration, na.rm = TRUE), length(time_seq))
@@ -618,7 +700,7 @@ gamm_ui <- function(input, output, session, dataset, normalised_data) {
     bs_type     <- input$gamm_bs
     ri_speaker  <- input$gamm_ri_speaker
     ri_item     <- input$gamm_ri_item
-    rs_speaker  <- input$gamm_rs_speaker
+    rs_type     <- input$gamm_rs_type
     use_ar1     <- input$gamm_ar1
     smooth_type <- input$gamm_smooth_type
     dur_var     <- input$gamm_dur_var
@@ -637,9 +719,21 @@ gamm_ui <- function(input, output, session, dataset, normalised_data) {
       formula_display <- paste0(formula_display, ' + s(', dur_var, ')')
     }
     random_parts <- c()
-    if (rs_speaker) {
+    tone_code_var <- if (smooth_type == "separate") tone_var else paste0(tone_var, ".ord")
+    if (rs_type == "speaker") {
       random_parts <- c(random_parts,
         paste0('s(time_norm, ', speaker_var, ', bs = "fs", m = 1, k = ', k_val, ')'))
+    } else if (rs_type == "speaker_tone") {
+      random_parts <- c(random_parts,
+        paste0('s(time_norm, ', speaker_var, '.', tone_var, ', bs = "fs", m = 1, k = ', k_val, ')'))
+    } else if (rs_type == "speaker_by_tone") {
+      random_parts <- c(random_parts,
+        paste0('s(time_norm, ', speaker_var, ', by = ', tone_code_var, ', bs = "fs", m = 1, k = ', k_val, ')'))
+    } else if (rs_type == "ref_diff") {
+      random_parts <- c(random_parts,
+        paste0('s(time_norm, ', speaker_var, ', bs = "fs", m = 1, k = ', k_val, ')'))
+      random_parts <- c(random_parts,
+        paste0('s(time_norm, ', speaker_var, ', by = ', tone_code_var, ', bs = "fs", m = 1, k = ', k_val, ')'))
     } else if (ri_speaker) {
       random_parts <- c(random_parts, paste0('s(', speaker_var, ', bs = "re")'))
     }
@@ -650,7 +744,11 @@ gamm_ui <- function(input, output, session, dataset, normalised_data) {
 
     # Build exclude vector string for predict()
     exclude_parts <- c()
-    if (rs_speaker) {
+    if (rs_type == "speaker") {
+      exclude_parts <- c(exclude_parts, paste0('"s(time_norm,', speaker_var, ')"'))
+    } else if (rs_type == "speaker_tone") {
+      exclude_parts <- c(exclude_parts, paste0('"s(time_norm,', speaker_var, '.', tone_var, ')"'))
+    } else if (rs_type %in% c("speaker_by_tone", "ref_diff")) {
       exclude_parts <- c(exclude_parts, paste0('"s(time_norm,', speaker_var, ')"'))
     } else if (ri_speaker) {
       exclude_parts <- c(exclude_parts, paste0('"s(', speaker_var, ')"'))
@@ -684,12 +782,17 @@ gamm_ui <- function(input, output, session, dataset, normalised_data) {
 
     if (smooth_type == "separate") {
       code_text <- paste0(code_text,
-        'dat$', tone_var, ' <- as.factor(dat$', tone_var, ')\n\n')
+        'dat$', tone_var, ' <- as.factor(dat$', tone_var, ')\n')
     } else {
       code_text <- paste0(code_text,
         'dat$', tone_var, '.ord <- as.ordered(dat$', tone_var, ')\n',
-        'contrasts(dat$', tone_var, '.ord) <- "contr.treatment"\n\n')
+        'contrasts(dat$', tone_var, '.ord) <- "contr.treatment"\n')
     }
+    if (rs_type == "speaker_tone") {
+      code_text <- paste0(code_text,
+        'dat$', speaker_var, '.', tone_var, ' <- interaction(dat$', speaker_var, ', dat$', tone_var, ', drop = TRUE)\n')
+    }
+    code_text <- paste0(code_text, '\n')
 
     if (use_ar1) {
       code_text <- paste0(code_text,
