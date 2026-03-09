@@ -27,12 +27,13 @@ model_ui <- function(input, output, session, dataset, normalised_data) {
           tags$li(tags$code(style = code_style, "P\u2082(t) = (3t\u00b2 \u2212 1) / 2")),
           tags$li(tags$code(style = code_style, "P\u2083(t) = (5t\u00b3 \u2212 3t) / 2"))
         ),
-        tags$strong("Coefficient interpretations:"),
+        tags$strong("Coefficient interpretations"),
+        " (the number of coefficients depends on the chosen degree):",
         tags$ul(style = "margin-bottom: 0; padding-left: 18px;",
-          tags$li(tags$strong("c0:"), " Mean f0 level of the contour."),
-          tags$li(tags$strong("c1:"), " Linear slope \u2014 overall rising or falling direction."),
-          tags$li(tags$strong("c2:"), " Curvature \u2014 positive = concave up (valley), negative = concave down (arch)."),
-          tags$li(tags$strong("c3:"), " Asymmetry of curvature (only present at degree 3).")
+          tags$li(tags$strong("c0"), " captures the mean f0 level of the contour."),
+          tags$li(tags$strong("c1"), " captures the overall rising or falling slope."),
+          tags$li(tags$strong("c2"), " captures the curvature: positive = concave up (valley), negative = concave down (arch)."),
+          tags$li(tags$strong("c3"), " captures the asymmetry of curvature.")
         )
       )
     )
