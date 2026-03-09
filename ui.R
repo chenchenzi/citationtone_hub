@@ -44,8 +44,16 @@ ui <- fluidPage(
                               heading_font = font_google("Open Sans"),
                               base_font = font_google("Open Sans"),
                               "font-size-base" = "0.9rem"),
-             # First Navbar for F0 modelling
-             tabPanel("F0 modelling", 
+             # Data collection panel
+             tabPanel("Data collection",
+                      icon = icon("clipboard-check"),
+                      tabsetPanel(id = "tabs_collection",
+                        tabPanel("Checklist",
+                                 uiOutput("checklist_content"))
+                      )
+             ),
+             # F0 modelling panel
+             tabPanel("F0 modelling",
                       #fluid = TRUE, 
                       icon = icon("chart-bar"),
                       sidebarLayout(
