@@ -153,6 +153,7 @@ gamm_ui <- function(input, output, session, dataset, normalised_data) {
         tags$strong("Autocorrelation:"),
         checkboxInput("gamm_ar1", "Include AR1 correction", value = FALSE),
         tags$hr(),
+        uiOutput("gamm_warning"),
         actionButton("gamm_button", "Fit GAMM"),
         div(style = "margin-top: 4px;",
           actionButton("gamm_show_code", "Show R code", icon = icon("code"))
@@ -161,7 +162,10 @@ gamm_ui <- function(input, output, session, dataset, normalised_data) {
         h5("Download:"),
         textInput("gamm_filename", "Enter filename (without extension):",
                   value = "gamm_plot"),
-        downloadButton("gamm_download", "Download Plot")
+        downloadButton("gamm_download", "Download Plot"),
+        div(style = "margin-top: 6px;",
+          downloadButton("gamm_download_model", "Download Model (.rds)")
+        )
       )
     )
   })
@@ -174,6 +178,46 @@ gamm_ui <- function(input, output, session, dataset, normalised_data) {
     }
   })
 
+  # --- Dynamic warning based on dataset size + model complexity ---
+  output$gamm_warning <- renderUI({
+    data <- active_data()
+    if (is.null(data)) return(NULL)
+    n_rows <- nrow(data)
+    rs_type <- input$gamm_rs_type
+    use_ar1 <- input$gamm_ar1
+
+    # Estimate complexity
+    is_complex_rs <- !is.null(rs_type) && rs_type %in% c("speaker_tone", "speaker_by_tone", "ref_diff")
+    is_large <- n_rows > 5000
+    is_very_large <- n_rows > 20000
+
+    msg <- NULL
+    if (is_very_large) {
+      msg <- paste0(
+        "Very large dataset (", format(n_rows, big.mark = ","), " rows). ",
+        "Fitting may take a long time. Consider using the R code in your local environment."
+      )
+    } else if (is_large && (is_complex_rs || isTRUE(use_ar1))) {
+      msg <- paste0(
+        "Large dataset (", format(n_rows, big.mark = ","), " rows) with complex random effects",
+        if (isTRUE(use_ar1)) " and AR1 correction" else "",
+        ". Fitting may take several minutes."
+      )
+    } else if (is_large) {
+      msg <- paste0(
+        "Large dataset (", format(n_rows, big.mark = ","), " rows). ",
+        "Fitting may take a minute or two."
+      )
+    }
+
+    if (!is.null(msg)) {
+      tags$div(
+        style = "background-color: #fff3cd; border: 1px solid #ffc107; padding: 6px 10px; border-radius: 4px; margin-bottom: 8px; font-size: 0.82rem;",
+        icon("clock"), " ", msg
+      )
+    }
+  })
+
   # --- Result storage ---
   gamm_model <- reactiveVal(NULL)
   gamm_summary_data <- reactiveVal(NULL)
@@ -181,6 +225,7 @@ gamm_ui <- function(input, output, session, dataset, normalised_data) {
   gamm_plot_data <- reactiveVal(NULL)
   gamm_formula_str <- reactiveVal(NULL)
   gamm_rho_val <- reactiveVal(NULL)
+  gamm_fitting <- reactiveVal(FALSE)
 
   # --- Core computation ---
   observeEvent(input$gamm_button, {
@@ -188,6 +233,13 @@ gamm_ui <- function(input, output, session, dataset, normalised_data) {
     req(input$gamm_token_var, input$gamm_time_var,
         input$gamm_speaker_var, input$gamm_tone_var,
         input$gamm_f0_var, input$gamm_item_var)
+
+    # Show progress notification
+    progress_id <- showNotification(
+      tagList(icon("spinner", class = "fa-spin"), " Fitting GAMM model... This may take a while."),
+      duration = NULL, closeButton = FALSE, type = "message"
+    )
+    on.exit(removeNotification(progress_id), add = TRUE)
 
     data        <- active_data()
     token_var   <- input$gamm_token_var
@@ -678,6 +730,17 @@ gamm_ui <- function(input, output, session, dataset, normalised_data) {
     }
   )
 
+  # --- Download handler (model .rds) ---
+  output$gamm_download_model <- downloadHandler(
+    filename = function() {
+      paste0(input$gamm_filename, "_model.rds")
+    },
+    content = function(file) {
+      req(gamm_model())
+      saveRDS(gamm_model(), file)
+    }
+  )
+
   # --- Show R code toggle ---
   gamm_code_visible <- reactiveVal(FALSE)
 
@@ -869,7 +932,11 @@ gamm_ui <- function(input, output, session, dataset, normalised_data) {
       '       y = "Predicted ', f0_var, '",\n',
       '       colour = "', tone_var, '", fill = "', tone_var, '") +\n',
       '  theme_bw(base_size = 14) +\n',
-      '  theme(legend.position = "bottom")'
+      '  theme(legend.position = "bottom")\n\n',
+      '# --- Load a saved model (.rds) ---\n',
+      '# model <- readRDS("', input$gamm_filename, '_model.rds")\n',
+      '# summary(model)\n',
+      '# predict(model, newdata = newdat, exclude = ', exclude_str, ', se.fit = TRUE)'
     )
 
     tagList(
