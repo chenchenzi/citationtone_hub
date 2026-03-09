@@ -15,7 +15,7 @@ ui <- fluidPage(
     tags$style("
       #plot_button, #show_code_button { display: block; }
       #save_plot_button { display: block; margin-top: 4px; width: fit-content; }
-      #visualise_guide strong, #normalise_guide strong, #view_guide strong, #inspect_guide strong, #model_guide strong { font-weight: 900; color: #3a3a3a; }
+      #visualise_guide strong, #normalise_guide strong, #view_guide strong, #inspect_guide strong, #model_guide strong, #gca_guide strong { font-weight: 900; color: #3a3a3a; }
     "),
     tags$script(HTML("
       document.addEventListener('DOMContentLoaded', function() {
@@ -35,6 +35,7 @@ ui <- fluidPage(
         }
         watchForCode('r_code_output');
         watchForCode('model_r_code');
+        watchForCode('gca_r_code');
       });
     "))
   ),
@@ -67,7 +68,9 @@ ui <- fluidPage(
                           conditionalPanel("input.tabs_data == 'Inspect'",
                                            uiOutput("ui_inspect")),
                           conditionalPanel("input.tabs_data == 'Model: Polynomials'",
-                                           uiOutput("ui_model"))
+                                           uiOutput("ui_model")),
+                          conditionalPanel("input.tabs_data == 'Model: GCA'",
+                                           uiOutput("ui_gca"))
                         ),
                         mainPanel(
                           tabsetPanel(id = "tabs_data",
@@ -93,7 +96,12 @@ ui <- fluidPage(
                                                uiOutput("model_guide"),
                                                uiOutput("model_summary"),
                                                DT::dataTableOutput("model_data"),
-                                               uiOutput("model_r_code"))
+                                               uiOutput("model_r_code")),
+                                      tabPanel("Model: GCA",
+                                               uiOutput("gca_guide"),
+                                               uiOutput("gca_summary"),
+                                               plotOutput("gca_plot", height = "auto", width = "auto"),
+                                               uiOutput("gca_r_code"))
                           )
                         )
                       )

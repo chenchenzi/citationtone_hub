@@ -16,6 +16,7 @@ library(bslib)
 library(tidyverse)
 library(DT)
 library(RColorBrewer)
+library(lme4)
 library(thematic)
 #library(ragg)
 
@@ -25,6 +26,7 @@ source("ui/visualise_ui.R")
 source("ui/normalise_ui.R")
 source("ui/inspect_ui.R")
 source("ui/model_ui.R")
+source("ui/gca_ui.R")
 source("ui/checklist_ui.R")
 options(shiny.maxRequestSize = 20 * 1024^2) 
 #options(shiny.useragg = TRUE)
@@ -61,6 +63,7 @@ server <- function(input, output, session) {
   visualise_ui(input, output, session, dataset)
   inspect_ui(input, output, session, dataset)
   model_ui(input, output, session, dataset, normalised_data)
+  gca_ui(input, output, session, dataset, normalised_data)
   checklist_ui(input, output, session)
 
 }
