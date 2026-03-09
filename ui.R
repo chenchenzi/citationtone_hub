@@ -15,7 +15,7 @@ ui <- fluidPage(
     tags$style("
       #plot_button, #show_code_button { display: block; }
       #save_plot_button { display: block; margin-top: 4px; width: fit-content; }
-      #visualise_guide strong, #normalise_guide strong, #view_guide strong, #inspect_guide strong, #model_guide strong, #gca_guide strong { font-weight: 900; color: #3a3a3a; }
+      #visualise_guide strong, #normalise_guide strong, #view_guide strong, #inspect_guide strong, #model_guide strong, #gca_guide strong, #gamm_guide strong { font-weight: 900; color: #3a3a3a; }
     "),
     tags$script(HTML("
       document.addEventListener('DOMContentLoaded', function() {
@@ -36,6 +36,7 @@ ui <- fluidPage(
         watchForCode('r_code_output');
         watchForCode('model_r_code');
         watchForCode('gca_r_code');
+        watchForCode('gamm_r_code');
       });
     "))
   ),
@@ -70,7 +71,9 @@ ui <- fluidPage(
                           conditionalPanel("input.tabs_data == 'Model: Polynomials'",
                                            uiOutput("ui_model")),
                           conditionalPanel("input.tabs_data == 'Model: GCA'",
-                                           uiOutput("ui_gca"))
+                                           uiOutput("ui_gca")),
+                          conditionalPanel("input.tabs_data == 'Model: GAMM'",
+                                           uiOutput("ui_gamm"))
                         ),
                         mainPanel(
                           tabsetPanel(id = "tabs_data",
@@ -101,7 +104,12 @@ ui <- fluidPage(
                                                uiOutput("gca_guide"),
                                                uiOutput("gca_summary"),
                                                plotOutput("gca_plot", height = "auto", width = "auto"),
-                                               uiOutput("gca_r_code"))
+                                               uiOutput("gca_r_code")),
+                                      tabPanel("Model: GAMM",
+                                               uiOutput("gamm_guide"),
+                                               uiOutput("gamm_summary"),
+                                               plotOutput("gamm_plot", height = "auto", width = "auto"),
+                                               uiOutput("gamm_r_code"))
                           )
                         )
                       )

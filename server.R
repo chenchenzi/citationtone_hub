@@ -17,6 +17,7 @@ library(tidyverse)
 library(DT)
 library(RColorBrewer)
 library(lme4)
+library(mgcv)
 library(thematic)
 #library(ragg)
 
@@ -27,6 +28,7 @@ source("ui/normalise_ui.R")
 source("ui/inspect_ui.R")
 source("ui/model_ui.R")
 source("ui/gca_ui.R")
+source("ui/gamm_ui.R")
 source("ui/checklist_ui.R")
 options(shiny.maxRequestSize = 20 * 1024^2) 
 #options(shiny.useragg = TRUE)
@@ -44,12 +46,12 @@ server <- function(input, output, session) {
       return(NULL)
     }
     dat <-read.csv(input$uploadfile$datapath, stringsAsFactors = FALSE)
-    
+
     if (input$convert_to_factor) {
       dat <- dat %>%
         dplyr::mutate(across(where(is.character), as.factor))
     }
-    
+
     return(dat)
   })
   
@@ -64,6 +66,7 @@ server <- function(input, output, session) {
   inspect_ui(input, output, session, dataset)
   model_ui(input, output, session, dataset, normalised_data)
   gca_ui(input, output, session, dataset, normalised_data)
+  gamm_ui(input, output, session, dataset, normalised_data)
   checklist_ui(input, output, session)
 
 }
