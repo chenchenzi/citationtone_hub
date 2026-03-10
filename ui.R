@@ -15,7 +15,7 @@ ui <- fluidPage(
     tags$style("
       #plot_button, #show_code_button { display: block; }
       #save_plot_button { display: block; margin-top: 4px; width: fit-content; }
-      #visualise_guide strong, #normalise_guide strong, #view_guide strong, #inspect_guide strong, #model_guide strong, #gca_guide strong, #gamm_guide strong { font-weight: 900; color: #3a3a3a; }
+      #visualise_guide strong, #normalise_guide strong, #view_guide strong, #inspect_guide strong, #model_guide strong, #gca_guide strong, #gamm_guide strong, #summarise_guide strong { font-weight: 900; color: #3a3a3a; }
     "),
     tags$script(HTML("
       document.addEventListener('DOMContentLoaded', function() {
@@ -37,6 +37,7 @@ ui <- fluidPage(
         watchForCode('model_r_code');
         watchForCode('gca_r_code');
         watchForCode('gamm_r_code');
+        watchForCode('summarise_r_code');
       });
     "))
   ),
@@ -73,7 +74,9 @@ ui <- fluidPage(
                           conditionalPanel("input.tabs_data == 'Model: GCA'",
                                            uiOutput("ui_gca")),
                           conditionalPanel("input.tabs_data == 'Model: GAMM'",
-                                           uiOutput("ui_gamm"))
+                                           uiOutput("ui_gamm")),
+                          conditionalPanel("input.tabs_data == 'Summarise'",
+                                           uiOutput("ui_summarise"))
                         ),
                         mainPanel(
                           tabsetPanel(id = "tabs_data",
@@ -109,7 +112,12 @@ ui <- fluidPage(
                                                uiOutput("gamm_guide"),
                                                uiOutput("gamm_summary"),
                                                plotOutput("gamm_plot", height = "auto", width = "auto"),
-                                               uiOutput("gamm_r_code"))
+                                               uiOutput("gamm_r_code")),
+                                      tabPanel("Summarise",
+                                               uiOutput("summarise_guide"),
+                                               uiOutput("summarise_summary"),
+                                               plotOutput("summarise_plot", height = "auto", width = "auto"),
+                                               uiOutput("summarise_r_code"))
                           )
                         )
                       )

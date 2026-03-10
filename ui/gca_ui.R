@@ -2,7 +2,7 @@
 # Model: GCA tab — Growth Curve Analysis using lme4
 ###############################################
 
-gca_ui <- function(input, output, session, dataset, normalised_data) {
+gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_data = NULL) {
 
   # --- Guide text ---
   output$gca_guide <- renderUI({
@@ -334,6 +334,11 @@ gca_ui <- function(input, output, session, dataset, normalised_data) {
     }
 
     gca_plot_data(do.call(rbind, plot_rows))
+
+    # Export to shared prediction store for Summarise tab
+    if (!is.null(gca_pred_data)) {
+      gca_pred_data(do.call(rbind, plot_rows))
+    }
   })
 
   # --- Summary box ---

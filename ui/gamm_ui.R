@@ -2,7 +2,7 @@
 # Model: GAMM tab — Generalised Additive Mixed Model using mgcv
 ###############################################
 
-gamm_ui <- function(input, output, session, dataset, normalised_data) {
+gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_data = NULL) {
 
   # --- Guide text ---
   output$gamm_guide <- renderUI({
@@ -556,6 +556,11 @@ gamm_ui <- function(input, output, session, dataset, normalised_data) {
     }
 
     gamm_plot_data(do.call(rbind, plot_rows))
+
+    # Export to shared prediction store for Summarise tab
+    if (!is.null(gamm_pred_data)) {
+      gamm_pred_data(do.call(rbind, plot_rows))
+    }
   })
 
   # --- Summary box ---

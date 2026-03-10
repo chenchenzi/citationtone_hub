@@ -19,6 +19,7 @@ library(RColorBrewer)
 library(lme4)
 library(mgcv)
 library(thematic)
+library(gridExtra)
 #library(ragg)
 
 source("ui/start_ui.R")
@@ -30,6 +31,7 @@ source("ui/model_ui.R")
 source("ui/gca_ui.R")
 source("ui/gamm_ui.R")
 source("ui/checklist_ui.R")
+source("ui/summarise_ui.R")
 options(shiny.maxRequestSize = 20 * 1024^2) 
 #options(shiny.useragg = TRUE)
 
@@ -38,7 +40,7 @@ thematic::thematic_shiny(font = "auto")
 theme_set(theme_bw(base_size = 16))
 
 server <- function(input, output, session) {
-  
+
   # Reactive dataset storage
   dataset <- reactive({
     #req(input$uploadfile)
@@ -58,6 +60,10 @@ server <- function(input, output, session) {
   # Shared storage for normalised dataset (written by Normalise tab, read by Model tab)
   normalised_data <- reactiveVal(NULL)
 
+  # Shared storage for model prediction data (written by GCA/GAMM, read by Summarise)
+  gca_pred_data <- reactiveVal(NULL)
+  gamm_pred_data <- reactiveVal(NULL)
+
   # Call the Start tab UI and server logic (start_ui function)
   start_ui(input, output, session, dataset)
   view_ui(input, output, session, dataset)
@@ -65,8 +71,9 @@ server <- function(input, output, session) {
   visualise_ui(input, output, session, dataset)
   inspect_ui(input, output, session, dataset)
   model_ui(input, output, session, dataset, normalised_data)
-  gca_ui(input, output, session, dataset, normalised_data)
-  gamm_ui(input, output, session, dataset, normalised_data)
+  gca_ui(input, output, session, dataset, normalised_data, gca_pred_data)
+  gamm_ui(input, output, session, dataset, normalised_data, gamm_pred_data)
   checklist_ui(input, output, session)
+  summarise_ui(input, output, session, dataset, normalised_data, gca_pred_data, gamm_pred_data)
 
 }
