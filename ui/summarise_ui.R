@@ -49,7 +49,7 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
         ),
         tags$p(style = "margin-bottom: 8px;",
           "The first two methods use ",
-          tags$strong("Fraction of Range (FoR)"),
+          tags$strong("Fraction of Range (FOR)"),
           " normalisation, which maps f0 onto a bounded scale using the speaker\u2019s absolute pitch range (min/max). The third uses ",
           tags$strong("Proportion of Range (POR)"),
           ", where the range is instead defined by \u03bc \u00b1 1 SD of f0 from the highest and lowest pitched tones (Zhu, 2004)."
@@ -57,7 +57,7 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
         tags$strong("Conversion methods:"),
         tags$ul(style = "margin-bottom: 8px; padding-left: 18px;",
           tags$li(
-            tags$strong("Reference-line FoR [1, 5]:"),
+            tags$strong("Reference-line FOR [1, 5]:"),
             tags$div(style = "margin: 4px 0 2px 0; font-family: 'Georgia', serif; font-style: italic; font-size: 0.92rem;",
               HTML("f\u2080\u2032 = (f\u2080 \u2212 f\u2080<sub>min</sub>) / (f\u2080<sub>max</sub> \u2212 f\u2080<sub>min</sub>) \u00d7 4 + 1")
             ),
@@ -65,7 +65,7 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
             tags$em("Works with raw f0 data or model predictions.")
           ),
           tags$li(
-            tags$strong("Interval-based FoR (0, 5]:"),
+            tags$strong("Interval-based FOR (0, 5]:"),
             tags$div(style = "margin: 4px 0 2px 0; font-family: 'Georgia', serif; font-style: italic; font-size: 0.92rem;",
               HTML("f\u2080\u2032 = (f\u2080 \u2212 f\u2080<sub>min</sub>) / (f\u2080<sub>max</sub> \u2212 f\u2080<sub>min</sub>) \u00d7 5")
             ),
@@ -550,9 +550,9 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
     header_row1_cells <- list(
       tags$th(style = paste0(th_style, " border-right: 1px solid #ddd;"), rowspan = 2, "Tone"),
       tags$th(style = paste0(th_group, " background-color: #f0f7ff; border-right: 1px solid #ddd;"), colspan = 2,
-              HTML("Reference-line FoR [1, 5]<br><span style='font-weight:normal; font-size:0.72rem; color:#888;'>\u00d7 4 + 1, round()</span>")),
+              HTML("Reference-line FOR [1, 5]<br><span style='font-weight:normal; font-size:0.72rem; color:#888;'>\u00d7 4 + 1, round()</span>")),
       tags$th(style = paste0(th_group, " background-color: #fff8f0; border-right: 1px solid #ddd;"), colspan = 2,
-              HTML("Interval-based FoR (0, 5]<br><span style='font-weight:normal; font-size:0.72rem; color:#888;'>\u00d7 5, ceiling()</span>"))
+              HTML("Interval-based FOR (0, 5]<br><span style='font-weight:normal; font-size:0.72rem; color:#888;'>\u00d7 5, ceiling()</span>"))
     )
     header_row2_cells <- list(
       tags$th(style = paste0(th_style, " font-size: 0.76rem; background-color: #f0f7ff;"), "Scaled"),
@@ -619,7 +619,7 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
         tags$strong("Conversion parameters:"),
         tags$ul(style = "margin-bottom: 8px; padding-left: 18px;",
           tags$li(paste0("Source: ", src_label)),
-          tags$li(HTML(paste0("Reference-line & Interval FoR, f0 range (min/max): ", round(params$f0_min, 2), " \u2013 ", round(params$f0_max, 2),
+          tags$li(HTML(paste0("Reference-line & Interval FOR, f0 range (min/max): ", round(params$f0_min, 2), " \u2013 ", round(params$f0_max, 2),
                               " Hz &nbsp;(\u0394 = ", round(params$f0_max - params$f0_min, 2), ")"))),
           if (show_1b) tags$li(HTML(paste0(
             "POR, f0 range (\u03bc\u00b1\u03c3): ",
@@ -718,7 +718,7 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
                 vjust = -1.3, size = 4, fontface = "bold", show.legend = FALSE) +
       scale_y_continuous(breaks = ref_breaks, limits = c(0.5, 5.5)) +
       scale_x_continuous(breaks = seq(0, 1, by = 0.25)) +
-      labs(title = "Reference-line FoR [1, 5]", subtitle = "round()",
+      labs(title = "Reference-line FOR [1, 5]", subtitle = "round()",
            x = "Normalised time", y = "Chao scale [1, 5]", colour = "Tone") +
       base_theme
 
@@ -742,7 +742,7 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
                 vjust = -1.3, size = 4, fontface = "bold", show.legend = FALSE) +
       scale_y_continuous(breaks = 0:5, limits = c(-0.3, 5.5)) +
       scale_x_continuous(breaks = seq(0, 1, by = 0.25), limits = c(0, 1.12)) +
-      labs(title = "Interval-based FoR (0, 5]", subtitle = "ceiling()",
+      labs(title = "Interval-based FOR (0, 5]", subtitle = "ceiling()",
            x = "Normalised time", y = "Chao scale (0, 5]", colour = "Tone") +
       base_theme
 
