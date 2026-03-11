@@ -48,11 +48,9 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
           " (high falling)."
         ),
         tags$p(style = "margin-bottom: 8px;",
-          "The first two methods use ",
+          "All three methods use ",
           tags$strong("Fraction of Range (FOR)"),
-          " normalisation, which maps f0 onto a bounded scale using the speaker\u2019s absolute pitch range (min/max). The third uses ",
-          tags$strong("Proportion of Range (POR)"),
-          ", where the range is instead defined by \u03bc \u00b1 1 SD of f0 from the highest and lowest pitched tones (Zhu, 2004)."
+          " normalisation, which maps f0 onto a bounded scale representing the speaker\u2019s pitch range (min/max). They differ in how Tone Numerals (i.e. 1\u20135) are mapped and how pitch range is defined."
         ),
         tags$strong("Conversion methods:"),
         tags$ul(style = "margin-bottom: 8px; padding-left: 18px;",
@@ -62,7 +60,7 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
               HTML("f\u2080\u2032 = (f\u2080 \u2212 f\u2080<sub>min</sub>) / (f\u2080<sub>max</sub> \u2212 f\u2080<sub>min</sub>) \u00d7 4 + 1")
             ),
             " Scales f0 onto [1, 5] with 5 reference lines at integer values. Each sampled value is ", tags$code(style = code_style, "round()"), "ed to the nearest integer. ",
-            tags$em("Works with raw f0 data or model predictions.")
+            tags$em("Recommended input: model predictions.")
           ),
           tags$li(
             tags$strong("Interval-based FOR (0, 5]:"),
@@ -71,15 +69,15 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
             ),
             " Scales f0 onto (0, 5] with 5 equal-width intervals. Each sampled value is assigned to an interval via ", tags$code(style = code_style, "ceiling()"),
             ": (0,1]\u21921, (1,2]\u21922, (2,3]\u21923, (3,4]\u21924, (4,5]\u21925. ",
-            tags$em("Works with raw f0 data or model predictions.")
+            tags$em("Recommended input: model predictions.")
           ),
           tags$li(
-            tags$strong("POR (0, 5]:"),
+            tags$strong("Robust FOR (0, 5]:"),
             tags$div(style = "margin: 4px 0 2px 0; font-family: 'Georgia', serif; font-style: italic; font-size: 0.92rem;",
               HTML("f\u2080\u2032 = (f\u2080 \u2212 (\u03bc<sub>min</sub> \u2212 \u03c3<sub>min</sub>)) / ((\u03bc<sub>max</sub> + \u03c3<sub>max</sub>) \u2212 (\u03bc<sub>min</sub> \u2212 \u03c3<sub>min</sub>)) \u00d7 5")
             ),
-            " Same interval-based conversion, but with a statistically defined range. ",
-            tags$em("Works with raw f0 data only.")
+            " Same interval-based conversion, but the range is defined by \u03bc \u00b1 \u03c3 of per-token f0 peaks from the highest-pitched tone (max) and per-token f0 valleys from the lowest-pitched tone (min). ",
+            tags$em("Works with raw f0 data or normalised f0 data.")
           )
         ),
         tags$p(style = "margin: 4px 0 8px 0; font-size: 0.84rem; color: #777;",
@@ -88,7 +86,7 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
         tags$strong("Data source:"),
         tags$ul(style = "margin-bottom: 0; padding-left: 18px;",
           tags$li(tags$strong("Raw data mean:"), " Always available. Computes per-tone mean f0 contours from the uploaded or normalised data."),
-          tags$li(tags$strong("GCA / GAMM predictions:"), " Available after fitting the respective model. Uses the population-level predicted contours (smoother, more representative). Note: POR is not available for model predictions.")
+          tags$li(tags$strong("GCA / GAMM predictions:"), " Available after fitting the respective model. Uses the population-level predicted contours (smoother, more representative). Note: Robust FOR is not available for model predictions.")
         )
       )
     )
@@ -296,18 +294,20 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
     # Use [1,5] reference-line scale for plotting (more standard)
     contour_data$chao_continuous <- contour_data$chao_ref
 
-    # --- POR method: μ±σ range on log scale (only for raw data) ---
+    # --- Robust FOR: range from highest/lowest tone extremes (only for raw data) ---
     has_1b <- src %in% c("raw_hz", "normalised")
     if (has_1b) {
-      # Get raw token-level data for computing per-tone μ and σ
+      # Get raw token-level data for computing per-tone peak/valley μ and σ
       if (src == "raw_hz") {
         raw_1b_data <- dataset()
         f0_var_1b   <- input$sum_raw_f0_var
         tone_var_1b <- input$sum_raw_tone_var
+        token_var_1b <- input$sum_raw_token_var
       } else {
         raw_1b_data <- normalised_data()
         f0_var_1b   <- input$sum_norm_f0_var
         tone_var_1b <- input$sum_norm_tone_var
+        token_var_1b <- input$sum_norm_token_var
       }
 
       # Filter valid f0
@@ -323,20 +323,26 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
       highest_tone <- tone_means[[tone_var_1b]][which.max(tone_means$.tone_mean)]
       lowest_tone  <- tone_means[[tone_var_1b]][which.min(tone_means$.tone_mean)]
 
-      # μ and σ from the highest-pitched tone's f0 values
-      f0_high_tone <- raw_1b$.f0[raw_1b[[tone_var_1b]] == highest_tone]
-      mu_max_1b    <- mean(f0_high_tone, na.rm = TRUE)
-      sigma_max_1b <- sd(f0_high_tone, na.rm = TRUE)
+      # Per-token f0 peaks from the highest-pitched tone → μ_max, σ_max
+      token_peaks <- raw_1b %>%
+        filter(.data[[tone_var_1b]] == highest_tone) %>%
+        group_by(.data[[token_var_1b]]) %>%
+        summarise(.f0_peak = max(.f0, na.rm = TRUE), .groups = "drop")
+      mu_max_1b    <- mean(token_peaks$.f0_peak, na.rm = TRUE)
+      sigma_max_1b <- sd(token_peaks$.f0_peak, na.rm = TRUE)
 
-      # μ and σ from the lowest-pitched tone's f0 values
-      f0_low_tone  <- raw_1b$.f0[raw_1b[[tone_var_1b]] == lowest_tone]
-      mu_min_1b    <- mean(f0_low_tone, na.rm = TRUE)
-      sigma_min_1b <- sd(f0_low_tone, na.rm = TRUE)
+      # Per-token f0 valleys from the lowest-pitched tone → μ_min, σ_min
+      token_valleys <- raw_1b %>%
+        filter(.data[[tone_var_1b]] == lowest_tone) %>%
+        group_by(.data[[token_var_1b]]) %>%
+        summarise(.f0_valley = min(.f0, na.rm = TRUE), .groups = "drop")
+      mu_min_1b    <- mean(token_valleys$.f0_valley, na.rm = TRUE)
+      sigma_min_1b <- sd(token_valleys$.f0_valley, na.rm = TRUE)
 
       upper_1b <- mu_max_1b + sigma_max_1b
       lower_1b <- max(mu_min_1b - sigma_min_1b, 1)  # floor at 1 Hz to avoid log(0)
 
-      # Apply POR formula to the per-tone mean contour
+      # Apply tone-specific FOR formula to the per-tone mean contour
       log_range_1b <- log(upper_1b) - log(lower_1b)
       if (log_range_1b > 0) {
         contour_data$chao_1b <- pmax(0, pmin(5,
@@ -566,7 +572,7 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
     if (show_1b) {
       header_row1_cells <- c(header_row1_cells, list(
         tags$th(style = paste0(th_group, " background-color: #f0fff0; border-right: 1px solid #ddd;"), colspan = 2,
-                HTML("POR (0, 5]<br><span style='font-weight:normal; font-size:0.72rem; color:#888;'>\u03bc\u00b1\u03c3 range, ceiling()</span>"))
+                HTML("Robust FOR (0, 5]<br><span style='font-weight:normal; font-size:0.72rem; color:#888;'>\u03bc\u00b1\u03c3 range, ceiling()</span>"))
       ))
       header_row2_cells <- c(header_row2_cells, list(
         tags$th(style = paste0(th_style, " font-size: 0.76rem; background-color: #f0fff0;"), "Scaled"),
@@ -622,7 +628,7 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
           tags$li(HTML(paste0("Reference-line & Interval FOR, f0 range (min/max): ", round(params$f0_min, 2), " \u2013 ", round(params$f0_max, 2),
                               " Hz &nbsp;(\u0394 = ", round(params$f0_max - params$f0_min, 2), ")"))),
           if (show_1b) tags$li(HTML(paste0(
-            "POR, f0 range (\u03bc\u00b1\u03c3): ",
+            "Robust FOR, f0 range (\u03bc\u00b1\u03c3): ",
             round(params$lower_1b, 2), " \u2013 ", round(params$upper_1b, 2),
             " Hz &nbsp;(lowest tone: ", params$lowest_tone,
             ", \u03bc=", round(params$mu_min_1b, 1),
@@ -765,7 +771,7 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
                   vjust = -1.3, size = 4, fontface = "bold", show.legend = FALSE) +
         scale_y_continuous(breaks = 0:5, limits = c(-0.3, 5.5)) +
         scale_x_continuous(breaks = seq(0, 1, by = 0.25), limits = c(0, 1.12)) +
-        labs(title = "POR (0, 5]",
+        labs(title = "Robust FOR (0, 5]",
              subtitle = expression(paste(mu, "\u00b1", sigma, " range, ceiling()")),
              x = "Normalised time", y = "Chao scale (0, 5]", colour = "Tone") +
         base_theme
