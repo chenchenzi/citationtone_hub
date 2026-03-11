@@ -35,6 +35,106 @@ output$instruction_text <- renderUI({
       tags$li(HTML("&#128202; "), tags$strong(style = "color: #78c2ad;", "Model: GCA"), " Run Growth Curve Analysis using a mixed-effects model with orthogonal polynomials and configurable random effects by speaker and item."),
       tags$li(HTML("&#128202; "), tags$strong(style = "color: #78c2ad;", "Model: GAMM"), " Fit Generalised Additive Mixed Models (GAMMs) to f0 contours with configurable basis functions, random effects, and AR1 autocorrelation correction."),
       tags$li(HTML("&#128203; "), tags$strong(style = "color: #78c2ad;", "Summarise"), " Convert tone contours into Chao tone numerals (1\u20135 scale). Compare reference-line and interval-based conversion methods.")
+    ),
+    tags$hr(),
+    h4("Recommended workflows"),
+    # --- Pipeline CSS ---
+    tags$style(HTML("
+      .pipeline-container { margin-bottom: 18px; }
+      .pipeline-label {
+        font-size: 0.82rem; font-weight: 600; color: #555;
+        margin-bottom: 6px; display: flex; align-items: center; gap: 6px;
+      }
+      .pipeline-label .badge {
+        display: inline-block; padding: 2px 8px; border-radius: 10px;
+        font-size: 0.72rem; font-weight: 600; color: #fff;
+      }
+      .pipeline-flow {
+        display: flex; align-items: center; flex-wrap: wrap;
+        gap: 0; padding: 4px 0;
+      }
+      .pipeline-step {
+        display: inline-flex; align-items: center; padding: 5px 12px;
+        border-radius: 6px; font-size: 0.8rem; font-weight: 500;
+        white-space: nowrap;
+      }
+      .pipeline-step.app-step {
+        background-color: #e8f5f0; border: 1.5px solid #78c2ad; color: #2a7a5a;
+      }
+      .pipeline-step.external-step {
+        background-color: #fff8e1; border: 1.5px dashed #e0a800; color: #8a6d00;
+        font-style: italic;
+      }
+      .pipeline-step.data-step {
+        background-color: #e3f2fd; border: 1.5px solid #90caf9; color: #1565c0;
+        font-weight: 600;
+      }
+      .pipeline-arrow {
+        color: #aaa; font-size: 1.1rem; margin: 0 4px;
+        display: inline-flex; align-items: center;
+      }
+      .pipeline-loop {
+        display: inline-flex; align-items: center;
+        font-size: 0.75rem; color: #999; font-style: italic; margin-left: 6px;
+      }
+      .pipeline-loop .loop-icon { font-size: 0.9rem; margin-right: 3px; }
+      .pipeline-legend {
+        display: flex; gap: 16px; margin-top: 10px; font-size: 0.75rem; color: #888;
+      }
+      .pipeline-legend span {
+        display: inline-flex; align-items: center; gap: 4px;
+      }
+      .legend-box {
+        display: inline-block; width: 14px; height: 14px; border-radius: 3px;
+      }
+    ")),
+    # --- Pipeline 1: Data quality check ---
+    tags$div(class = "pipeline-container",
+      tags$div(class = "pipeline-label",
+        tags$span(class = "badge", style = "background-color: #78c2ad;", "1"),
+        "Data quality check"
+      ),
+      tags$div(class = "pipeline-flow",
+        tags$span(class = "pipeline-step data-step", "Raw f0 data"),
+        tags$span(class = "pipeline-arrow", HTML("&#10132;")),
+        tags$span(class = "pipeline-step app-step", "Start"),
+        tags$span(class = "pipeline-arrow", HTML("&#10132;")),
+        tags$span(class = "pipeline-step app-step", "Normalise"),
+        tags$span(class = "pipeline-arrow", HTML("&#10132;")),
+        tags$span(class = "pipeline-step app-step", "Visualise"),
+        tags$span(class = "pipeline-arrow", HTML("&#10132;")),
+        tags$span(class = "pipeline-step app-step", "Inspect"),
+        tags$span(class = "pipeline-arrow", HTML("&#10132;")),
+        tags$span(class = "pipeline-step external-step", "Manual correction"),
+        tags$span(class = "pipeline-loop",
+          tags$span(class = "loop-icon", HTML("&#8634;")),
+          "repeat until clean"
+        )
+      )
+    ),
+    # --- Pipeline 2: Model & summarise ---
+    tags$div(class = "pipeline-container",
+      tags$div(class = "pipeline-label",
+        tags$span(class = "badge", style = "background-color: #78c2ad;", "2"),
+        "Model & summarise"
+      ),
+      tags$div(class = "pipeline-flow",
+        tags$span(class = "pipeline-step data-step", "Cleaned f0 data"),
+        tags$span(class = "pipeline-arrow", HTML("&#10132;")),
+        tags$span(class = "pipeline-step app-step", "Start"),
+        tags$span(class = "pipeline-arrow", HTML("&#10132;")),
+        tags$span(class = "pipeline-step app-step", "Normalise"),
+        tags$span(class = "pipeline-arrow", HTML("&#10132;")),
+        tags$span(class = "pipeline-step app-step", "Model"),
+        tags$span(class = "pipeline-arrow", HTML("&#10132;")),
+        tags$span(class = "pipeline-step app-step", "Summarise")
+      )
+    ),
+    # --- Legend ---
+    tags$div(class = "pipeline-legend", style = "margin-bottom: 24px;",
+      tags$span(tags$span(class = "legend-box", style = "background-color: #e3f2fd; border: 1px solid #90caf9;"), "Data input"),
+      tags$span(tags$span(class = "legend-box", style = "background-color: #e8f5f0; border: 1px solid #78c2ad;"), "In-app step"),
+      tags$span(tags$span(class = "legend-box", style = "background-color: #fff8e1; border: 1px dashed #e0a800;"), "External step (e.g. Praat)")
     )
   )
 })
