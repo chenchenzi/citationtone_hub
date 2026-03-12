@@ -68,7 +68,7 @@ server <- function(input, output, session) {
   start_ui(input, output, session, dataset)
   view_ui(input, output, session, dataset)
   normalised_ui(input, output, session, dataset, normalised_data)
-  visualise_ui(input, output, session, dataset)
+  visualise_ui(input, output, session, dataset, normalised_data)
   inspect_ui(input, output, session, dataset)
   model_ui(input, output, session, dataset, normalised_data)
   gca_ui(input, output, session, dataset, normalised_data, gca_pred_data)

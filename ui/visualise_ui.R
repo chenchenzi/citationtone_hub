@@ -1,4 +1,13 @@
-visualise_ui <- function(input, output, session, dataset) {
+visualise_ui <- function(input, output, session, dataset, normalised_data) {
+
+  # Active dataset for the Visualise tab (uploaded or normalised)
+  vis_dataset <- reactive({
+    if (!is.null(input$vis_data_source) && input$vis_data_source == "normalised" && !is.null(normalised_data())) {
+      normalised_data()
+    } else {
+      dataset()
+    }
+  })
 
   # Variable guide box on the right panel
   output$visualise_guide <- renderUI({
@@ -6,6 +15,7 @@ visualise_ui <- function(input, output, session, dataset) {
       tags$div(style = "background-color: #f0faf7; border-left: 4px solid #78c2ad; padding: 10px 14px; margin-bottom: 12px; border-radius: 4px; font-size: 0.88rem; color: #555;",
         tags$strong("Plotting guide:"),
         tags$ul(style = "margin-bottom: 0; padding-left: 18px;",
+          tags$li(tags$strong("Data source:"), " Use the uploaded (raw) dataset or the normalised dataset (available after using the Normalise tab)."),
           tags$li(tags$strong("X (time):"), " A time-related or index variable, e.g., normalised time points within a syllable."),
           tags$li(tags$strong("Y (f0):"), " An f0-related variable, e.g., raw Hz or normalised (z-score, semitone)."),
           tags$li(tags$strong("Tone category:"), " The column labelling tone types (e.g., T1, T2, T3, T4)."),
@@ -17,14 +27,27 @@ visualise_ui <- function(input, output, session, dataset) {
 
   # Render the UI for selecting X, Y, tone category, and speaker variables
   output$ui_visualise <- renderUI({
-    vars <- if (!is.null(dataset())) names(dataset()) else c("No dataset available")  # Get variable names from the dataset
-    #req(vars)  # Ensure the dataset is available
-    data_types <- if (!is.null(dataset())) sapply(dataset(), class) else rep("NA", length(vars))  # Get data types for each column
-    var_types <- paste0(vars, " {", data_types, "}")  # Create "x {type}" labels
+    # Build dataset choices: always have uploaded, conditionally add normalised
+    has_norm <- !is.null(normalised_data())
+    data_choices <- c("Uploaded data" = "uploaded")
+    if (has_norm) {
+      data_choices <- c(data_choices, "Normalised data" = "normalised")
+    }
+    ds_selected <- if (!is.null(input$vis_data_source) && input$vis_data_source %in% data_choices) {
+      input$vis_data_source
+    } else {
+      "uploaded"
+    }
+
+    active_data <- vis_dataset()
+    vars <- if (!is.null(active_data)) names(active_data) else c("No dataset available")
+    data_types <- if (!is.null(active_data)) sapply(active_data, class) else rep("NA", length(vars))
+    var_types <- paste0(vars, " {", data_types, "}")
 
     tagList(
       wellPanel(
-        h5(paste("Dataset:", input$dataset_name)),  # Display the dataset name
+        selectInput("vis_data_source", "Select dataset:",
+                    choices = data_choices, selected = ds_selected),
         selectInput("x_var", "Select X (time) variable:",
                     choices = setNames(vars, var_types), selected = vars[1], multiple = FALSE),
         selectInput("y_var", "Select Y (f0) variable:",
@@ -50,10 +73,10 @@ visualise_ui <- function(input, output, session, dataset) {
   # Shared reactive to build the plot
   current_plot <- reactive({
     req(input$plot_button > 0)
-    req(!is.null(dataset()))
+    req(!is.null(vis_dataset()))
     req(input$x_var, input$y_var, input$tone_var, input$speaker_var)
 
-    plot_data <- dataset()
+    plot_data <- vis_dataset()
 
     if (input$convert_tone_to_factor) {
       plot_data[[input$tone_var]] <- as.factor(plot_data[[input$tone_var]])
@@ -74,16 +97,16 @@ visualise_ui <- function(input, output, session, dataset) {
 
   # Dynamic plot dimensions (shared by display and download)
   plot_height <- reactive({
-    if (!is.null(dataset()) && input$facet_by_speaker) {
-      300 + 100 * length(unique(dataset()[[input$speaker_var]]))
+    if (!is.null(vis_dataset()) && input$facet_by_speaker) {
+      300 + 100 * length(unique(vis_dataset()[[input$speaker_var]]))
     } else {
       600
     }
   })
 
   plot_width <- reactive({
-    if (!is.null(dataset()) && input$facet_by_speaker) {
-      400 + 100 * length(unique(dataset()[[input$tone_var]]))
+    if (!is.null(vis_dataset()) && input$facet_by_speaker) {
+      400 + 100 * length(unique(vis_dataset()[[input$tone_var]]))
     } else {
       800
     }

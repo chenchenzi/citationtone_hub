@@ -19,7 +19,7 @@ output$instruction_text <- renderUI({
   tagList(
     h2("Welcome!"),
     p("Upload a CSV file to get started. Your file should have column headers and ideally contain
-      columns for time, f0, tone category, and speaker."),
+      columns for time, f0, tone category, speaker ID, and token ID."),
     if (is.null(input$uploadfile)) {
       p("Once uploaded, a preview of the first 10 rows will appear below.")
     },
