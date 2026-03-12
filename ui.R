@@ -71,6 +71,7 @@ ui <- fluidPage(
         watchForCode('gamm_r_code');
         watchForCode('summarise_r_code');
       });
+      // Dismiss loading screen once Shiny connects
       $(document).on('shiny:connected', function() {
         var el = document.getElementById('loading-screen');
         if (el) { el.classList.add('fade-out'); setTimeout(function(){ el.remove(); }, 500); }
@@ -122,9 +123,22 @@ ui <- fluidPage(
                         mainPanel(
                           tabsetPanel(id = "tabs_data",
                                       tabPanel("Start",
+                                               # Static welcome content (shown immediately, replaced once renderUI loads)
+                                               tags$div(id = "static-welcome",
+                                                 h2("Welcome!"),
+                                                 tags$p("Upload a CSV file to get started. Your file should have column headers and ideally contain columns for time, f0, tone category, speaker ID, and token ID."),
+                                                 tags$p("Once uploaded, a preview of the first 10 rows will appear below.")
+                                               ),
                                                uiOutput("instruction_text"),
                                                h2(textOutput("preview_title")),
-                                               uiOutput("man_example")),
+                                               uiOutput("man_example"),
+                                               tags$script(HTML("
+                                                 $(document).on('shiny:value', function(e) {
+                                                   if (e.name === 'instruction_text') {
+                                                     $('#static-welcome').remove();
+                                                   }
+                                                 });
+                                               "))),
                                       tabPanel("View",
                                                uiOutput("view_guide"),
                                                DT::dataTableOutput("dataviewer")),
