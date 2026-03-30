@@ -8,6 +8,14 @@ ui <- fluidPage(
   # ),
   # Syntax highlighting for R code blocks
   tags$head(
+    # Google Analytics (GA4) — replace G-5RG08QWPPG with your measurement ID
+    tags$script(async = NA, src = "https://www.googletagmanager.com/gtag/js?id=G-5RG08QWPPG"),
+    tags$script(HTML("
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-5RG08QWPPG');
+    ")),
     tags$link(rel = "stylesheet", href = "https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;700&display=swap"),
     tags$link(rel = "stylesheet", href = "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"),
     tags$script(src = "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"),
@@ -198,6 +206,97 @@ ui <- fluidPage(
                       tabsetPanel(id = "tabs_collection",
                         tabPanel("Checklist",
                                  uiOutput("checklist_content"))
+                      )
+             ),
+             # About & Privacy panel
+             tabPanel("About",
+                      icon = icon("circle-info"),
+                      tags$div(style = "max-width: 800px; margin: 0 auto; padding: 20px 15px;",
+                        h2("About Shinytone"),
+                        tags$p("Shinytone is an open-source R Shiny web application that integrates the full citation tone analysis workflow into a single interactive tool. It is designed for phoneticians, typologists, fieldworkers, and students studying lexical tone production."),
+                        tags$p(icon("laptop-code"), " Developed by ", tags$a(href = "https://chenzixu.rbind.io/", target = "_blank", "Chenzi Xu")),
+                        tags$p("Source code: ", icon("github"), " ", tags$a(href = "https://github.com/chenchenzi/citationtone_hub", target = "_blank", "github.com/chenchenzi/citationtone_hub")),
+
+                        tags$hr(),
+                        h3("Frequently Asked Questions"),
+
+                        # --- Privacy & Data ---
+                        h4(style = "color: #78c2ad; margin-top: 20px;", "Privacy & Data"),
+
+                        tags$div(class = "faq-item", style = "margin-bottom: 16px;",
+                          tags$p(tags$strong("Is my data stored or shared?")),
+                          tags$p("No. When you upload a CSV file, it is loaded into temporary server memory for in-session analysis only. It is never written to any persistent database, cloud storage, or file system, and is never transmitted to the developer or any third party.")
+                        ),
+
+                        tags$div(class = "faq-item", style = "margin-bottom: 16px;",
+                          tags$p(tags$strong("What happens when I close the app?")),
+                          tags$p("All uploaded data and results are irrecoverably discarded when your session ends, the browser tab is closed, or the app reaches its idle timeout (typically 5 minutes of inactivity). No copy is retained. Download any outputs (CSV, plots) before closing.")
+                        ),
+
+                        tags$div(class = "faq-item", style = "margin-bottom: 16px;",
+                          tags$p(tags$strong("Can anyone access my data during my session?")),
+                          tags$p("No. No individual, including the developer, can access, retrieve, or view data uploaded during your session. The source code is publicly available for independent verification.")
+                        ),
+
+                        tags$div(class = "faq-item", style = "margin-bottom: 16px;",
+                          tags$p(tags$strong("Should I upload sensitive or personal data?")),
+                          tags$p("This app is designed for linguistic research data (e.g., acoustic measurements, tone labels). Do not upload personally identifiable information (PII) or protected health information (PHI). The developer accepts no liability for data uploaded in violation of applicable privacy regulations.")
+                        ),
+
+                        # --- Hosting & Platform ---
+                        h4(style = "color: #78c2ad; margin-top: 20px;", "Hosting & Platform"),
+
+                        tags$div(class = "faq-item", style = "margin-bottom: 16px;",
+                          tags$p(tags$strong("Where is the app hosted?")),
+                          tags$p("The app is hosted on ", tags$a(href = "https://www.shinyapps.io/", target = "_blank", "shinyapps.io"), ", operated by Posit, PBC, using Amazon Web Services (AWS) infrastructure in the us-east-1 region. All connections use HTTPS/TLS encryption. Note: Posit plans to migrate shinyapps.io users to ",
+                            tags$a(href = "https://connect.posit.cloud/", target = "_blank", "Posit Connect Cloud"),
+                            " by the end of 2026.")
+                        ),
+
+                        tags$div(class = "faq-item", style = "margin-bottom: 16px;",
+                          tags$p(tags$strong("Does the platform collect any metadata?")),
+                          tags$p("Posit may independently collect server-level metadata such as IP address, browser/device information, and request timestamps. See ", tags$a(href = "https://posit.co/about/privacy-policy/", target = "_blank", "Posit's privacy policy"), " for details.")
+                        ),
+
+                        tags$div(class = "faq-item", style = "margin-bottom: 16px;",
+                          tags$p(tags$strong("Does this app use cookies?")),
+                          tags$p("The app itself sets no cookies. Shiny/shinyapps.io sets a session-scoped cookie to route server responses to the correct client. It expires when the browser session ends.")
+                        ),
+
+                        tags$div(class = "faq-item", style = "margin-bottom: 16px;",
+                          tags$p(tags$strong("Does this app use analytics?")),
+                          tags$p("This app uses Google Analytics to collect anonymous usage statistics (e.g., page views, session duration). No personally identifiable information or uploaded data is sent to Google Analytics.")
+                        ),
+
+                        # --- Usage ---
+                        h4(style = "color: #78c2ad; margin-top: 20px;", "Usage"),
+
+                        tags$div(class = "faq-item", style = "margin-bottom: 16px;",
+                          tags$p(tags$strong("Is this app open source?")),
+                          tags$p("Yes. The source code is available at ", tags$a(href = "https://github.com/chenchenzi/citationtone_hub", target = "_blank", "github.com/chenchenzi/citationtone_hub"), ". It is licensed under ", tags$a(href = "https://creativecommons.org/licenses/by-nc/4.0/", target = "_blank", "CC BY-NC 4.0"), ". Free to use for research and teaching (non-commercial) purposes with attribution.")
+                        ),
+
+                        tags$div(class = "faq-item", style = "margin-bottom: 16px;",
+                          tags$p(tags$strong("Can I run Shinytone locally?")),
+                          tags$p("Yes. Clone the repository and run ", tags$code("shiny::runApp()"), " in R. When running locally, your data never leaves your machine. For very large datasets, consider running the app locally.")
+                        ),
+
+                        tags$div(class = "faq-item", style = "margin-bottom: 16px;",
+                          tags$p(tags$strong("How do I cite Shinytone?")),
+                          tags$p("If you use Shinytone in your research, please cite it as:"),
+                          tags$blockquote(style = "border-left: 3px solid #78c2ad; padding-left: 12px; color: #555; font-size: 0.9rem;",
+                            "Xu, Chenzi (2026). Shinytone: A citation tone research hub. [Web application]. Available at https://chenzixu.shinyapps.io/shinytone/"
+                          )
+                        ),
+
+                        tags$div(class = "faq-item", style = "margin-bottom: 16px;",
+                          tags$p(tags$strong("I found a bug or have a feature request.")),
+                          tags$p("Please open an issue on the ", tags$a(href = "https://github.com/chenchenzi/citationtone_hub/issues", target = "_blank", "GitHub repository"), ".")
+                        ),
+
+                        # --- Footer ---
+                        tags$hr(),
+                        tags$p(style = "color: #999; font-size: 0.8rem;", "Last updated: March 2026")
                       )
              ),
   )
