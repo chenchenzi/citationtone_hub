@@ -214,7 +214,7 @@ ui <- fluidPage(
                       tags$div(style = "max-width: 800px; margin: 0 auto; padding: 20px 15px;",
                         h2("About Shinytone"),
                         tags$p("Shinytone is an open-source R Shiny web application that integrates the full citation tone analysis workflow into a single interactive tool. It is designed for phoneticians, typologists, fieldworkers, and students studying lexical tone production."),
-                        tags$p(icon("laptop-code"), " Developed by ", tags$a(href = "https://chenzixu.rbind.io/", target = "_blank", "Chenzi Xu")),
+                        tags$p("Developed by ", icon("laptop-code"), " ", tags$a(href = "https://chenzixu.rbind.io/", target = "_blank", "Chenzi Xu")),
                         tags$p("Source code: ", icon("github"), " ", tags$a(href = "https://github.com/chenchenzi/citationtone_hub", target = "_blank", "github.com/chenchenzi/citationtone_hub")),
 
                         tags$hr(),
