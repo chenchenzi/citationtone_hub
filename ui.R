@@ -98,8 +98,8 @@ ui <- fluidPage(
     tags$p("Loading app...")
   ),
   #Navbar structure for UI
-  navbarPage(title = tags$img(src = "shinytone.svg", height = "44px", alt = "Shinytone",
-                              style = "margin-top: -8px; margin-bottom: -8px;"),
+  navbarPage(title = tags$img(src = "shinytone.svg", height = "60px", alt = "Shinytone",
+                              style = "margin-top: -16px; margin-bottom: -16px;"),
              windowTitle = "Shinytone",
              theme = bs_theme(version = 5, bootswatch = "minty",
                               heading_font = font_google("Open Sans"),
