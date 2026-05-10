@@ -1,0 +1,9 @@
+<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <g transform="translate(32,32) scale(1.4)">
+    <!-- Thicker leaves for better legibility at small sizes -->
+    <path d="M -20 14 Q 0 10 20 -12 Q 0 22 -20 16 Z" fill="#5cb89a"/>
+    <path d="M -20 -12 Q 0 -10 20 14 Q 0 -22 -20 -16 Z" fill="#e8927d"/>
+    <!-- Larger, bolder eye -->
+    <circle cx="-12" cy="0" r="3.4" fill="#2c5f4f"/>
+  </g>
+</svg>

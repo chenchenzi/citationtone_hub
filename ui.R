@@ -8,6 +8,12 @@ ui <- fluidPage(
   # ),
   # Syntax highlighting for R code blocks
   tags$head(
+    # Favicons
+    tags$link(rel = "icon", type = "image/svg+xml", href = "favicon.svg"),
+    tags$link(rel = "icon", type = "image/png", sizes = "32x32", href = "favicon-32.png"),
+    tags$link(rel = "icon", type = "image/png", sizes = "192x192", href = "favicon-192.png"),
+    tags$link(rel = "apple-touch-icon", sizes = "192x192", href = "favicon-192.png"),
+    tags$link(rel = "apple-touch-icon", sizes = "512x512", href = "favicon-512.png"),
     # Google Analytics (GA4) — replace G-5RG08QWPPG with your measurement ID
     tags$script(async = NA, src = "https://www.googletagmanager.com/gtag/js?id=G-5RG08QWPPG"),
     tags$script(HTML("
@@ -92,7 +98,9 @@ ui <- fluidPage(
     tags$p("Loading app...")
   ),
   #Navbar structure for UI
-  navbarPage("Citation tones", 
+  navbarPage(title = tags$img(src = "shinytone.svg", height = "44px", alt = "Shinytone",
+                              style = "margin-top: -8px; margin-bottom: -8px;"),
+             windowTitle = "Shinytone",
              theme = bs_theme(version = 5, bootswatch = "minty",
                               heading_font = font_google("Open Sans"),
                               base_font = font_google("Open Sans"),

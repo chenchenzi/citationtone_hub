@@ -1,0 +1,12 @@
+<svg viewBox="0 0 320 90" xmlns="http://www.w3.org/2000/svg">
+  <g transform="translate(42,45)">
+    <path d="M -22 12 Q 0 10 22 -10 Q 0 18 -22 13 Z" fill="#5cb89a"/>
+    <path d="M -22 -10 Q 0 -10 22 12 Q 0 -18 -22 -11 Z" fill="#e8927d"/>
+    <!-- Eye nudged from x=-18 to x=-14 -->
+    <circle cx="-14" cy="0" r="2.6" fill="#2c5f4f"/>
+  </g>
+  <text x="82" y="56" font-family="'IBM Plex Serif', Georgia, serif"
+        font-size="38" font-weight="500" fill="#2c5f4f" letter-spacing="-0.5">
+    Shiny<tspan font-style="italic" font-weight="400" fill="#c66b56">tone</tspan>
+  </text>
+</svg>
