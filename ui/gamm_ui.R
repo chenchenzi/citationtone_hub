@@ -732,6 +732,8 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
         theme(legend.position = "bottom")
 
       ggsave(file, plot = p, width = 8, height = 5, dpi = 300)
+      showNotification(paste("Plot saved as", paste0(input$gamm_filename, ".png")),
+                       type = "message", duration = 4)
     }
   )
 
@@ -742,7 +744,9 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
     },
     content = function(file) {
       req(gamm_model())
+      fname <- paste0(input$gamm_filename, "_model.rds")
       saveRDS(gamm_model(), file)
+      showNotification(paste("Model saved as", fname), type = "message", duration = 4)
     }
   )
 

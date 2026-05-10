@@ -494,6 +494,8 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
         theme(legend.position = "bottom")
 
       ggsave(file, plot = p, width = 8, height = 5, dpi = 300)
+      showNotification(paste("Plot saved as", paste0(input$gca_filename, ".png")),
+                       type = "message", duration = 4)
     }
   )
 

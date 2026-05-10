@@ -813,6 +813,8 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
       }
       export$Shape <- result$contour_shape
       write.csv(export, file, row.names = FALSE)
+      showNotification(paste("Data saved as", paste0(input$sum_filename, ".csv")),
+                       type = "message", duration = 4)
     }
   )
 
@@ -825,6 +827,8 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
       png(file, width = plot_width, height = 5, units = "in", res = 300)
       sum_plot_reactive()
       dev.off()
+      showNotification(paste("Plot saved as", paste0(input$sum_filename, ".png")),
+                       type = "message", duration = 4)
     }
   )
 

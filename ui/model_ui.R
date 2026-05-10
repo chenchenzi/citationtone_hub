@@ -301,7 +301,9 @@ model_ui <- function(input, output, session, dataset, normalised_data) {
     },
     content = function(file) {
       req(model_result())
+      fname <- paste0(input$model_filename, ".csv")
       write.csv(model_result(), file, row.names = FALSE)
+      showNotification(paste("Coefficients saved as", fname), type = "message", duration = 4)
     }
   )
 

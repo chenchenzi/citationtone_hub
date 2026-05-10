@@ -124,9 +124,11 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
       paste0("f0_plot_", Sys.Date(), ".png")
     },
     content = function(file) {
+      fname <- paste0("f0_plot_", Sys.Date(), ".png")
       ggsave(file, plot = current_plot(),
              width = plot_width() / 100, height = plot_height() / 100,
              dpi = 300, bg = "white")
+      showNotification(paste("Plot saved as", fname), type = "message", duration = 4)
     }
   )
 
@@ -139,8 +141,17 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
 
   output$r_code_output <- renderUI({
     req(code_visible())
-    req(input$plot_button > 0)
     req(input$x_var, input$y_var, input$tone_var, input$speaker_var)
+
+    # Friendly nudge when no plot has been generated yet
+    if (is.null(input$plot_button) || input$plot_button == 0) {
+      return(tags$div(
+        style = "background-color: #fff8e1; border-left: 4px solid #e0a800; padding: 12px 14px; margin-top: 12px; border-radius: 4px; color: #555;",
+        icon("circle-info"),
+        " Click ", tags$strong("Visualise f0 Contours"),
+        " first to generate the plot, then the corresponding R code will appear here."
+      ))
+    }
 
     # Build the R code string dynamically
     code_lines <- c(

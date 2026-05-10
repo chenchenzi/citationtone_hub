@@ -119,7 +119,9 @@ normalised_ui <- function(input, output, session, dataset, normalised_data) {
     },
     content = function(file) {
       req(norm_display())
+      fname <- paste0(input$output_filename, ".csv")
       write.csv(norm_display(), file, row.names = FALSE)
+      showNotification(paste("Data saved as", fname), type = "message", duration = 4)
     }
   )
 }

@@ -351,7 +351,9 @@ inspect_ui <- function(input, output, session, dataset) {
     },
     content = function(file) {
       req(inspect_result())
+      fname <- paste0(input$inspect_filename, ".csv")
       write.csv(inspect_result(), file, row.names = FALSE)
+      showNotification(paste("Data saved as", fname), type = "message", duration = 4)
     }
   )
 
@@ -362,8 +364,10 @@ inspect_ui <- function(input, output, session, dataset) {
     },
     content = function(file) {
       req(inspect_result())
+      fname <- paste0(input$inspect_filename, "_flagged.csv")
       flagged <- inspect_result() %>% filter(flagged_token == TRUE)
       write.csv(flagged, file, row.names = FALSE)
+      showNotification(paste("Flagged tokens saved as", fname), type = "message", duration = 4)
     }
   )
 }
