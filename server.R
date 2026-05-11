@@ -22,6 +22,10 @@ library(mgcv)
 library(thematic)
 library(gridExtra)
 library(plotly)
+# Audio / Praat ecosystem (f0 processing tab)
+library(tuneR)
+library(rPraat)
+library(praatpicture)
 #library(ragg)
 
 source("ui/start_ui.R")
@@ -34,7 +38,10 @@ source("ui/gca_ui.R")
 source("ui/gamm_ui.R")
 source("ui/checklist_ui.R")
 source("ui/summarise_ui.R")
-options(shiny.maxRequestSize = 20 * 1024^2) 
+source("ui/fp_start_ui.R")
+source("ui/fp_extraction_ui.R")
+source("ui/fp_correction_ui.R")
+options(shiny.maxRequestSize = 100 * 1024^2)  # 100 MB cap for batch WAV uploads
 #options(shiny.useragg = TRUE)
 
 # Enable thematic
@@ -66,6 +73,10 @@ server <- function(input, output, session) {
   gca_pred_data <- reactiveVal(NULL)
   gamm_pred_data <- reactiveVal(NULL)
 
+  # Shared storage for f0 processing tab
+  fp_audio_data <- reactiveVal(NULL)   # data.frame: basename, wav_path, tg_path, pitch_path, sr, bit, dur, channels
+  fp_f0_data    <- reactiveVal(NULL)   # extracted/parsed f0 contours (long format)
+
   # Call the Start tab UI and server logic (start_ui function)
   start_ui(input, output, session, dataset)
   view_ui(input, output, session, dataset)
@@ -77,5 +88,10 @@ server <- function(input, output, session) {
   gamm_ui(input, output, session, dataset, normalised_data, gamm_pred_data)
   checklist_ui(input, output, session)
   summarise_ui(input, output, session, dataset, normalised_data, gca_pred_data, gamm_pred_data)
+
+  # f0 processing tab modules
+  fp_start_ui(input, output, session, fp_audio_data)
+  fp_extraction_ui(input, output, session, fp_audio_data, fp_f0_data)
+  fp_correction_ui(input, output, session, fp_audio_data, fp_f0_data)
 
 }

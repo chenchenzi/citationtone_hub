@@ -210,7 +210,35 @@ ui <- fluidPage(
                       )
              ),
              # Data collection panel
-             tabPanel("Data collection",
+             # F0 Processing panel ------------------------------------------------
+             tabPanel("F0 Processing",
+                      icon = icon("wave-square"),
+                      sidebarLayout(
+                        sidebarPanel(
+                          titlePanel("Audio files"),
+                          conditionalPanel("input.tabs_fp == 'Start'",
+                                           uiOutput("ui_fp_upload")),
+                          conditionalPanel("input.tabs_fp == 'F0 Extraction'",
+                                           uiOutput("ui_fp_extraction")),
+                          conditionalPanel("input.tabs_fp == 'F0 Correction'",
+                                           uiOutput("ui_fp_correction"))
+                        ),
+                        mainPanel(
+                          tabsetPanel(id = "tabs_fp",
+                                      tabPanel("Start",
+                                               uiOutput("fp_start_guide"),
+                                               uiOutput("fp_files_summary"),
+                                               DT::dataTableOutput("fp_files_table")),
+                                      tabPanel("F0 Extraction",
+                                               uiOutput("fp_extraction_guide"),
+                                               uiOutput("fp_extraction_results")),
+                                      tabPanel("F0 Correction",
+                                               uiOutput("fp_correction_guide"))
+                          )
+                        )
+                      )
+             ),
+             tabPanel("Data Collection",
                       icon = icon("clipboard-check"),
                       tabsetPanel(id = "tabs_collection",
                         tabPanel("Checklist",
