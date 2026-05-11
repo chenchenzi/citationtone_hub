@@ -40,8 +40,7 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
           tags$li(tags$strong("ot3"), " (cubic) captures the asymmetry of curvature.")
         ),
         tags$p(style = "margin-bottom: 0;",
-          tags$strong("Tone contrasts:"),
-          " R's default treatment contrasts are used — the alphabetically-first tone is the reference, and other tones' coefficients reflect their difference from it on each polynomial term."
+          tags$strong("Contrast coding:"), " Treatment (Dummy) Coding is used here."
         )
       )
     )
