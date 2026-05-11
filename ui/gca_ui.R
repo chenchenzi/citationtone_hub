@@ -117,6 +117,10 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
         tags$hr(),
         actionButton("gca_button", "Fit GCA Model"),
         div(style = "margin-top: 4px;",
+          actionButton("gca_show_pairwise", "Pairwise Tone Comparisons",
+                       icon = icon("scale-balanced"))
+        ),
+        div(style = "margin-top: 4px;",
           actionButton("gca_show_code", "Show R code", icon = icon("code"))
         ),
         tags$hr(),
@@ -135,6 +139,19 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
   gca_plot_data <- reactiveVal(NULL)
   gca_formula_str <- reactiveVal(NULL)
   gca_tone_estimates <- reactiveVal(NULL)
+  gca_pairwise <- reactiveVal(NULL)
+  gca_pairwise_visible <- reactiveVal(FALSE)
+
+  observeEvent(input$gca_show_pairwise, {
+    if (is.null(gca_model())) {
+      showNotification(
+        "Fit the GCA model first, then click Pairwise Tone Comparisons.",
+        type = "warning", duration = 4
+      )
+      return()
+    }
+    gca_pairwise_visible(!gca_pairwise_visible())
+  })
 
   # --- Core computation ---
   observeEvent(input$gca_button, {
@@ -331,6 +348,24 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
     if (!is.null(gca_pred_data)) {
       gca_pred_data(plot_df)
     }
+
+    # Pairwise tone comparisons (intercept-level + per polynomial slope)
+    pw_tables <- list()
+    # Intercept-level: marginal means of tone with poly terms held at 0
+    pw_tables$Intercept <- tryCatch({
+      at_list <- setNames(as.list(rep(0, degree)), ot_names)
+      emm <- emmeans::emmeans(model, ~ .tone, at = at_list)
+      as.data.frame(pairs(emm, adjust = "tukey"))
+    }, error = function(e) NULL)
+    # Per polynomial slope: emtrends
+    for (k in seq_len(degree)) {
+      otn <- paste0("ot", k)
+      pw_tables[[otn]] <- tryCatch({
+        emt <- emmeans::emtrends(model, ~ .tone, var = otn)
+        as.data.frame(pairs(emt, adjust = "tukey"))
+      }, error = function(e) NULL)
+    }
+    gca_pairwise(pw_tables)
   })
 
   # --- Summary box ---
@@ -440,6 +475,51 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
               tags$thead(tags$tr(te_header_cells)),
               tags$tbody(te_body_rows)
             )
+          )
+        },
+        # Pairwise tone comparisons (emmeans), shown when toggled on
+        if (isTRUE(gca_pairwise_visible()) && !is.null(gca_pairwise())) {
+          pw <- gca_pairwise()
+          term_label <- function(nm) {
+            if (nm == "Intercept") "Intercept (mean level)"
+            else if (nm == "ot1") "ot1 (linear slope)"
+            else if (nm == "ot2") "ot2 (quadratic curvature)"
+            else if (nm == "ot3") "ot3 (cubic asymmetry)"
+            else nm
+          }
+          render_pw_table <- function(df) {
+            if (is.null(df) || nrow(df) == 0) {
+              return(tags$p(style = "color: #999; font-style: italic;", "Not estimable for this model."))
+            }
+            cn <- names(df)
+            tags$table(
+              style = "margin-top: 6px; border-collapse: collapse; font-size: 0.86rem; width: 100%;",
+              tags$thead(tags$tr(lapply(cn, function(x) tags$th(style = th_style, x)))),
+              tags$tbody(lapply(seq_len(nrow(df)), function(i) {
+                tags$tr(
+                  tags$td(style = td_style_left, as.character(df[i, 1])),
+                  lapply(cn[-1], function(x) {
+                    v <- df[i, x]
+                    if (is.numeric(v)) tags$td(style = td_style, signif(v, 4))
+                    else tags$td(style = td_style, as.character(v))
+                  })
+                )
+              }))
+            )
+          }
+          tagList(
+            tags$br(),
+            tags$strong("Pairwise tone comparisons (Tukey-adjusted):"),
+            tags$p(style = "color: #777; font-size: 0.82rem; margin: 4px 0 0 0;",
+                   "All pairwise tone contrasts on each polynomial term, computed via emmeans / emtrends."),
+            lapply(names(pw), function(nm) {
+              tagList(
+                tags$div(style = "margin-top: 10px;",
+                  tags$em(term_label(nm))
+                ),
+                render_pw_table(pw[[nm]])
+              )
+            })
           )
         }
       )
