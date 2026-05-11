@@ -178,6 +178,7 @@ ui <- fluidPage(
                                                  uiOutput("model_summary"),
                                                  tags$div(class = "plot-spinner")
                                                ),
+                                               uiOutput("model_plot_block"),
                                                DT::dataTableOutput("model_data"),
                                                uiOutput("model_r_code")),
                                       tabPanel("Model: GCA",

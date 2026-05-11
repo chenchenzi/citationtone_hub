@@ -294,6 +294,120 @@ model_ui <- function(input, output, session, dataset, normalised_data) {
       DT::formatRound(coef_cols, 4)
   })
 
+  # --- Coefficient-space scatter plot (plotly) ---
+  # Only meaningful for degree >= 2, since with degree=1 there's only c0/c1.
+  # Wrapping controls + plotlyOutput in a single uiOutput ensures the plot
+  # DOM is fully removed when degree drops to 1 (plotly does not auto-clear).
+  output$model_plot_block <- renderUI({
+    req(model_result())
+    coef_cols <- grep("^c\\d+$", names(model_result()), value = TRUE)
+    if (length(coef_cols) < 2) return(NULL)  # need at least c0, c1
+
+    # At degree=1 we only have c0/c1 → 2D only, no Z dropdown.
+    # At degree>=2 we expose the full X/Y/Z choice.
+    can_3d <- length(coef_cols) >= 3
+    default_y <- if (can_3d) "c2" else "c1"
+    default_x <- if (can_3d) "c1" else "c0"
+    z_choices <- c("(none)" = "", setNames(coef_cols, coef_cols))
+
+    tagList(
+      tags$div(
+        style = "margin: 10px 0 6px 0; padding: 8px 12px; background: #f5fbf8; border-left: 3px solid #78c2ad; border-radius: 4px;",
+        tags$strong("Coefficient-space scatter "),
+        tags$span(style = "color: #777; font-size: 0.85rem;",
+                  " — each point is one token, coloured by tone. Use the camera icon on the plot toolbar to download a high-resolution PNG."),
+        fluidRow(
+          column(4, selectInput("model_plot_x", "X axis", choices = coef_cols, selected = default_x)),
+          column(4, selectInput("model_plot_y", "Y axis", choices = coef_cols, selected = default_y)),
+          if (can_3d) {
+            column(4, selectInput("model_plot_z", "Z axis", choices = z_choices, selected = ""))
+          }
+        )
+      ),
+      plotly::plotlyOutput("model_plot", height = "500px")
+    )
+  })
+
+  output$model_plot <- plotly::renderPlotly({
+    req(model_result())
+    res <- model_result()
+    coef_cols <- grep("^c\\d+$", names(res), value = TRUE)
+    if (length(coef_cols) < 2) return(NULL)  # nothing to scatter
+
+    x_var <- if (!is.null(input$model_plot_x) && input$model_plot_x %in% coef_cols) input$model_plot_x else coef_cols[min(2, length(coef_cols))]
+    y_var <- if (!is.null(input$model_plot_y) && input$model_plot_y %in% coef_cols) input$model_plot_y else coef_cols[1]
+    z_var <- input$model_plot_z
+    if (is.null(z_var) || !nzchar(z_var) || !(z_var %in% coef_cols)) z_var <- NA_character_
+
+    tone_var    <- input$model_tone_var
+    token_var   <- input$model_token_var
+    speaker_var <- input$model_speaker_var
+
+    plot_df <- res[!is.na(res[[x_var]]) & !is.na(res[[y_var]]), , drop = FALSE]
+    if (!is.na(z_var)) plot_df <- plot_df[!is.na(plot_df[[z_var]]), , drop = FALSE]
+    if (nrow(plot_df) == 0) return(NULL)
+
+    plot_df$.tone    <- as.factor(plot_df[[tone_var]])
+    plot_df$.token   <- as.character(plot_df[[token_var]])
+    plot_df$.speaker <- as.character(plot_df[[speaker_var]])
+
+    hover_text <- paste0(
+      "<b>", plot_df$.token, "</b><br>",
+      tone_var, ": ", as.character(plot_df$.tone), "<br>",
+      speaker_var, ": ", plot_df$.speaker, "<br>",
+      x_var, ": ", signif(plot_df[[x_var]], 4), "<br>",
+      y_var, ": ", signif(plot_df[[y_var]], 4),
+      if (!is.na(z_var)) paste0("<br>", z_var, ": ", signif(plot_df[[z_var]], 4)) else ""
+    )
+
+    apply_config <- function(p) {
+      plotly::config(
+        p,
+        displaylogo = FALSE,
+        toImageButtonOptions = list(
+          format = "png",
+          filename = "polynomial_scatter",
+          width = 1600, height = 1000, scale = 2
+        )
+      )
+    }
+
+    if (is.na(z_var)) {
+      plotly::plot_ly(
+        data = plot_df,
+        x = ~.data[[x_var]], y = ~.data[[y_var]],
+        color = ~.tone,
+        text = hover_text, hoverinfo = "text",
+        type = "scatter", mode = "markers",
+        marker = list(size = 8, opacity = 0.75, line = list(width = 0.5, color = "#444"))
+      ) |>
+        plotly::layout(
+          xaxis = list(title = x_var, zeroline = TRUE),
+          yaxis = list(title = y_var, zeroline = TRUE),
+          legend = list(title = list(text = tone_var))
+        ) |>
+        apply_config()
+    } else {
+      plotly::plot_ly(
+        data = plot_df,
+        x = ~.data[[x_var]], y = ~.data[[y_var]], z = ~.data[[z_var]],
+        color = ~.tone,
+        text = hover_text, hoverinfo = "text",
+        type = "scatter3d", mode = "markers",
+        marker = list(size = 4, opacity = 0.8, line = list(width = 0.3, color = "#444"))
+      ) |>
+        plotly::layout(
+          scene = list(
+            xaxis = list(title = x_var),
+            yaxis = list(title = y_var),
+            zaxis = list(title = z_var)
+          ),
+          legend = list(title = list(text = tone_var))
+        ) |>
+        apply_config()
+    }
+  })
+
   # --- Download handler ---
   output$model_download <- downloadHandler(
     filename = function() {

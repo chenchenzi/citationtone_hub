@@ -21,6 +21,7 @@ library(emmeans)
 library(mgcv)
 library(thematic)
 library(gridExtra)
+library(plotly)
 #library(ragg)
 
 source("ui/start_ui.R")
