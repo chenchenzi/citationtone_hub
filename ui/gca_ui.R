@@ -34,10 +34,14 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
         ),
         tags$strong("Orthogonal polynomial terms"),
         " (the number depends on the chosen degree):",
-        tags$ul(style = "margin-bottom: 0; padding-left: 18px;",
+        tags$ul(style = "margin-bottom: 8px; padding-left: 18px;",
           tags$li(tags$strong("ot1"), " (linear) captures the overall rising or falling slope."),
           tags$li(tags$strong("ot2"), " (quadratic) captures the curvature of the contour."),
           tags$li(tags$strong("ot3"), " (cubic) captures the asymmetry of curvature.")
+        ),
+        tags$p(style = "margin-bottom: 0;",
+          tags$strong("Tone contrasts:"),
+          " R's default treatment contrasts are used — the alphabetically-first tone is the reference, and other tones' coefficients reflect their difference from it on each polynomial term."
         )
       )
     )
@@ -169,8 +173,9 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
       ) %>%
       ungroup()
 
-    # Generate orthogonal polynomial terms
+    # Generate orthogonal polynomial terms (save coefs to reuse at prediction time)
     poly_matrix <- poly(dat$.time_norm, degree)
+    poly_coefs  <- attr(poly_matrix, "coefs")
     ot_names <- paste0("ot", 1:degree)
     for (i in 1:degree) {
       dat[[ot_names[i]]] <- poly_matrix[, i]
@@ -292,52 +297,40 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
     }
     gca_tone_estimates(tone_est)
 
-    # Prepare plot data: predicted values from fixed effects by tone
+    # Prepare plot data: predicted values from fixed effects by tone.
+    # Build a (time x tone) grid, recompute the orthogonal polynomial basis
+    # using the SAME coefs as the fitted model, then predict via lme4 with
+    # re.form = NA (population-average curve, ignores random effects).
     time_seq <- seq(0, 1, length.out = 100)
-    poly_pred <- poly(time_seq, degree)
-
     tone_levels <- levels(dat$.tone)
-    plot_rows <- list()
+    newdata <- expand.grid(.time_norm = time_seq, .tone = tone_levels,
+                           stringsAsFactors = FALSE)
+    newdata$.tone <- factor(newdata$.tone, levels = tone_levels)
 
-    for (tone in tone_levels) {
-      # Build design matrix for this tone
-      pred_f0 <- rep(0, length(time_seq))
-      for (j in seq_along(time_seq)) {
-        # Intercept
-        val <- fe["(Intercept)"]
-        # Tone intercept (if not reference level)
-        tone_coef_name <- paste0(".tone", tone)
-        if (tone_coef_name %in% names(fe)) {
-          val <- val + fe[tone_coef_name]
-        }
-        # ot terms
-        for (k in 1:degree) {
-          ot_name <- paste0("ot", k)
-          val <- val + fe[ot_name] * poly_pred[j, k]
-          # ot:tone interaction
-          int_name <- paste0("ot", k, ":.tone", tone)
-          int_name2 <- paste0(".tone", tone, ":ot", k)
-          if (int_name %in% names(fe)) {
-            val <- val + fe[int_name] * poly_pred[j, k]
-          } else if (int_name2 %in% names(fe)) {
-            val <- val + fe[int_name2] * poly_pred[j, k]
-          }
-        }
-        pred_f0[j] <- val
-      }
-      plot_rows[[length(plot_rows) + 1]] <- data.frame(
-        time = time_seq,
-        f0_predicted = pred_f0,
-        tone = tone,
-        stringsAsFactors = FALSE
-      )
+    poly_pred <- poly(newdata$.time_norm, degree, coefs = poly_coefs)
+    for (k in 1:degree) {
+      newdata[[paste0("ot", k)]] <- poly_pred[, k]
     }
+    # lme4 needs the grouping-factor columns even with re.form = NA;
+    # values are ignored once random effects are dropped.
+    newdata$.speaker <- dat$.speaker[1]
+    newdata$.item    <- dat$.item[1]
 
-    gca_plot_data(do.call(rbind, plot_rows))
+    newdata$f0_predicted <- predict(model, newdata = newdata, re.form = NA,
+                                    allow.new.levels = TRUE)
+
+    plot_df <- data.frame(
+      time = newdata$.time_norm,
+      f0_predicted = newdata$f0_predicted,
+      tone = as.character(newdata$.tone),
+      stringsAsFactors = FALSE
+    )
+
+    gca_plot_data(plot_df)
 
     # Export to shared prediction store for Summarise tab
     if (!is.null(gca_pred_data)) {
-      gca_pred_data(do.call(rbind, plot_rows))
+      gca_pred_data(plot_df)
     }
   })
 
@@ -470,7 +463,7 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
       ) +
       theme_bw(base_size = 14) +
       theme(legend.position = "bottom")
-  }, height = function() { if (!is.null(gca_plot_data())) 400 else 1 })
+  }, width = 800, height = 500)
 
   # --- Download handler (plot image) ---
   output$gca_download <- downloadHandler(

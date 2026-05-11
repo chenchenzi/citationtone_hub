@@ -184,7 +184,7 @@ ui <- fluidPage(
                                                uiOutput("gca_guide"),
                                                tags$div(class = "plot-spinner-wrap",
                                                  uiOutput("gca_summary"),
-                                                 plotOutput("gca_plot", height = "auto", width = "auto"),
+                                                 plotOutput("gca_plot", height = "500px", width = "800px"),
                                                  tags$div(class = "plot-spinner")
                                                ),
                                                uiOutput("gca_r_code")),
