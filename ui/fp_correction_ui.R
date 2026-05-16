@@ -19,6 +19,12 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   fp_corrections <- reactiveVal(list())
   # Named list: token -> list of past states (for undo)
   fp_history <- reactiveVal(list())
+  # Optional flagged-token filter: raw uploaded CSV + extracted token IDs.
+  # fp_flagged_frames (if the CSV came from the Inspect tab) holds per-frame
+  # flag info keyed by token: a named list, token -> data.frame(time, note).
+  fp_flagged_raw    <- reactiveVal(NULL)
+  fp_flagged_tokens <- reactiveVal(NULL)
+  fp_flagged_frames <- reactiveVal(NULL)
 
   # Current token's contour (corrected if edited, else original)
   current_f0 <- reactive({
@@ -121,14 +127,29 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         .fp-edit-meta { font-size: 0.80rem; color: #666; }
       ")),
 
-      # ---- Token nav + progress ----
-      div(style = "display:flex; gap:4px; align-items:center; margin-bottom: 6px;",
-        actionButton("fp_corr_prev", HTML("&#9664;"), title = "Previous token"),
-        actionButton("fp_corr_next", HTML("&#9654;"), title = "Next token")
-      ),
+      # ---- Token + progress + nav ----
       selectInput("fp_corr_token", "Token:",
                   choices = tokens, selected = tokens[1]),
       verbatimTextOutput("fp_corr_progress", placeholder = TRUE),
+      div(style = "display:flex; gap:4px; align-items:center; margin-top: 6px;",
+        actionButton("fp_corr_prev", HTML("&#9664;"), title = "Previous token"),
+        actionButton("fp_corr_next", HTML("&#9654;"), title = "Next token")
+      ),
+
+      # ---- Flagged-tokens filter (collapsible, optional) ----
+      tags$details(style = "margin-top: 8px; margin-bottom: 4px;",
+        tags$summary(style = "cursor:pointer; font-size: 0.85rem; color: #4a7868; font-weight: 600;",
+                     icon("filter"), " Filter by flagged tokens"),
+        div(style = "padding: 6px 0 0 0;",
+          fileInput("fp_corr_flagged_csv", NULL,
+                    accept = c(".csv", "text/csv"),
+                    placeholder = "Upload Inspect-tab CSV"),
+          uiOutput("fp_corr_flagged_col_picker"),
+          checkboxInput("fp_corr_only_flagged",
+                        "Only show flagged tokens", value = FALSE)
+        )
+      ),
+
       tags$hr(),
 
       # ---- Edit section heading ----
@@ -195,47 +216,162 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         )
       ),
 
-      # ---- Undo (separated, full-width) ----
+      # ---- Undo (separated from edit groups) ----
       div(style = "margin-top: 12px;",
         actionButton("fp_corr_undo", "Undo last edit",
-                     icon = icon("rotate-left"), width = "100%")
+                     icon = icon("rotate-left"))
       ),
 
-      tags$hr(),
-      # Praat candidates (only when current token came from .Pitch)
+      # Praat candidates (only when current token came from .Pitch).
+      # The output includes its own leading <hr> when it renders content,
+      # so the sidebar avoids a double separator when this block is empty.
       uiOutput("fp_corr_candidates_ui"),
 
       tags$hr(),
       h5("Download"),
-      textInput("fp_corr_filename", "Filename:", value = "corrected_f0"),
-      downloadButton("fp_corr_download", "Download corrected f0 (CSV)")
+      div(style = "display:flex; gap:6px; flex-wrap: wrap;",
+        downloadButton("fp_corr_download_current", "Current token"),
+        downloadButton("fp_corr_download_all",     "All tokens")
+      ),
+      tags$small(style = "color:#888; display:block; margin-top:4px;",
+        "Files are named after the token or ", tags$code("all_correctedf0.csv"), ".")
     )
   })
 
-  # Prev / Next handlers (wrap around at ends)
+  # Prev / Next handlers — step through the *filtered* token list, wrap at ends
   observeEvent(input$fp_corr_prev, {
-    df <- fp_f0_data(); req(df)
-    tokens <- sort(unique(df$token))
+    tokens <- filtered_tokens()
+    if (length(tokens) == 0) return()
     idx <- match(input$fp_corr_token, tokens)
     new <- if (is.na(idx) || idx <= 1) length(tokens) else idx - 1
     updateSelectInput(session, "fp_corr_token", selected = tokens[new])
   })
   observeEvent(input$fp_corr_next, {
-    df <- fp_f0_data(); req(df)
-    tokens <- sort(unique(df$token))
+    tokens <- filtered_tokens()
+    if (length(tokens) == 0) return()
     idx <- match(input$fp_corr_token, tokens)
     new <- if (is.na(idx) || idx >= length(tokens)) 1 else idx + 1
     updateSelectInput(session, "fp_corr_token", selected = tokens[new])
   })
 
+  # ---- Flagged-token filter handlers ----
+  observeEvent(input$fp_corr_flagged_csv, {
+    req(input$fp_corr_flagged_csv)
+    df <- tryCatch(
+      utils::read.csv(input$fp_corr_flagged_csv$datapath, stringsAsFactors = FALSE),
+      error = function(e) NULL
+    )
+    if (is.null(df) || ncol(df) == 0) {
+      showNotification("Could not read flagged-tokens CSV.",
+                       type = "warning", duration = 4)
+      return()
+    }
+    fp_flagged_raw(df)
+    showNotification(sprintf("Loaded CSV: %d rows, %d columns. Pick the token column below.",
+                             nrow(df), ncol(df)),
+                     type = "message", duration = 4)
+  })
+
+  output$fp_corr_flagged_col_picker <- renderUI({
+    df <- fp_flagged_raw()
+    if (is.null(df)) return(NULL)
+    cols <- names(df)
+    default <- if ("token" %in% cols) "token"
+               else if ("token_id" %in% cols) "token_id"
+               else cols[1]
+    selectInput("fp_corr_flagged_col",
+                "Token column",
+                choices = cols, selected = default, width = "100%")
+  })
+
+  # Extract unique flagged token IDs whenever the user (re-)picks the column.
+  # If the CSV looks like Inspect output (has flagged_jump / time / flag_notes),
+  # also build per-frame flag info so we can highlight individual points later.
+  observeEvent(input$fp_corr_flagged_col, {
+    df <- fp_flagged_raw()
+    col <- input$fp_corr_flagged_col
+    req(df, col, col %in% names(df))
+    toks <- unique(as.character(df[[col]]))
+    toks <- toks[!is.na(toks) & nzchar(toks)]
+    fp_flagged_tokens(toks)
+
+    # Per-frame flag info (Inspect-tab format detection)
+    has_jump <- "flagged_jump" %in% names(df)
+    has_time <- "time" %in% names(df) || any(grepl("^time$", names(df), ignore.case = TRUE))
+    if (has_jump && has_time) {
+      time_col <- if ("time" %in% names(df)) "time" else grep("^time$", names(df), ignore.case = TRUE, value = TRUE)[1]
+      notes_col <- if ("flag_notes" %in% names(df)) "flag_notes" else NULL
+      sub <- df[isTRUE(as.logical(df$flagged_jump)) | df$flagged_jump %in% c(TRUE, "TRUE", "true", 1L, "1"), , drop = FALSE]
+      # Defensive: ensure boolean filter actually filters
+      sub <- df[as.logical(df$flagged_jump) %in% TRUE, , drop = FALSE]
+      sub <- sub[!is.na(sub[[col]]) & !is.na(sub[[time_col]]), , drop = FALSE]
+      if (nrow(sub) > 0) {
+        frames_by_token <- split(
+          data.frame(
+            time = as.numeric(sub[[time_col]]),
+            note = if (!is.null(notes_col)) as.character(sub[[notes_col]]) else "",
+            stringsAsFactors = FALSE
+          ),
+          as.character(sub[[col]])
+        )
+        fp_flagged_frames(frames_by_token)
+        showNotification(sprintf("Found %d flagged frames across %d tokens.",
+                                 nrow(sub), length(frames_by_token)),
+                         type = "message", duration = 4)
+      } else {
+        fp_flagged_frames(NULL)
+      }
+    } else {
+      fp_flagged_frames(NULL)
+    }
+  })
+
+  # Filtered list of tokens to populate the dropdown.
+  filtered_tokens <- reactive({
+    df <- fp_f0_data()
+    if (is.null(df)) return(character(0))
+    all_t <- sort(unique(df$token))
+    if (isTRUE(input$fp_corr_only_flagged)) {
+      flagged <- fp_flagged_tokens()
+      if (!is.null(flagged) && length(flagged) > 0) {
+        return(intersect(all_t, flagged))
+      }
+    }
+    all_t
+  })
+
+  # When the filtered set changes, update the dropdown choices in-place
+  # (avoids re-rendering the whole sidebar and losing edit state).
+  observe({
+    toks <- filtered_tokens()
+    cur <- isolate(input$fp_corr_token)
+    sel <- if (!is.null(cur) && cur %in% toks) cur
+           else if (length(toks) > 0) toks[1] else NULL
+    if (length(toks) == 0) {
+      updateSelectInput(session, "fp_corr_token",
+                        choices = c("(no matching tokens)" = ""),
+                        selected = "")
+    } else {
+      updateSelectInput(session, "fp_corr_token",
+                        choices = toks, selected = sel)
+    }
+  })
+
   # Progress counter: current position + how many tokens have been edited
   output$fp_corr_progress <- renderText({
-    df <- fp_f0_data(); req(df)
-    tokens <- sort(unique(df$token))
-    idx <- match(input$fp_corr_token, tokens)
-    if (is.na(idx)) return("")
+    toks <- filtered_tokens()
+    if (length(toks) == 0) return("No tokens match the current filter.")
+    idx <- match(input$fp_corr_token, toks)
+    if (is.na(idx)) idx <- 0
     n_edited <- length(fp_corrections())
-    sprintf("Token %d / %d  ·  Edited: %d", idx, length(tokens), n_edited)
+    flagged_total <- if (isTRUE(input$fp_corr_only_flagged) &&
+                         !is.null(fp_flagged_tokens())) {
+      sprintf("  ·  Flagged: %d", length(toks))
+    } else {
+      ""
+    }
+    sprintf("Token %d / %d  ·  Edited: %d%s",
+            idx, length(toks), n_edited, flagged_total)
   })
 
   # Selection text: count + time / f0 readout of selected frame(s)
@@ -311,11 +447,60 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       }
     }
 
-    # --- f0 marker colour / size with selected points highlighted ---
-    point_colors <- rep("#5cb89a", nrow(f0_df))
-    if (length(sel) > 0) point_colors[sel] <- "#e0712d"
-    point_sizes  <- rep(7, nrow(f0_df))
-    if (length(sel) > 0) point_sizes[sel] <- 12
+    # --- Per-frame flag lookup (from Inspect-tab CSV, if uploaded) ---
+    # Match frames whose time is within half a frame-step of a flagged time.
+    flagged_idx <- integer(0); flag_notes_full <- rep("", nrow(f0_df))
+    frames_by_tok <- fp_flagged_frames()
+    if (!is.null(frames_by_tok) && tok %in% names(frames_by_tok)) {
+      fl <- frames_by_tok[[tok]]
+      step <- if (nrow(f0_df) >= 2) median(diff(f0_df$time), na.rm = TRUE) else 0.005
+      if (is.na(step) || step <= 0) step <- 0.005
+      tol <- step / 2
+      for (k in seq_len(nrow(fl))) {
+        i <- which(abs(f0_df$time - fl$time[k]) <= tol)
+        if (length(i) > 0) {
+          flagged_idx <- c(flagged_idx, i[1])
+          flag_notes_full[i[1]] <- fl$note[k]
+        }
+      }
+      flagged_idx <- unique(flagged_idx)
+    }
+
+    # --- Pre-filter NA rows before plotting ---
+    # Plotly silently drops NA y-values from x/y but KEEPS per-point arrays
+    # (marker.color, .size) at their original length, mis-aligning colors with
+    # displayed points. Filtering in R first keeps every per-point array in
+    # lockstep. customdata preserves the *original* frame index so click events
+    # and edit handlers stay correct.
+    plot_idx <- which(!is.na(f0_df$f0))
+    f0_plot <- f0_df[plot_idx, , drop = FALSE]
+    flag_notes <- flag_notes_full[plot_idx]
+
+    # Map flagged + selected indices from full-data → plot-data positions
+    flagged_in_plot <- match(flagged_idx, plot_idx)
+    flagged_in_plot <- flagged_in_plot[!is.na(flagged_in_plot)]
+    sel_in_plot <- match(sel, plot_idx)
+    sel_in_plot <- sel_in_plot[!is.na(sel_in_plot)]
+
+    point_colors <- rep("#5cb89a", nrow(f0_plot))
+    point_sizes  <- rep(7L,        nrow(f0_plot))
+    if (length(flagged_in_plot) > 0) {
+      point_colors[flagged_in_plot] <- "#d9534f"   # red — Inspect-flagged
+      point_sizes [flagged_in_plot] <- 10L
+    }
+    if (length(sel_in_plot) > 0) {
+      point_colors[sel_in_plot] <- "#e0712d"       # orange — selected (overrides flag)
+      point_sizes [sel_in_plot] <- 12L
+    }
+
+    # Hover text — original frame index, time, f0, and flag note if any
+    hover_text <- sprintf("frame %d<br>time: %.3fs<br>f0: %.1f Hz",
+                          plot_idx, f0_plot$time, f0_plot$f0)
+    if (length(flagged_in_plot) > 0) {
+      hover_text[flagged_in_plot] <- paste0(hover_text[flagged_in_plot],
+                                            "<br><b>⚑ flagged:</b> ",
+                                            flag_notes[flagged_in_plot])
+    }
 
     p <- plotly::plot_ly(source = "fp_corr_plot")
 
@@ -332,28 +517,29 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
 
     p <- plotly::add_trace(
       p,
-      data = f0_df, x = ~time, y = ~f0,
+      x = f0_plot$time, y = f0_plot$f0,
       type = "scatter", mode = "markers+lines",
       yaxis = "y",
       marker = list(size = point_sizes, color = point_colors,
                     line = list(width = 1, color = "#2c5f4f")),
       line = list(color = "#5cb89a", width = 1),
-      customdata = ~seq_len(nrow(f0_df)),
-      hovertemplate = paste0(
-        "frame %{customdata}<br>time: %{x:.3f}s<br>f0: %{y:.1f} Hz<extra></extra>"
-      ),
+      customdata = plot_idx,               # original frame index
+      text = hover_text, hoverinfo = "text",
       showlegend = FALSE
     )
 
     # Stack waveform (top, y2) and f0 (bottom, y) on a shared x-axis.
+    # fixedrange = TRUE locks the y axes so modebar zoom acts only horizontally.
     layout_args <- list(
       xaxis = list(title = "time (s)", domain = c(0, 1)),
-      yaxis = list(title = "f0 (Hz)", domain = c(0, 0.6)),
+      yaxis = list(title = "f0 (Hz)", domain = c(0, 0.6),
+                   fixedrange = TRUE),
       dragmode = "select"
     )
     if (!is.null(wav)) {
       layout_args$yaxis2 <- list(title = "waveform",
-                                 domain = c(0.65, 1), anchor = "x")
+                                 domain = c(0.65, 1), anchor = "x",
+                                 fixedrange = TRUE)
     }
     p <- do.call(plotly::layout, c(list(p), layout_args))
     plotly::config(p, displaylogo = FALSE)
@@ -610,6 +796,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     cdf <- current_candidates()
     if (is.null(cdf) || nrow(cdf) == 0) {
       return(tagList(
+        tags$hr(),
         tags$strong("Praat candidates:"),
         tags$div(style = "color:#888; font-style: italic; font-size: 0.85rem;",
           "Select exactly one frame on the plot to see its alternative candidates.")
@@ -637,6 +824,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       )
     })
     tagList(
+      tags$hr(),
       tags$strong("Praat candidates:"),
       tags$div(style = "color:#666; font-size: 0.78rem; margin-bottom: 4px;",
                "Click an alternative to set this frame's f0."),
@@ -654,26 +842,50 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     }, sprintf("Pick candidate (%.2f Hz)", v))
   })
 
-  # ---- Download corrected CSV ----
-  output$fp_corr_download <- downloadHandler(
-    filename = function() paste0(input$fp_corr_filename, ".csv"),
-    content = function(file) {
-      orig <- fp_f0_data()
-      req(orig)
-      corr <- fp_corrections()
-      # Build a "corrected" column: corrected if edited, else original
-      out <- orig
-      out$f0_corrected <- out$f0
-      if (length(corr) > 0) {
-        for (tok in names(corr)) {
-          mask <- out$token == tok
-          # Align by row order within token (we kept row order in current_f0)
-          out$f0_corrected[mask] <- corr[[tok]]$f0[seq_len(sum(mask))]
-        }
+  # ---- Helper: build full (orig + corrected) dataframe ----
+  build_corrected_df <- function() {
+    orig <- fp_f0_data()
+    if (is.null(orig)) return(NULL)
+    corr <- fp_corrections()
+    out <- orig
+    out$f0_corrected <- out$f0
+    if (length(corr) > 0) {
+      for (tok in names(corr)) {
+        mask <- out$token == tok
+        out$f0_corrected[mask] <- corr[[tok]]$f0[seq_len(sum(mask))]
       }
-      fname <- paste0(input$fp_corr_filename, ".csv")
+    }
+    out
+  }
+
+  # ---- Download: current token only (named after the token) ----
+  output$fp_corr_download_current <- downloadHandler(
+    filename = function() {
+      tok <- input$fp_corr_token
+      if (is.null(tok) || !nzchar(tok)) tok <- "current"
+      paste0(tok, "_correctedf0.csv")
+    },
+    content = function(file) {
+      out <- build_corrected_df()
+      req(out)
+      tok <- input$fp_corr_token
+      req(tok)
+      sub <- out[out$token == tok, , drop = FALSE]
+      fname <- paste0(tok, "_correctedf0.csv")
+      write.csv(sub, file, row.names = FALSE)
+      showNotification(paste("Saved", fname),
+                       type = "message", duration = 4)
+    }
+  )
+
+  # ---- Download: all tokens in one CSV ----
+  output$fp_corr_download_all <- downloadHandler(
+    filename = function() "all_correctedf0.csv",
+    content = function(file) {
+      out <- build_corrected_df()
+      req(out)
       write.csv(out, file, row.names = FALSE)
-      showNotification(paste("Corrected f0 saved as", fname),
+      showNotification("Saved all_correctedf0.csv",
                        type = "message", duration = 4)
     }
   )
