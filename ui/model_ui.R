@@ -103,7 +103,7 @@ model_ui <- function(input, output, session, dataset, normalised_data) {
           actionButton("model_show_code", "Show R code", icon = icon("code"))
         ),
         tags$hr(),
-        h5("Download:"),
+        h5("Download"),
         textInput("model_filename", "Enter filename (without extension):",
                   value = "polynomial_coefficients"),
         downloadButton("model_download", "Download Coefficients")

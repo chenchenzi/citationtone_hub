@@ -33,7 +33,9 @@ normalised_ui <- function(input, output, session, dataset, normalised_data) {
 
     tagList(
       wellPanel(
-        h5(paste("Dataset:", input$dataset_name)),
+        h5("Dataset",
+           tags$small(style = "color: #777; margin-left: 6px; font-weight: 400;",
+                      input$dataset_name)),
         selectInput("f0_var", "Select f0 (Hz) variable:",
                     choices = setNames(vars, var_types), selected = vars[1], multiple = FALSE),
         selectInput("speaker_var", "Select Speaker variable:",
@@ -52,7 +54,7 @@ normalised_ui <- function(input, output, session, dataset, normalised_data) {
                      selected = "zscore"),
         actionButton("normalise_button", "Normalise f0 (Hz)"),
         tags$hr(),
-        h5("Download:"),
+        h5("Download"),
         textInput("output_filename", "Enter filename (without extension):", value = "normalised_data"),
         downloadButton("download_data", "Download Normalised Data")
       )

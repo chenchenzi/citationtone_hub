@@ -124,7 +124,7 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
           actionButton("gca_show_code", "Show R code", icon = icon("code"))
         ),
         tags$hr(),
-        h5("Download:"),
+        h5("Download"),
         textInput("gca_filename", "Enter filename (without extension):",
                   value = "gca_plot"),
         downloadButton("gca_download", "Download Plot")

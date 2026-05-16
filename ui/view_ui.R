@@ -39,7 +39,9 @@ output$ui_View <- renderUI({
   tagList(
     wellPanel(
       # Display the file name that the user input in the "Start" panel
-      h5(paste("Dataset:", input$dataset_name)),  # Assuming `input$dataset_name` holds the file name
+      h5("Dataset",
+         tags$small(style = "color: #777; margin-left: 6px; font-weight: 400;",
+                    input$dataset_name)),  # `input$dataset_name` holds the file name
       uiOutput("ui_view_vars"),  # Render the variable selection UI
       numericInput("view_dec", "Decimals:", value = 2, min = 0)  # Input for rounding decimals
     ),

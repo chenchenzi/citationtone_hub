@@ -40,7 +40,9 @@ inspect_ui <- function(input, output, session, dataset) {
 
     tagList(
       wellPanel(
-        h5(paste("Dataset:", input$dataset_name)),
+        h5("Dataset",
+           tags$small(style = "color: #777; margin-left: 6px; font-weight: 400;",
+                      input$dataset_name)),
         selectInput("inspect_f0_var", "Select f0 (Hz) variable:",
                     choices = setNames(vars, var_types), selected = vars[1]),
         selectInput("inspect_token_var", "Select Token ID variable:",
@@ -72,7 +74,7 @@ inspect_ui <- function(input, output, session, dataset) {
         tags$hr(),
         actionButton("inspect_button", "Run Inspection"),
         tags$hr(),
-        h5("Download:"),
+        h5("Download"),
         textInput("inspect_filename", "Enter filename (without extension):",
                   value = "inspected_data"),
         downloadButton("inspect_download", "Download Inspected Data"),

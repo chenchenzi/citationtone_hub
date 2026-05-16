@@ -159,7 +159,7 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
           actionButton("gamm_show_code", "Show R code", icon = icon("code"))
         ),
         tags$hr(),
-        h5("Download:"),
+        h5("Download"),
         textInput("gamm_filename", "Enter filename (without extension):",
                   value = "gamm_plot"),
         downloadButton("gamm_download", "Download Plot"),
