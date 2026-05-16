@@ -7,7 +7,8 @@
 #   token (basename), time (s), f0 (Hz, NA on unvoiced frames).
 ###############################################
 
-fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data) {
+fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
+                             fp_pitch_candidates = NULL) {
 
   # ---- Sidebar controls ----
   output$ui_fp_extraction <- renderUI({
@@ -26,7 +27,7 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data) 
       actionButton("fp_extract_run", "Run extraction", icon = icon("play")),
       tags$hr(),
       conditionalPanel("output.fp_have_f0 === 'yes'",
-        h5("Download:"),
+        h5("Download"),
         textInput("fp_extract_filename", "Filename:", value = "extracted_f0"),
         downloadButton("fp_extract_download", "Download f0 (CSV)")
       )
@@ -63,6 +64,7 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data) 
   })
 
   # ---- Helpers: extract one token from .wav (wrassp) ----
+  # Returns list(df, candidates = NULL) for uniformity with extract_praat_one.
   extract_wrassp_one <- function(wav_path, basename, f0_min, f0_max, step_ms) {
     obj <- tryCatch(
       wrassp::ksvF0(wav_path, toFile = FALSE,
@@ -79,13 +81,21 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data) 
     n_frames  <- nrow(obj$F0)
     t         <- seq(t0, by = 1 / sr, length.out = n_frames)
     f0        <- as.vector(obj$F0)
-    f0[f0 == 0] <- NA_real_   # wrassp uses 0 for unvoiced
-    data.frame(token = basename, time = t, f0 = f0, stringsAsFactors = FALSE)
+    f0[f0 == 0] <- NA_real_
+    list(
+      df = data.frame(token = basename, time = t, f0 = f0,
+                      stringsAsFactors = FALSE),
+      candidates = NULL
+    )
   }
 
   # ---- Helpers: parse one .Pitch or .PitchTier file (rPraat) ----
+  # Returns a list(df = ..., candidates = ... or NULL)
+  #   df         : data.frame(token, time, f0)
+  #   candidates : list of per-frame data.frame(frequency, strength) — only
+  #                populated for .Pitch files (the source has alternatives);
+  #                NULL for .PitchTier (which is a sparse curve).
   extract_praat_one <- function(pitch_path, pitchtier_path, basename) {
-    # Prefer .Pitch (full output) over .PitchTier (sparse, possibly cleaned).
     if (!is.na(pitch_path)) {
       parsed <- tryCatch(rPraat::pitch.read(pitch_path), error = function(e) NULL)
       if (!is.null(parsed)) {
@@ -93,20 +103,32 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data) 
         if (is.null(n) || n == 0) return(NULL)
         t <- if (!is.null(parsed$t)) parsed$t
              else parsed$x1 + (0:(n - 1)) * parsed$dx
-        f0 <- vapply(parsed$frame, function(fr) {
-          if (is.null(fr$nCandidates) || fr$nCandidates == 0) return(NA_real_)
-          fr$frequency[1]    # selected (best) candidate
+        # Preserve ALL candidates per frame for the Correction tab to pick from
+        cands_list <- lapply(parsed$frame, function(fr) {
+          if (is.null(fr$nCandidates) || fr$nCandidates == 0) {
+            return(data.frame(frequency = numeric(0), strength = numeric(0)))
+          }
+          data.frame(frequency = fr$frequency, strength = fr$strength)
+        })
+        f0 <- vapply(cands_list, function(c) {
+          if (nrow(c) == 0) NA_real_ else c$frequency[1]
         }, numeric(1))
-        f0[f0 == 0] <- NA_real_   # Praat uses 0 for unvoiced
-        return(data.frame(token = basename, time = t, f0 = f0,
-                          stringsAsFactors = FALSE))
+        f0[f0 == 0] <- NA_real_
+        return(list(
+          df = data.frame(token = basename, time = t, f0 = f0,
+                          stringsAsFactors = FALSE),
+          candidates = cands_list
+        ))
       }
     }
     if (!is.na(pitchtier_path)) {
       parsed <- tryCatch(rPraat::pt.read(pitchtier_path), error = function(e) NULL)
       if (!is.null(parsed)) {
-        return(data.frame(token = basename, time = parsed$t, f0 = parsed$f,
-                          stringsAsFactors = FALSE))
+        return(list(
+          df = data.frame(token = basename, time = parsed$t, f0 = parsed$f,
+                          stringsAsFactors = FALSE),
+          candidates = NULL
+        ))
       }
     }
     NULL
@@ -147,7 +169,8 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data) 
                            type = "error", duration = 6)
           return()
         }
-        fp_f0_data(do.call(rbind, results))
+        fp_f0_data(do.call(rbind, lapply(results, `[[`, "df")))
+        if (!is.null(fp_pitch_candidates)) fp_pitch_candidates(list())  # wrassp has no candidates
         showNotification(sprintf("Extracted f0 for %d / %d tokens.",
                                  length(results), nrow(wavs)),
                          type = "message", duration = 4)
@@ -175,7 +198,14 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data) 
                            type = "error", duration = 6)
           return()
         }
-        fp_f0_data(do.call(rbind, results))
+        fp_f0_data(do.call(rbind, lapply(results, `[[`, "df")))
+        if (!is.null(fp_pitch_candidates)) {
+          cands <- list()
+          for (b in names(results)) {
+            if (!is.null(results[[b]]$candidates)) cands[[b]] <- results[[b]]$candidates
+          }
+          fp_pitch_candidates(cands)
+        }
         showNotification(sprintf("Parsed f0 for %d / %d tokens.",
                                  length(results), nrow(has_praat)),
                          type = "message", duration = 4)

@@ -74,8 +74,9 @@ server <- function(input, output, session) {
   gamm_pred_data <- reactiveVal(NULL)
 
   # Shared storage for f0 processing tab
-  fp_audio_data <- reactiveVal(NULL)   # data.frame: basename, wav_path, tg_path, pitch_path, sr, bit, dur, channels
-  fp_f0_data    <- reactiveVal(NULL)   # extracted/parsed f0 contours (long format)
+  fp_audio_data       <- reactiveVal(NULL)   # data.frame: basename, wav_path, tg_path, pitch_path, sr, bit, dur, channels
+  fp_f0_data          <- reactiveVal(NULL)   # extracted/parsed f0 contours (long format)
+  fp_pitch_candidates <- reactiveVal(list()) # named list: token -> list of per-frame data.frame(frequency, strength). Populated only for tokens parsed from .Pitch files.
 
   # Call the Start tab UI and server logic (start_ui function)
   start_ui(input, output, session, dataset)
@@ -91,7 +92,7 @@ server <- function(input, output, session) {
 
   # f0 processing tab modules
   fp_start_ui(input, output, session, fp_audio_data)
-  fp_extraction_ui(input, output, session, fp_audio_data, fp_f0_data)
-  fp_correction_ui(input, output, session, fp_audio_data, fp_f0_data)
+  fp_extraction_ui(input, output, session, fp_audio_data, fp_f0_data, fp_pitch_candidates)
+  fp_correction_ui(input, output, session, fp_audio_data, fp_f0_data, fp_pitch_candidates)
 
 }
