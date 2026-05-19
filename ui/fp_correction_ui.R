@@ -26,6 +26,17 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   fp_flagged_tokens <- reactiveVal(NULL)
   fp_flagged_frames <- reactiveVal(NULL)
 
+  # Current token's TextGrid (if available), parsed via rPraat::tg.read.
+  # Returns a list of tiers (each with $name, $type, intervals/points), or NULL.
+  current_textgrid <- reactive({
+    tok <- input$fp_corr_token
+    audio <- fp_audio_data()
+    if (is.null(tok) || is.null(audio)) return(NULL)
+    row <- audio[audio$basename == tok, , drop = FALSE]
+    if (nrow(row) == 0 || is.na(row$tg_path[1])) return(NULL)
+    tryCatch(rPraat::tg.read(row$tg_path[1]), error = function(e) NULL)
+  })
+
   # Current token's contour (corrected if edited, else original)
   current_f0 <- reactive({
     req(input$fp_corr_token)
@@ -98,11 +109,11 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   # ---- Sidebar ----
   output$ui_fp_correction <- renderUI({
     df <- fp_f0_data()
-    if (is.null(df) || nrow(df) == 0) {
-      return(tags$div(style = "color: #888; font-style: italic;",
-        "Run F0 Extraction first."))
-    }
-    tokens <- sort(unique(df$token))
+    has_data <- !is.null(df) && nrow(df) > 0
+    tokens <- if (has_data) sort(unique(df$token)) else character(0)
+    token_choices <- if (has_data) tokens
+                     else c("(run F0 Extraction first)" = "")
+    token_selected <- if (has_data) tokens[1] else ""
     tagList(
       # ---- Per-group styling (injected once per re-render of this sidebar) ----
       tags$style(HTML("
@@ -129,7 +140,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
 
       # ---- Token + progress + nav ----
       selectInput("fp_corr_token", "Token:",
-                  choices = tokens, selected = tokens[1]),
+                  choices = token_choices, selected = token_selected),
       verbatimTextOutput("fp_corr_progress", placeholder = TRUE),
       div(style = "display:flex; gap:4px; align-items:center; margin-top: 6px;",
         actionButton("fp_corr_prev", HTML("&#9664;"), title = "Previous token"),
@@ -528,17 +539,114 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       showlegend = FALSE
     )
 
-    # Stack waveform (top, y2) and f0 (bottom, y) on a shared x-axis.
-    # fixedrange = TRUE locks the y axes so modebar zoom acts only horizontally.
+    # --- Optional TextGrid annotation strip below f0 ---
+    tg <- current_textgrid()
+    n_tiers <- if (!is.null(tg)) length(tg) else 0
+    shapes <- list(); annotations <- list()
+
+    if (n_tiers > 0) {
+      # Stack: waveform (top) → f0 (middle) → TextGrid (bottom).
+      # The shared x-axis is pinned to paper y=0 (in the bottom margin) so
+      # the time-axis labels don't collide with the TextGrid strip.
+      tg_bottom <- 0.00
+      tg_top    <- 0.34
+      tier_h    <- (tg_top - tg_bottom) / n_tiers
+      f0_dom    <- c(0.42, 0.68)
+      wav_dom   <- c(0.72, 1.00)
+
+      for (k in seq_along(tg)) {
+        tier <- tg[[k]]
+        # First tier goes at the TOP of the TextGrid strip
+        y_max <- tg_top - (k - 1) * tier_h
+        y_min <- y_max - tier_h
+
+        # Separator line between tiers (top of this tier)
+        shapes[[length(shapes) + 1]] <- list(
+          type = "line", xref = "paper", yref = "paper",
+          x0 = 0, x1 = 1, y0 = y_max, y1 = y_max,
+          line = list(color = "#ddd", width = 1)
+        )
+        # Tier name on the left margin
+        annotations[[length(annotations) + 1]] <- list(
+          x = -0.005, y = (y_min + y_max) / 2,
+          xref = "paper", yref = "paper",
+          xanchor = "right", text = tier$name,
+          showarrow = FALSE,
+          font = list(size = 10, color = "#666")
+        )
+
+        if (identical(tier$type, "interval")) {
+          n_iv <- length(tier$t1)
+          for (j in seq_len(n_iv)) {
+            # Right boundary — extend from this tier's bottom UP through f0
+            # and waveform, so the line is visible against the audio + f0.
+            if (j < n_iv) {
+              shapes[[length(shapes) + 1]] <- list(
+                type = "line", xref = "x", yref = "paper",
+                x0 = tier$t2[j], x1 = tier$t2[j],
+                y0 = y_min, y1 = 1,
+                line = list(color = "#999", width = 0.6, dash = "dot")
+              )
+            }
+            lbl <- tier$label[j]
+            if (!is.na(lbl) && nzchar(lbl)) {
+              annotations[[length(annotations) + 1]] <- list(
+                x = (tier$t1[j] + tier$t2[j]) / 2,
+                y = (y_min + y_max) / 2,
+                xref = "x", yref = "paper",
+                text = lbl, showarrow = FALSE,
+                font = list(size = 11, color = "#222")
+              )
+            }
+          }
+        } else if (identical(tier$type, "point")) {
+          for (j in seq_along(tier$t)) {
+            shapes[[length(shapes) + 1]] <- list(
+              type = "line", xref = "x", yref = "paper",
+              x0 = tier$t[j], x1 = tier$t[j],
+              y0 = y_min, y1 = 1,
+              line = list(color = "#5a8caa", width = 1, dash = "dot")
+            )
+            lbl <- tier$label[j]
+            if (!is.na(lbl) && nzchar(lbl)) {
+              annotations[[length(annotations) + 1]] <- list(
+                x = tier$t[j], y = y_min,
+                xref = "x", yref = "paper",
+                xanchor = "left", yanchor = "bottom",
+                text = paste0(" ", lbl), showarrow = FALSE,
+                font = list(size = 10, color = "#5a8caa")
+              )
+            }
+          }
+        }
+      }
+    } else {
+      f0_dom  <- c(0,    0.6)
+      wav_dom <- c(0.65, 1)
+    }
+
+    # When TextGrid is shown the x-axis is detached from the f0 yaxis and
+    # pinned to paper y=0 so it sits below the TextGrid strip.
+    if (n_tiers > 0) {
+      xaxis_def <- list(title = "time (s)", domain = c(0, 1),
+                        anchor = "free", position = 0)
+      bottom_margin <- 60
+    } else {
+      xaxis_def <- list(title = "time (s)", domain = c(0, 1))
+      bottom_margin <- 40
+    }
+
     layout_args <- list(
-      xaxis = list(title = "time (s)", domain = c(0, 1)),
-      yaxis = list(title = "f0 (Hz)", domain = c(0, 0.6),
-                   fixedrange = TRUE),
-      dragmode = "select"
+      xaxis = xaxis_def,
+      yaxis = list(title = "f0 (Hz)", domain = f0_dom, fixedrange = TRUE),
+      dragmode = "select",
+      shapes = shapes,
+      annotations = annotations,
+      margin = list(l = 60, r = 20, t = 20, b = bottom_margin)
     )
     if (!is.null(wav)) {
       layout_args$yaxis2 <- list(title = "waveform",
-                                 domain = c(0.65, 1), anchor = "x",
+                                 domain = wav_dom, anchor = "x",
                                  fixedrange = TRUE)
     }
     p <- do.call(plotly::layout, c(list(p), layout_args))
@@ -546,24 +654,10 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   })
 
   # ---- Main panel layout ----
+  # The guide is rendered unconditionally so users can read it
+  # before uploading audio / extracting f0.
   output$fp_correction_guide <- renderUI({
     box_style <- "background-color: #f0faf7; border-left: 4px solid #78c2ad; padding: 10px 14px; margin-bottom: 12px; border-radius: 4px; font-size: 0.88rem; color: #555;"
-    df <- fp_f0_data()
-    if (is.null(df) || nrow(df) == 0) {
-      return(tagList(
-        tags$div(style = box_style,
-          tags$strong("F0 Correction"),
-          tags$p(style = "margin: 6px 0 0 0;",
-            "Run extraction in the ", tags$strong("F0 Extraction"),
-            " tab first, then come back here to inspect and correct each token's contour."),
-          tags$ul(style = "margin-bottom: 0; padding-left: 18px;",
-            tags$li("Octave jumps (e.g. doubling/halving on creaky voice)"),
-            tags$li("Spurious frames outside the speaker's typical range"),
-            tags$li("Misaligned voiced/unvoiced boundaries")
-          )
-        )
-      ))
-    }
     tagList(
       tags$div(style = box_style,
         tags$strong("F0 Correction"),
