@@ -105,7 +105,9 @@ model_ui <- function(input, output, session, dataset, normalised_data) {
         tags$hr(),
         h5("Download"),
         textInput("model_filename", "Enter filename (without extension):",
-                  value = "polynomial_coefficients"),
+                  value = if (!is.null(input$dataset_name) && nzchar(input$dataset_name))
+                            paste0(input$dataset_name, "_polynomials")
+                          else "polynomial_coefficients"),
         downloadButton("model_download", "Download Coefficients")
       )
     )

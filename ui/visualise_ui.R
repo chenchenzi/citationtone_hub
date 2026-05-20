@@ -60,7 +60,7 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
                     choices = setNames(vars, var_types), selected = ifelse(length(vars) > 3, vars[4], vars[1]), multiple = FALSE),
         tags$hr(),
         h5("Graph options"),
-        radioButtons("plot_facet", "Plot layout:",
+        radioButtons("plot_facet", NULL,
                      choices = c("All in one plot"         = "none",
                                  "By-Tone plot"            = "tone",
                                  "By-Speaker by-Tone plot" = "speaker_tone"),

@@ -161,7 +161,9 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
         tags$hr(),
         h5("Download"),
         textInput("gamm_filename", "Enter filename (without extension):",
-                  value = "gamm_plot"),
+                  value = if (!is.null(input$dataset_name) && nzchar(input$dataset_name))
+                            paste0(input$dataset_name, "_gamm")
+                          else "gamm_plot"),
         downloadButton("gamm_download", "Download Plot"),
         div(style = "margin-top: 6px;",
           downloadButton("gamm_download_model", "Download Model (.rds)")

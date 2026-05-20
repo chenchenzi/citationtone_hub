@@ -55,7 +55,10 @@ normalised_ui <- function(input, output, session, dataset, normalised_data) {
         actionButton("normalise_button", "Normalise f0 (Hz)"),
         tags$hr(),
         h5("Download"),
-        textInput("output_filename", "Enter filename (without extension):", value = "normalised_data"),
+        textInput("output_filename", "Enter filename (without extension):",
+                  value = if (!is.null(input$dataset_name) && nzchar(input$dataset_name))
+                            paste0(input$dataset_name, "_normalised")
+                          else "normalised_data"),
         downloadButton("download_data", "Download Normalised Data")
       )
     )

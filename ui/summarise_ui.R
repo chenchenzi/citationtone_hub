@@ -196,7 +196,9 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
         # --- Download ---
         h5("Download"),
         textInput("sum_filename", "Enter filename (without extension):",
-                  value = "chao_summary"),
+                  value = if (!is.null(input$dataset_name) && nzchar(input$dataset_name))
+                            paste0(input$dataset_name, "_summary")
+                          else "chao_summary"),
         downloadButton("sum_download_csv", "Download CSV"),
         div(style = "margin-top: 6px;",
           downloadButton("sum_download_plot", "Download Plot")
