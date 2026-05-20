@@ -21,7 +21,7 @@ inspect_ui <- function(input, output, session, dataset) {
           tags$li(tags$strong("Token-level:"), " Computes per-token max and min f0, then z-scores these by speaker. Tokens exceeding the threshold are flagged as ", tags$code(style = "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;", "max too high"), " or ", tags$code(style = "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;", "min too low"), "."),
           tags$li(tags$strong("Jump detection:"), " Computes sample-to-sample semitone differences within each token. Flags where the change exceeds a rise or fall threshold, labelled ", tags$code(style = "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;", "jump (rise)"), " or ", tags$code(style = "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;", "jump (fall)"), " (Steffman & Cole, 2022)."),
           tags$li(tags$strong("Octave jumps:"), " Flags samples where the Hz ratio to the previous sample is < 0.49 or > 1.99 (pitch halving/doubling), labelled ", tags$code(style = "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;", "octave jump"), "."),
-          tags$li(tags$strong("Carryover:"), " Samples following a detected error that remain within 1.5\u00d7 the threshold of the error\u2019s f0. These may still be erroneous even if their own step is small, labelled ", tags$code(style = "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;", "carryover"), ".")
+          tags$li(tags$strong("Carryover:"), " Samples following a detected error that stay within ", tags$em("mult"), "\u00d7 the rise/fall threshold (in semitones) of the error\u2019s f0. These may still be erroneous even if their own step is small, labelled ", tags$code(style = "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;", "carryover"), ". The band is direction-specific: ", tags$code("rise_threshold \u00d7 mult"), " when the trend is rising, ", tags$code("fall_threshold \u00d7 mult"), " when falling (Steffman & Cole, 2022). The multiplier defaults to ", tags$strong("1.5"), " (paper\u2019s value) and is configurable in the sidebar (set to 0 to disable).")
         ),
         tags$strong("Default thresholds:"),
         tags$ul(style = "margin-bottom: 0; padding-left: 18px;",
@@ -62,7 +62,7 @@ inspect_ui <- function(input, output, session, dataset) {
                      choices = list("Milliseconds" = "ms",
                                     "Seconds" = "s",
                                     "Normalised (per step)" = "norm"),
-                     selected = "ms", inline = TRUE),
+                     selected = "s", inline = TRUE),
         tags$hr(),
         h5("Thresholds"),
         numericInput("inspect_z_thresh", "Token z-score threshold (SD):",
@@ -71,12 +71,17 @@ inspect_ui <- function(input, output, session, dataset) {
                      value = 1.263, min = 0.1, max = 5, step = 0.1),
         numericInput("inspect_fall_thresh", "Fall threshold (ST per 10ms):",
                      value = 1.714, min = 0.1, max = 5, step = 0.1),
+        numericInput("inspect_carryover_mult",
+                     "Carryover band (× threshold):",
+                     value = 1.5, min = 0, max = 3, step = 0.1),
         tags$hr(),
         actionButton("inspect_button", "Run Inspection"),
         tags$hr(),
         h5("Download"),
         textInput("inspect_filename", "Enter filename (without extension):",
-                  value = "inspected_data"),
+                  value = if (!is.null(input$dataset_name) && nzchar(input$dataset_name))
+                            paste0(input$dataset_name, "_inspected")
+                          else "inspected_data"),
         downloadButton("inspect_download", "Download Inspected Data"),
         div(style = "margin-top: 4px;",
           downloadButton("inspect_download_flagged", "Download Flagged Tokens")
@@ -100,10 +105,12 @@ inspect_ui <- function(input, output, session, dataset) {
     time_var <- input$inspect_time_var
     speaker_var <- input$inspect_speaker_var
     tone_var <- input$inspect_tone_var
-    z_thresh <- input$inspect_z_thresh
+    z_thresh    <- input$inspect_z_thresh
     rise_thresh <- input$inspect_rise_thresh
     fall_thresh <- input$inspect_fall_thresh
-    time_unit <- input$inspect_time_unit
+    carry_mult  <- as.numeric(input$inspect_carryover_mult)
+    if (is.na(carry_mult) || carry_mult < 0) carry_mult <- 1.5
+    time_unit   <- input$inspect_time_unit
 
     # Treat f0 == 0 as NA (pitch trackers output 0 for unvoiced)
     data <- data %>%
@@ -193,26 +200,37 @@ inspect_ui <- function(input, output, session, dataset) {
       ) %>%
       ungroup()
 
-    # Carryover detection: per-token forward loop
-    detect_carryover <- function(flagged_jump, f0_st, rise_thresh, fall_thresh) {
+    # Carryover detection — direction-specific band (Steffman & Cole 2022).
+    # A sample is a carryover if it follows a flagged-jump (or another
+    # carryover) AND its semitone distance from the original error f0 stays
+    # within mult * rise_thresh (if the next sample is HIGHER, i.e. rising
+    # trend) or mult * fall_thresh (if the next sample is LOWER). The chain
+    # breaks once a sample falls outside this band. Setting mult = 0 disables
+    # carryover entirely.
+    detect_carryover <- function(flagged_jump, f0_st, rise_thresh, fall_thresh, mult) {
       n <- length(flagged_jump)
       carryover <- rep(FALSE, n)
       carryover_note <- rep("", n)
-      if (n < 2) return(list(carryover = carryover, carryover_note = carryover_note))
-
-      threshold_band <- 1.5 * max(rise_thresh, fall_thresh)
+      if (n < 2 || mult <= 0) {
+        return(list(carryover = carryover, carryover_note = carryover_note))
+      }
       error_f0 <- NA_real_
-
       for (i in 2:n) {
         if (flagged_jump[i] && !is.na(f0_st[i])) {
           error_f0 <- f0_st[i]
         } else if (!is.na(error_f0) && !is.na(f0_st[i]) &&
                    (flagged_jump[i - 1] || carryover[i - 1])) {
-          if (abs(f0_st[i] - error_f0) <= threshold_band) {
+          band <- if (i < n && !is.na(f0_st[i + 1])) {
+            if (f0_st[i + 1] > f0_st[i]) rise_thresh * mult
+            else fall_thresh * mult
+          } else {
+            max(rise_thresh, fall_thresh) * mult
+          }
+          if (abs(f0_st[i] - error_f0) <= band) {
             carryover[i] <- TRUE
             carryover_note[i] <- "carryover"
           } else {
-            error_f0 <- NA_real_  # chain broken
+            error_f0 <- NA_real_   # chain broken
           }
         }
       }
@@ -222,7 +240,7 @@ inspect_ui <- function(input, output, session, dataset) {
     result <- result %>%
       group_by(.data[[token_var]]) %>%
       mutate({
-        co <- detect_carryover(flagged_jump, f0_st, rise_thresh, fall_thresh)
+        co <- detect_carryover(flagged_jump, f0_st, rise_thresh, fall_thresh, carry_mult)
         data.frame(carryover = co$carryover, carryover_note = co$carryover_note)
       }) %>%
       ungroup()
