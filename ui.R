@@ -62,6 +62,79 @@ ui <- fluidPage(
         margin-top: 16px; font-family: 'Open Sans', sans-serif;
         color: #888; font-size: 0.95rem;
       }
+      /* Feature cards on the About tab */
+      .feature-section { margin-bottom: 28px; }
+      .feature-section h3 {
+        margin: 16px 0 4px 0; color: #2c5f4f;
+      }
+      .feature-section p.lead {
+        color: #666; font-size: 0.95rem; margin-bottom: 12px;
+      }
+      .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+        gap: 12px;
+      }
+      .feature-card {
+        background: #ffffff;
+        border: 1px solid #d6e7df;
+        border-left: 3px solid #78c2ad;
+        border-radius: 4px;
+        padding: 12px 14px;
+        display: flex;
+        flex-direction: column;
+        transition: box-shadow 0.15s, transform 0.15s;
+      }
+      .feature-card:hover {
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        transform: translateY(-1px);
+      }
+      .feature-card-title {
+        font-weight: 700; font-size: 0.97rem;
+        color: #2c5f4f; margin-bottom: 4px;
+      }
+      .feature-card-icon { font-size: 1.15rem; margin-right: 6px; }
+      .feature-card-desc {
+        font-size: 0.84rem; color: #555; flex-grow: 1; line-height: 1.4;
+      }
+      .feature-section-cta {
+        display: inline-block;
+        margin-top: 14px;
+        padding: 7px 16px;
+        background: #e8f5f0;
+        color: #2c5f4f;
+        border-radius: 4px;
+        font-size: 0.92rem;
+        font-weight: 600;
+        text-decoration: none;
+        transition: background 0.15s, color 0.15s;
+      }
+      .feature-section-cta:hover {
+        background: #78c2ad;
+        color: #ffffff;
+        text-decoration: none;
+      }
+      /* FAQ subsection cards (Privacy & Data / Hosting / Usage) */
+      .faq-section {
+        background: #f0faf7;
+        border-radius: 8px;
+        padding: 18px 24px 6px 24px;
+        margin: 20px 0;
+      }
+      .faq-section > h4 {
+        margin-top: 0 !important;
+        margin-bottom: 12px;
+        color: #2c5f4f !important;
+        font-weight: 700;
+      }
+      .faq-section .faq-item {
+        background: #ffffff;
+        border-radius: 4px;
+        border-left: 3px solid #78c2ad;
+        padding: 10px 14px 4px 14px;
+        margin-bottom: 10px !important;
+      }
+      .faq-section .faq-item p { margin-bottom: 6px; }
     "),
     tags$script(HTML("
       document.addEventListener('DOMContentLoaded', function() {
@@ -100,11 +173,177 @@ ui <- fluidPage(
   #Navbar structure for UI
   navbarPage(title = tags$img(src = "shinytone.svg", height = "60px", alt = "Shinytone",
                               style = "margin-top: -16px; margin-bottom: -16px;"),
+             id = "main_nav",
              windowTitle = "Shinytone",
              theme = bs_theme(version = 5, bootswatch = "minty",
                               heading_font = font_google("Open Sans"),
                               base_font = font_google("Open Sans"),
                               "font-size-base" = "0.9rem"),
+             # About & Privacy panel (landing page)
+             tabPanel("About",
+                      icon = icon("house"),
+                      # --- Hero: logo + tagline + author/source ---
+                      tags$div(style = "text-align: center; padding: 32px 15px 16px 15px;",
+                        tags$img(src = "shinytone.svg", height = "110px", alt = "Shinytone",
+                                 style = "margin-bottom: 16px;"),
+                        tags$p(style = "color: #555; font-size: 1.02rem; max-width: 820px; margin: 0 auto 14px auto; line-height: 1.55;",
+                          "An open-source tool for citation tone research across tone languages. ",
+                          "It integrates the full citation tone analysis workflow into an interactive tool. ",
+                          "It is designed for phoneticians, typologists, fieldworkers, and students working on lexical tone production."),
+                        tags$p(style = "color: #777; font-size: 0.88rem; margin: 0;",
+                          icon("laptop-code"), " ",
+                          tags$a(href = "https://chenzixu.rbind.io/", target = "_blank", "Chenzi Xu"),
+                          tags$span(style = "margin: 0 10px; color: #ccc;", "·"),
+                          icon("github"), " ",
+                          tags$a(href = "https://github.com/chenchenzi/citationtone_hub", target = "_blank",
+                                 "github.com/chenchenzi/citationtone_hub")
+                        )
+                      ),
+
+                      # --- Section break + landing heading ---
+                      tags$div(style = "max-width: 900px; margin: 40px auto 8px auto; text-align: center; padding: 0 15px;",
+                        # Short teal accent bar (visual divider)
+                        tags$div(style = "width: 56px; height: 3px; background: #78c2ad; margin: 0 auto 24px auto; border-radius: 2px;"),
+                        tags$h2(style = "color: #2c5f4f; margin: 0 0 8px 0; font-weight: 700;",
+                                "What you can do"),
+                        tags$p(style = "color: #777; font-size: 0.95rem; margin: 0;",
+                          "Two complementary pipelines, from audio recordings to pitch contour analysis.")
+                      ),
+
+                      # --- What you can do (feature cards) ---
+                      tags$div(style = "max-width: 1080px; margin: 0 auto; padding: 8px 15px 0 15px;",
+                        # Helper for one section's cards — no per-card link, single CTA below.
+                        local({
+                          make_card <- function(emoji, name, desc) {
+                            tags$div(class = "feature-card",
+                              tags$div(class = "feature-card-title",
+                                HTML(paste0("<span class='feature-card-icon'>", emoji, "</span>", name))),
+                              tags$div(class = "feature-card-desc", desc)
+                            )
+                          }
+                          section_cta <- function(main, label) {
+                            js <- sprintf(
+                              "Shiny.setInputValue('about_nav_target', '%s|Start', {priority:'event'}); return false;",
+                              main)
+                            tags$div(style = "text-align: right;",
+                              tags$a(class = "feature-section-cta",
+                                     href = "#", onclick = js, label)
+                            )
+                          }
+                          tagList(
+                            tags$div(class = "feature-section",
+                              h4(style = "color: #78c2ad; margin-top: 20px;", "F0 Analysis"),
+                              tags$p(class = "lead",
+                                "Run the full citation-tone analysis pipeline on f0 measurements (CSV)."),
+                              tags$div(class = "feature-grid",
+                                make_card("\U0001F3A8", "Visualise",
+                                  "Plot f0 contours coloured by tone, with optional speaker faceting and z-score / semitone normalisation. Export plots and the R code that made them."),
+                                make_card("\U0001F50E", "Inspect",
+                                  "Flag likely f0 artefacts — octave jumps, out-of-range outliers, and tracking errors — using by-speaker z-scores and sample-to-sample jump detection."),
+                                make_card("\U0001F4CA", "Model",
+                                  "Fit per-token Legendre polynomials, Growth Curve Analysis (GCA) with mixed effects + Tukey-adjusted pairwise tone tests, or Generalised Additive Mixed Models (GAMM)."),
+                                make_card("\U0001F4CB", "Summarise",
+                                  "Convert tone contours into Chao tone numerals (1–5 scale) for cross-language comparison. Compare reference-line and interval-based conversion methods.")
+                              ),
+                              section_cta("F0 Analysis", "Get started →")
+                            ),
+                            tags$div(class = "feature-section",
+                              h4(style = "color: #78c2ad; margin-top: 20px;", "F0 Processing"),
+                              tags$p(class = "lead",
+                                "Go from raw .wav files to clean f0 contours, ready for the analysis pipeline above."),
+                              tags$div(class = "feature-grid",
+                                make_card("\U0001F30A", "Extract",
+                                  "Extract f0 contours from .wav files with wrassp::ksvF0(), or import pre-computed Praat .Pitch / .PitchTier files."),
+                                make_card("\U0001F527", "Correct",
+                                  "Review and correct extraction artefacts interactively — listen to audio, see waveform + TextGrid, and edit individual frames (halve, double, interpolate, smooth, manual entry, Praat candidate picker).")
+                              ),
+                              section_cta("F0 Processing", "Get started →")
+                            )
+                          )
+                        })
+                      ),
+
+                      # --- FAQ ---
+                      tags$div(style = "max-width: 900px; margin: 48px auto 0 auto; text-align: center; padding: 0 15px;",
+                        tags$div(style = "width: 56px; height: 3px; background: #78c2ad; margin: 0 auto 24px auto; border-radius: 2px;"),
+                        tags$h2(style = "color: #2c5f4f; margin: 0 0 8px 0; font-weight: 700;",
+                                "Frequently Asked Questions")
+                      ),
+                      tags$div(style = "max-width: 900px; margin: 0 auto; padding: 20px 15px;",
+
+                        # --- Privacy & Data ---
+                        tags$div(class = "faq-section",
+                          h4("Privacy & Data"),
+                          tags$div(class = "faq-item",
+                            tags$p(tags$strong("Is my data stored or shared?")),
+                            tags$p("No. When you upload a CSV file, it is loaded into temporary server memory for in-session analysis only. It is never written to any persistent database, cloud storage, or file system, and is never transmitted to the developer or any third party.")
+                          ),
+                          tags$div(class = "faq-item",
+                            tags$p(tags$strong("What happens when I close the app?")),
+                            tags$p("All uploaded data and results are irrecoverably discarded when your session ends, the browser tab is closed, or the app reaches its idle timeout (typically 5 minutes of inactivity). No copy is retained. Download any outputs (CSV, plots) before closing.")
+                          ),
+                          tags$div(class = "faq-item",
+                            tags$p(tags$strong("Can anyone access my data during my session?")),
+                            tags$p("No. No individual, including the developer, can access, retrieve, or view data uploaded during your session. The source code is publicly available for independent verification.")
+                          ),
+                          tags$div(class = "faq-item",
+                            tags$p(tags$strong("Should I upload sensitive or personal data?")),
+                            tags$p("This app is designed for linguistic research data (e.g., acoustic measurements, tone labels). Do not upload personally identifiable information (PII) or protected health information (PHI). The developer accepts no liability for data uploaded in violation of applicable privacy regulations.")
+                          )
+                        ),
+
+                        # --- Hosting & Platform ---
+                        tags$div(class = "faq-section",
+                          h4("Hosting & Platform"),
+                          tags$div(class = "faq-item",
+                            tags$p(tags$strong("Where is the app hosted?")),
+                            tags$p("The app is hosted on ", tags$a(href = "https://www.shinyapps.io/", target = "_blank", "shinyapps.io"), ", operated by Posit, PBC, using Amazon Web Services (AWS) infrastructure in the us-east-1 region. All connections use HTTPS/TLS encryption. Note: Posit plans to migrate shinyapps.io users to ",
+                              tags$a(href = "https://connect.posit.cloud/", target = "_blank", "Posit Connect Cloud"),
+                              " by the end of 2026.")
+                          ),
+                          tags$div(class = "faq-item",
+                            tags$p(tags$strong("Does the platform collect any metadata?")),
+                            tags$p("Posit may independently collect server-level metadata such as IP address, browser/device information, and request timestamps. See ", tags$a(href = "https://posit.co/about/privacy-policy/", target = "_blank", "Posit's privacy policy"), " for details.")
+                          ),
+                          tags$div(class = "faq-item",
+                            tags$p(tags$strong("Does this app use cookies?")),
+                            tags$p("The app itself sets no cookies. Shiny/shinyapps.io sets a session-scoped cookie to route server responses to the correct client. It expires when the browser session ends.")
+                          ),
+                          tags$div(class = "faq-item",
+                            tags$p(tags$strong("Does this app use analytics?")),
+                            tags$p("This app uses Google Analytics to collect anonymous usage statistics (e.g., page views, session duration). No personally identifiable information or uploaded data is sent to Google Analytics.")
+                          )
+                        ),
+
+                        # --- Usage ---
+                        tags$div(class = "faq-section",
+                          h4("Usage"),
+                          tags$div(class = "faq-item",
+                            tags$p(tags$strong("Is this app open source?")),
+                            tags$p("Yes. The source code is available at ", tags$a(href = "https://github.com/chenchenzi/citationtone_hub", target = "_blank", "github.com/chenchenzi/citationtone_hub"), ". It is licensed under ", tags$a(href = "https://creativecommons.org/licenses/by-nc/4.0/", target = "_blank", "CC BY-NC 4.0"), ". Free to use for research and teaching (non-commercial) purposes with attribution.")
+                          ),
+                          tags$div(class = "faq-item",
+                            tags$p(tags$strong("Can I run Shinytone locally?")),
+                            tags$p("Yes. Clone the repository and run ", tags$code("shiny::runApp()"), " in R. When running locally, your data never leaves your machine. For very large datasets, consider running the app locally.")
+                          ),
+                          tags$div(class = "faq-item",
+                            tags$p(tags$strong("How do I cite Shinytone?")),
+                            tags$p("If you use Shinytone in your research, please cite it as:"),
+                            tags$blockquote(style = "border-left: 3px solid #78c2ad; padding-left: 12px; color: #555; font-size: 0.9rem;",
+                              "Xu, Chenzi (2026). Shinytone: A citation tone research hub. [Web application]. Available at https://chenzixu.shinyapps.io/shinytone/"
+                            )
+                          ),
+                          tags$div(class = "faq-item",
+                            tags$p(tags$strong("I found a bug or have a feature request.")),
+                            tags$p("Please open an issue on the ", tags$a(href = "https://github.com/chenchenzi/citationtone_hub/issues", target = "_blank", "GitHub repository"), ".")
+                          )
+                        ),
+
+                        # --- Footer ---
+                        tags$hr(),
+                        tags$p(style = "color: #999; font-size: 0.8rem;", "Last updated: March 2026")
+                      )
+             ),
              # F0 modelling panel
              tabPanel("F0 Analysis",
                       #fluid = TRUE, 
@@ -243,97 +482,6 @@ ui <- fluidPage(
                       tabsetPanel(id = "tabs_collection",
                         tabPanel("Checklist",
                                  uiOutput("checklist_content"))
-                      )
-             ),
-             # About & Privacy panel
-             tabPanel("About",
-                      icon = icon("circle-info"),
-                      tags$div(style = "max-width: 800px; margin: 0 auto; padding: 20px 15px;",
-                        h2("About Shinytone"),
-                        tags$p("Shinytone is an open-source R Shiny web application that integrates the full citation tone analysis workflow into a single interactive tool. It is designed for phoneticians, typologists, fieldworkers, and students studying lexical tone production."),
-                        tags$p("Developed by ", icon("laptop-code"), " ", tags$a(href = "https://chenzixu.rbind.io/", target = "_blank", "Chenzi Xu")),
-                        tags$p("Source code: ", icon("github"), " ", tags$a(href = "https://github.com/chenchenzi/citationtone_hub", target = "_blank", "github.com/chenchenzi/citationtone_hub")),
-
-                        tags$hr(),
-                        h3("Frequently Asked Questions"),
-
-                        # --- Privacy & Data ---
-                        h4(style = "color: #78c2ad; margin-top: 20px;", "Privacy & Data"),
-
-                        tags$div(class = "faq-item", style = "margin-bottom: 16px;",
-                          tags$p(tags$strong("Is my data stored or shared?")),
-                          tags$p("No. When you upload a CSV file, it is loaded into temporary server memory for in-session analysis only. It is never written to any persistent database, cloud storage, or file system, and is never transmitted to the developer or any third party.")
-                        ),
-
-                        tags$div(class = "faq-item", style = "margin-bottom: 16px;",
-                          tags$p(tags$strong("What happens when I close the app?")),
-                          tags$p("All uploaded data and results are irrecoverably discarded when your session ends, the browser tab is closed, or the app reaches its idle timeout (typically 5 minutes of inactivity). No copy is retained. Download any outputs (CSV, plots) before closing.")
-                        ),
-
-                        tags$div(class = "faq-item", style = "margin-bottom: 16px;",
-                          tags$p(tags$strong("Can anyone access my data during my session?")),
-                          tags$p("No. No individual, including the developer, can access, retrieve, or view data uploaded during your session. The source code is publicly available for independent verification.")
-                        ),
-
-                        tags$div(class = "faq-item", style = "margin-bottom: 16px;",
-                          tags$p(tags$strong("Should I upload sensitive or personal data?")),
-                          tags$p("This app is designed for linguistic research data (e.g., acoustic measurements, tone labels). Do not upload personally identifiable information (PII) or protected health information (PHI). The developer accepts no liability for data uploaded in violation of applicable privacy regulations.")
-                        ),
-
-                        # --- Hosting & Platform ---
-                        h4(style = "color: #78c2ad; margin-top: 20px;", "Hosting & Platform"),
-
-                        tags$div(class = "faq-item", style = "margin-bottom: 16px;",
-                          tags$p(tags$strong("Where is the app hosted?")),
-                          tags$p("The app is hosted on ", tags$a(href = "https://www.shinyapps.io/", target = "_blank", "shinyapps.io"), ", operated by Posit, PBC, using Amazon Web Services (AWS) infrastructure in the us-east-1 region. All connections use HTTPS/TLS encryption. Note: Posit plans to migrate shinyapps.io users to ",
-                            tags$a(href = "https://connect.posit.cloud/", target = "_blank", "Posit Connect Cloud"),
-                            " by the end of 2026.")
-                        ),
-
-                        tags$div(class = "faq-item", style = "margin-bottom: 16px;",
-                          tags$p(tags$strong("Does the platform collect any metadata?")),
-                          tags$p("Posit may independently collect server-level metadata such as IP address, browser/device information, and request timestamps. See ", tags$a(href = "https://posit.co/about/privacy-policy/", target = "_blank", "Posit's privacy policy"), " for details.")
-                        ),
-
-                        tags$div(class = "faq-item", style = "margin-bottom: 16px;",
-                          tags$p(tags$strong("Does this app use cookies?")),
-                          tags$p("The app itself sets no cookies. Shiny/shinyapps.io sets a session-scoped cookie to route server responses to the correct client. It expires when the browser session ends.")
-                        ),
-
-                        tags$div(class = "faq-item", style = "margin-bottom: 16px;",
-                          tags$p(tags$strong("Does this app use analytics?")),
-                          tags$p("This app uses Google Analytics to collect anonymous usage statistics (e.g., page views, session duration). No personally identifiable information or uploaded data is sent to Google Analytics.")
-                        ),
-
-                        # --- Usage ---
-                        h4(style = "color: #78c2ad; margin-top: 20px;", "Usage"),
-
-                        tags$div(class = "faq-item", style = "margin-bottom: 16px;",
-                          tags$p(tags$strong("Is this app open source?")),
-                          tags$p("Yes. The source code is available at ", tags$a(href = "https://github.com/chenchenzi/citationtone_hub", target = "_blank", "github.com/chenchenzi/citationtone_hub"), ". It is licensed under ", tags$a(href = "https://creativecommons.org/licenses/by-nc/4.0/", target = "_blank", "CC BY-NC 4.0"), ". Free to use for research and teaching (non-commercial) purposes with attribution.")
-                        ),
-
-                        tags$div(class = "faq-item", style = "margin-bottom: 16px;",
-                          tags$p(tags$strong("Can I run Shinytone locally?")),
-                          tags$p("Yes. Clone the repository and run ", tags$code("shiny::runApp()"), " in R. When running locally, your data never leaves your machine. For very large datasets, consider running the app locally.")
-                        ),
-
-                        tags$div(class = "faq-item", style = "margin-bottom: 16px;",
-                          tags$p(tags$strong("How do I cite Shinytone?")),
-                          tags$p("If you use Shinytone in your research, please cite it as:"),
-                          tags$blockquote(style = "border-left: 3px solid #78c2ad; padding-left: 12px; color: #555; font-size: 0.9rem;",
-                            "Xu, Chenzi (2026). Shinytone: A citation tone research hub. [Web application]. Available at https://chenzixu.shinyapps.io/shinytone/"
-                          )
-                        ),
-
-                        tags$div(class = "faq-item", style = "margin-bottom: 16px;",
-                          tags$p(tags$strong("I found a bug or have a feature request.")),
-                          tags$p("Please open an issue on the ", tags$a(href = "https://github.com/chenchenzi/citationtone_hub/issues", target = "_blank", "GitHub repository"), ".")
-                        ),
-
-                        # --- Footer ---
-                        tags$hr(),
-                        tags$p(style = "color: #999; font-size: 0.8rem;", "Last updated: March 2026")
                       )
              ),
   )

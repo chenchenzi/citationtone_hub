@@ -95,4 +95,20 @@ server <- function(input, output, session) {
   fp_extraction_ui(input, output, session, fp_audio_data, fp_f0_data, fp_pitch_candidates)
   fp_correction_ui(input, output, session, fp_audio_data, fp_f0_data, fp_pitch_candidates)
 
+  # Feature-card navigation from the About tab.
+  # Cards fire Shiny.setInputValue('about_nav_target', 'F0 Analysis|View'), etc.
+  observeEvent(input$about_nav_target, {
+    val <- input$about_nav_target
+    parts <- strsplit(val, "|", fixed = TRUE)[[1]]
+    if (length(parts) != 2) return()
+    main <- parts[1]; sub <- parts[2]
+    sub_id <- if (main == "F0 Analysis") "tabs_data"
+              else if (main == "F0 Processing") "tabs_fp"
+              else NULL
+    updateNavbarPage(session, "main_nav", selected = main)
+    if (!is.null(sub_id)) {
+      updateTabsetPanel(session, sub_id, selected = sub)
+    }
+  })
+
 }
