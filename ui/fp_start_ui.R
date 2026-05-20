@@ -116,7 +116,7 @@ fp_start_ui <- function(input, output, session, fp_audio_data) {
         " across companion files. For example, ",
         tags$code("ma1.wav"), ", ", tags$code("ma1.TextGrid"),
         ", and ", tags$code("ma1.Pitch"),
-        " will all be grouped as one token."
+        " are treated as one token."
       )
     )
   })

@@ -237,13 +237,13 @@ ui <- fluidPage(
                                 "Run the full citation-tone analysis pipeline on f0 measurements (CSV)."),
                               tags$div(class = "feature-grid",
                                 make_card("\U0001F3A8", "Visualise",
-                                  "Plot f0 contours coloured by tone, with optional speaker faceting and z-score / semitone normalisation. Export plots and the R code that made them."),
+                                  "Plot f0 contours coloured by tone, with optional speaker faceting and normalisation (z-score or semitone). Export the plots and the underlying R code."),
                                 make_card("\U0001F50E", "Inspect",
-                                  "Flag likely f0 artefacts — octave jumps, out-of-range outliers, and tracking errors — using by-speaker z-scores and sample-to-sample jump detection."),
+                                  "Flag likely f0 artefacts such as octave jumps, out-of-range outliers, and tracking errors, using by-speaker z-scores and sample-to-sample jump detection."),
                                 make_card("\U0001F4CA", "Model",
-                                  "Fit per-token Legendre polynomials, Growth Curve Analysis (GCA) with mixed effects + Tukey-adjusted pairwise tone tests, or Generalised Additive Mixed Models (GAMM)."),
+                                  "Three modelling approaches for f0 contours: per-token Legendre polynomials, Growth Curve Analysis (GCA) with mixed effects, and Generalised Additive Mixed Models (GAMM)."),
                                 make_card("\U0001F4CB", "Summarise",
-                                  "Convert tone contours into Chao tone numerals (1–5 scale) for cross-language comparison. Compare reference-line and interval-based conversion methods.")
+                                  "Convert tone contours into Chao tone numerals (1–5 scale) for cross-language comparison. Compare reference-line and interval-based methods.")
                               ),
                               section_cta("F0 Analysis", "Get started →")
                             ),
@@ -253,9 +253,9 @@ ui <- fluidPage(
                                 "Go from raw .wav files to clean f0 contours, ready for the analysis pipeline above."),
                               tags$div(class = "feature-grid",
                                 make_card("\U0001F30A", "Extract",
-                                  "Extract f0 contours from .wav files with wrassp::ksvF0(), or import pre-computed Praat .Pitch / .PitchTier files."),
+                                  "Extract f0 contours from .wav files using the wrassp R package, or import pre-computed Praat .Pitch and .PitchTier files."),
                                 make_card("\U0001F527", "Correct",
-                                  "Review and correct extraction artefacts interactively — listen to audio, see waveform + TextGrid, and edit individual frames (halve, double, interpolate, smooth, manual entry, Praat candidate picker).")
+                                  "Review and correct extraction artefacts by listening to the audio, inspecting the waveform, and editing individual frames (halve, double, interpolate, smooth, manual entry, etc.).")
                               ),
                               section_cta("F0 Processing", "Get started →")
                             )
