@@ -164,15 +164,22 @@ inspect_ui <- function(input, output, session, dataset) {
       )
 
     # Flag jumps: the error is on the NEXT sample (where the jump lands)
-    # So we shift: if current sample has a big diff to the next, the NEXT sample is the error
+    # So we shift: if current sample has a big diff to the next, the NEXT sample is the error.
+    #
+    # Note on time normalisation: rise/fall thresholds are expressed as ST per
+    # 10 ms (Sundberg 1973). To compare the observed rate against that, we need
+    #   rate_per_10ms = diff_st / (diff_time_in_ms / 10) = diff_st / time_factor
+    # so we DIVIDE diff_st by time_factor (earlier versions of this code
+    # multiplied, which made the test ~30% stricter than intended for sample
+    # steps > 10 ms).
     result <- result %>%
       group_by(.data[[token_var]]) %>%
       mutate(
         # Octave jump detection (on lead sample)
         oct_jump = !is.na(hz_ratio) & (hz_ratio < 0.49 | hz_ratio > 1.99),
         # Threshold jump detection (on lead sample)
-        jump_rise = !is.na(diff_st) & diff_st > 0 & (abs(diff_st) * time_factor) > rise_thresh,
-        jump_fall = !is.na(diff_st) & diff_st < 0 & (abs(diff_st) * time_factor) > fall_thresh,
+        jump_rise = !is.na(diff_st) & diff_st > 0 & (abs(diff_st) / time_factor) > rise_thresh,
+        jump_fall = !is.na(diff_st) & diff_st < 0 & (abs(diff_st) / time_factor) > fall_thresh,
         # Shift flags to the sample where the jump lands
         flagged_jump = lag(oct_jump | jump_rise | jump_fall, default = FALSE),
         jump_note_raw = case_when(

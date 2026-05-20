@@ -60,7 +60,11 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
                     choices = setNames(vars, var_types), selected = ifelse(length(vars) > 3, vars[4], vars[1]), multiple = FALSE),
         tags$hr(),
         h5("Graph options"),
-        checkboxInput("facet_by_speaker", "By-Speaker by-Tone plot", FALSE),
+        radioButtons("plot_facet", "Plot layout:",
+                     choices = c("All in one plot"         = "none",
+                                 "By-Tone plot"            = "tone",
+                                 "By-Speaker by-Tone plot" = "speaker_tone"),
+                     selected = "none"),
         actionButton("plot_button", "Visualise f0 Contours"),
         downloadButton("save_plot_button", "Save Plot", icon = icon("download")),
         tags$hr(),
@@ -88,7 +92,11 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
       scale_color_brewer(palette = "Set3") +
       labs(x = input$x_var, y = input$y_var, color = input$tone_var)
 
-    if (input$facet_by_speaker) {
+    facet_mode <- input$plot_facet
+    if (is.null(facet_mode)) facet_mode <- "none"
+    if (facet_mode == "tone") {
+      p <- p + facet_wrap(reformulate(input$tone_var))
+    } else if (facet_mode == "speaker_tone") {
       p <- p + facet_grid(get(input$speaker_var) ~ get(input$tone_var))
     }
 
@@ -97,7 +105,9 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
 
   # Dynamic plot dimensions (shared by display and download)
   plot_height <- reactive({
-    if (!is.null(vis_dataset()) && input$facet_by_speaker) {
+    facet_mode <- input$plot_facet
+    if (is.null(facet_mode)) facet_mode <- "none"
+    if (!is.null(vis_dataset()) && facet_mode == "speaker_tone") {
       300 + 100 * length(unique(vis_dataset()[[input$speaker_var]]))
     } else {
       600
@@ -105,8 +115,11 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
   })
 
   plot_width <- reactive({
-    if (!is.null(vis_dataset()) && input$facet_by_speaker) {
-      400 + 100 * length(unique(vis_dataset()[[input$tone_var]]))
+    facet_mode <- input$plot_facet
+    if (is.null(facet_mode)) facet_mode <- "none"
+    if (!is.null(vis_dataset()) && facet_mode %in% c("tone", "speaker_tone")) {
+      n_tones <- length(unique(vis_dataset()[[input$tone_var]]))
+      max(400 + 100 * n_tones, 600)
     } else {
       800
     }
@@ -178,7 +191,15 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
       paste0('  labs(x = "', input$x_var, '", y = "', input$y_var, '", color = "', input$tone_var, '")')
     )
 
-    if (input$facet_by_speaker) {
+    facet_mode <- input$plot_facet
+    if (is.null(facet_mode)) facet_mode <- "none"
+    if (facet_mode == "tone") {
+      code_lines <- c(code_lines,
+        "",
+        "# Add faceting by tone",
+        paste0('p <- p + facet_wrap(~ ', input$tone_var, ')')
+      )
+    } else if (facet_mode == "speaker_tone") {
       code_lines <- c(code_lines,
         "",
         "# Add faceting by speaker and tone",

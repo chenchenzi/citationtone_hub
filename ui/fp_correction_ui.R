@@ -374,8 +374,17 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
 
   # Progress counter: current position + how many tokens have been edited
   output$fp_corr_progress <- renderText({
+    df <- fp_f0_data()
+    has_data <- !is.null(df) && nrow(df) > 0
+    if (!has_data) return("")          # no extraction yet — keep area quiet
     toks <- filtered_tokens()
-    if (length(toks) == 0) return("No tokens match the current filter.")
+    if (length(toks) == 0) {
+      # Data exists but the active filter excludes everything.
+      if (isTRUE(input$fp_corr_only_flagged)) {
+        return("No tokens match the flagged-list filter.")
+      }
+      return("")
+    }
     idx <- match(input$fp_corr_token, toks)
     if (is.na(idx)) idx <- 0
     n_edited <- length(fp_corrections())
