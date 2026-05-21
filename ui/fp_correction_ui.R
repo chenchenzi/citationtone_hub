@@ -107,13 +107,20 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   })
 
   # ---- Sidebar ----
+  # We render the choices reactively from filtered_tokens() AND use a plain
+  # (non-selectize) select. The selectize widget caused brittle Shiny bind
+  # state when the renderUI re-ran on data changes; the plain <select>
+  # rebinds cleanly on each render.
+  #
+  # suspendWhenHidden = FALSE is required: this uiOutput lives inside a
+  # conditionalPanel and Shiny does not always call bindAll() on the new
+  # content when the panel becomes visible, leaving input$fp_corr_token
+  # unregistered. Eager rendering side-steps that.
   output$ui_fp_correction <- renderUI({
-    df <- fp_f0_data()
-    has_data <- !is.null(df) && nrow(df) > 0
-    tokens <- if (has_data) sort(unique(df$token)) else character(0)
-    token_choices <- if (has_data) tokens
-                     else c("(run F0 Extraction first)" = "")
-    token_selected <- if (has_data) tokens[1] else ""
+    toks <- filtered_tokens()
+    has_data <- length(toks) > 0
+    token_choices  <- if (has_data) toks else c("(run F0 Extraction first)" = "")
+    token_selected <- if (has_data) toks[1] else ""
     tagList(
       # ---- Per-group styling (injected once per re-render of this sidebar) ----
       tags$style(HTML("
@@ -140,7 +147,8 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
 
       # ---- Token + progress + nav ----
       selectInput("fp_corr_token", "Token:",
-                  choices = token_choices, selected = token_selected),
+                  choices = token_choices, selected = token_selected,
+                  selectize = FALSE),
       verbatimTextOutput("fp_corr_progress", placeholder = TRUE),
       div(style = "display:flex; gap:4px; align-items:center; margin-top: 6px;",
         actionButton("fp_corr_prev", HTML("&#9664;"), title = "Previous token"),
@@ -252,6 +260,9 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         "Files are named after the token or ", tags$code("all_correctedf0.csv"), ".")
     )
   })
+  # Eager render so Shiny binds the selectInput even before the conditional
+  # panel becomes visible (avoids unbound input$fp_corr_token).
+  outputOptions(output, "ui_fp_correction", suspendWhenHidden = FALSE)
 
   # Prev / Next handlers — step through the *filtered* token list, wrap at ends
   observeEvent(input$fp_corr_prev, {
@@ -355,22 +366,10 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     all_t
   })
 
-  # When the filtered set changes, update the dropdown choices in-place
-  # (avoids re-rendering the whole sidebar and losing edit state).
-  observe({
-    toks <- filtered_tokens()
-    cur <- isolate(input$fp_corr_token)
-    sel <- if (!is.null(cur) && cur %in% toks) cur
-           else if (length(toks) > 0) toks[1] else NULL
-    if (length(toks) == 0) {
-      updateSelectInput(session, "fp_corr_token",
-                        choices = c("(no matching tokens)" = ""),
-                        selected = "")
-    } else {
-      updateSelectInput(session, "fp_corr_token",
-                        choices = toks, selected = sel)
-    }
-  })
+  # NOTE: the token dropdown's choices are populated by ui_fp_correction's
+  # renderUI directly (reactive on filtered_tokens). No separate
+  # updateSelectInput observer needed — keeping one source of truth avoids
+  # the bind / replace race that caused input$fp_corr_token to go undefined.
 
   # Progress counter: current position + how many tokens have been edited
   output$fp_corr_progress <- renderText({
@@ -385,8 +384,9 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       }
       return("")
     }
-    idx <- match(input$fp_corr_token, toks)
-    if (is.na(idx)) idx <- 0
+    cur <- input$fp_corr_token
+    idx <- if (is.null(cur) || !nzchar(cur)) 0L
+           else { m <- match(cur, toks); if (is.na(m)) 0L else m }
     n_edited <- length(fp_corrections())
     flagged_total <- if (isTRUE(input$fp_corr_only_flagged) &&
                          !is.null(fp_flagged_tokens())) {
