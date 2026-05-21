@@ -245,6 +245,14 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                      icon = icon("rotate-left"))
       ),
 
+      tags$hr(),
+      tags$strong("Display:"),
+      div(style = "margin-top: 4px;",
+        checkboxInput("fp_corr_show_pulses",
+                      "Glottal pulses on waveform",
+                      value = FALSE)
+      ),
+
       # Praat candidates (only when current token came from .Pitch).
       # The output includes its own leading <hr> when it renders content,
       # so the sidebar avoids a double separator when this block is empty.
@@ -562,10 +570,10 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       # The shared x-axis is pinned to paper y=0 (in the bottom margin) so
       # the time-axis labels don't collide with the TextGrid strip.
       tg_bottom <- 0.00
-      tg_top    <- 0.34
+      tg_top    <- 0.24
       tier_h    <- (tg_top - tg_bottom) / n_tiers
-      f0_dom    <- c(0.42, 0.68)
-      wav_dom   <- c(0.72, 1.00)
+      f0_dom    <- c(0.32, 0.62)
+      wav_dom   <- c(0.66, 1.00)
 
       for (k in seq_along(tg)) {
         tier <- tg[[k]]
@@ -585,7 +593,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           xref = "paper", yref = "paper",
           xanchor = "right", text = tier$name,
           showarrow = FALSE,
-          font = list(size = 10, color = "#666")
+          font = list(size = 12, color = "#666")
         )
 
         if (identical(tier$type, "interval")) {
@@ -608,7 +616,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                 y = (y_min + y_max) / 2,
                 xref = "x", yref = "paper",
                 text = lbl, showarrow = FALSE,
-                font = list(size = 11, color = "#222")
+                font = list(size = 13, color = "#222")
               )
             }
           }
@@ -627,7 +635,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                 xref = "x", yref = "paper",
                 xanchor = "left", yanchor = "bottom",
                 text = paste0(" ", lbl), showarrow = FALSE,
-                font = list(size = 10, color = "#5a8caa")
+                font = list(size = 12, color = "#5a8caa")
               )
             }
           }
@@ -636,6 +644,62 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     } else {
       f0_dom  <- c(0,    0.6)
       wav_dom <- c(0.65, 1)
+    }
+
+    # --- Vertical guide line(s) for currently-selected frame(s) ---
+    # Spans from the bottom of the f0 panel up to the top of the waveform,
+    # so you can read off the frame's time position against both the audio
+    # and the f0 contour. Drawn in the selection orange to match the marker.
+    if (length(sel) > 0) {
+      sel_times <- f0_df$time[sel]
+      sel_times <- sel_times[!is.na(sel_times)]
+      for (st in sel_times) {
+        shapes[[length(shapes) + 1]] <- list(
+          type = "line", xref = "x", yref = "paper",
+          x0 = st, x1 = st,
+          y0 = f0_dom[1], y1 = wav_dom[2],
+          line = list(color = "#e0712d", width = 1, dash = "dot")
+        )
+      }
+    }
+
+    # --- Optional glottal pulse markers on the waveform ---
+    # For each continuous voiced segment, walk forward one period = 1/f0 at
+    # a time, interpolating f0 between frames. Each step lands on a glottal
+    # pulse boundary. Drawn as short vertical lines within the waveform
+    # y-axis (yref = "y2"), spanning the full waveform amplitude.
+    if (!is.null(wav) && isTRUE(input$fp_corr_show_pulses)) {
+      voiced_idx <- which(!is.na(f0_df$f0))
+      if (length(voiced_idx) >= 2) {
+        # Group consecutive voiced frames into segments
+        gaps <- which(diff(voiced_idx) > 1)
+        seg_starts <- c(1, gaps + 1)
+        seg_ends   <- c(gaps, length(voiced_idx))
+        for (s in seq_along(seg_starts)) {
+          seg <- voiced_idx[seg_starts[s]:seg_ends[s]]
+          if (length(seg) < 2) next
+          t_seg <- f0_df$time[seg]
+          f_seg <- f0_df$f0[seg]
+          t_cur <- t_seg[1]
+          t_end <- t_seg[length(t_seg)]
+          # Cap pulses per segment to keep plotly fast for long tokens
+          max_pulses_per_seg <- 1500
+          count <- 0
+          while (t_cur < t_end && count < max_pulses_per_seg) {
+            shapes[[length(shapes) + 1]] <- list(
+              type = "line", xref = "x", yref = "y2",
+              x0 = t_cur, x1 = t_cur,
+              y0 = -1, y1 = 1,
+              line = list(color = "#7fb1d6", width = 0.6)
+            )
+            f_cur <- tryCatch(stats::approx(t_seg, f_seg, t_cur, rule = 2)$y,
+                              error = function(e) NA_real_)
+            if (is.na(f_cur) || f_cur <= 0) break
+            t_cur <- t_cur + 1 / f_cur
+            count <- count + 1
+          }
+        }
+      }
     }
 
     # When TextGrid is shown the x-axis is detached from the f0 yaxis and
