@@ -16,7 +16,7 @@ model_ui <- function(input, output, session, dataset, normalised_data) {
           tags$li(tags$strong("Token ID:"), " A unique identifier for each token/syllable. One polynomial fit per token."),
           tags$li(tags$strong("f0:"), " An f0-related variable. Normalised f0 (e.g. semitone or z-score) is recommended for more interpretable and comparable coefficients across speakers.",
             " Use the ", tags$strong("Normalise"), " tab first, then select ", tags$em("Normalised data"),
-            " from the dataset dropdown to access ", tags$code(style = code_style, "f0_normalised"), "."),
+            " from the dataset dropdown to access ", tags$code(style = code_style, "f0_st"), " or ", tags$code(style = code_style, "f0_zscore"), "."),
           tags$li(tags$strong("Time:"), " The time variable that orders f0 samples within each token. Will be normalised to [-1, 1] per token before fitting."),
           tags$li(tags$strong("Speaker / Tone category:"), " Meta information to keep in the output.")
         ),

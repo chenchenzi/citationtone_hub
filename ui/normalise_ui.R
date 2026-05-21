@@ -91,15 +91,20 @@ normalised_ui <- function(input, output, session, dataset, normalised_data) {
     data <- data %>%
       left_join(speaker_means, by = input$speaker_var)
 
-    # Add normalised f0
+    # Add normalised f0 — column name reflects the chosen method:
+    #   semitone → f0_st        (semitones above/below speaker mean)
+    #   z-score  → f0_zscore    (by-speaker z-score)
+    norm_col <- if (input$normalisation_method == "zscore") "f0_zscore" else "f0_st"
+
     if (input$normalisation_method == "zscore") {
       data <- data %>%
         group_by(.data[[input$speaker_var]]) %>%
-        mutate(f0_normalised = (.data[[input$f0_var]] - speaker_mean) / sd(.data[[input$f0_var]], na.rm = TRUE)) %>%
+        mutate(!!norm_col := (.data[[input$f0_var]] - speaker_mean) /
+                              sd(.data[[input$f0_var]], na.rm = TRUE)) %>%
         ungroup()
     } else if (input$normalisation_method == "semitone") {
       data <- data %>%
-        mutate(f0_normalised = 12 * log2(.data[[input$f0_var]] / speaker_mean))
+        mutate(!!norm_col := 12 * log2(.data[[input$f0_var]] / speaker_mean))
     }
 
     # Store the full dataset with normalised columns (for other tabs)
@@ -107,7 +112,8 @@ normalised_ui <- function(input, output, session, dataset, normalised_data) {
 
     # Store the display subset (for DT table and download)
     display <- data %>%
-      select(all_of(input$f0_var), all_of(input$speaker_var), all_of(input$tone_var), speaker_mean, f0_normalised)
+      select(all_of(input$f0_var), all_of(input$speaker_var),
+             all_of(input$tone_var), speaker_mean, all_of(norm_col))
     norm_display(display)
   })
 

@@ -432,7 +432,7 @@ ui <- fluidPage(
                                                uiOutput("gamm_guide"),
                                                tags$div(class = "plot-spinner-wrap",
                                                  uiOutput("gamm_summary"),
-                                                 plotOutput("gamm_plot", height = "auto", width = "auto"),
+                                                 plotOutput("gamm_plot", height = "500px", width = "800px"),
                                                  tags$div(class = "plot-spinner")
                                                ),
                                                uiOutput("gamm_r_code")),

@@ -139,7 +139,7 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
 
     # Smart defaults for normalised data
     norm_token_default <- guess_var(norm_vars, c("^token", "^item", "^segment", "^id"), 1)
-    norm_f0_default    <- guess_var(norm_vars, c("^f0_normalised$", "^f0_norm", "^f0$", "^f0_"), 2)
+    norm_f0_default    <- guess_var(norm_vars, c("^f0_st$", "^f0_zscore$", "^f0_normalised$", "^f0_norm", "^f0$", "^f0_"), 2)
     norm_time_default  <- guess_var(norm_vars, c("^time", "^t$", "^timepoint"), 3)
     norm_tone_default  <- guess_var(norm_vars, c("^tone", "^category", "^tonecat"), 4)
 

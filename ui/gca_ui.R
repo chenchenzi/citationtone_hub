@@ -16,7 +16,7 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
           tags$li(tags$strong("Token ID:"), " A unique identifier for each token/syllable."),
           tags$li(tags$strong("f0:"), " An f0-related variable. Normalised f0 (e.g. semitone or z-score) is recommended for more interpretable and comparable coefficients across speakers.",
             " Use the ", tags$strong("Normalise"), " tab first, then select ", tags$em("Normalised data"),
-            " from the dataset dropdown to access ", tags$code(style = code_style, "f0_normalised"), "."),
+            " from the dataset dropdown to access ", tags$code(style = code_style, "f0_st"), " or ", tags$code(style = code_style, "f0_zscore"), "."),
           tags$li(tags$strong("Time:"), " The time variable that orders f0 samples within each token. Will be normalised to [0, 1] per token before fitting."),
           tags$li(tags$strong("Speaker:"), " Grouping variable for by-speaker random effects."),
           tags$li(tags$strong("Item:"), " The word or syllable type (e.g. different segmental compositions). Grouping variable for by-item random effects."),
@@ -161,6 +161,15 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
     req(input$gca_token_var, input$gca_time_var,
         input$gca_speaker_var, input$gca_tone_var,
         input$gca_f0_var)
+
+    # Progress notification — GCA can be slow on large datasets with random
+    # slopes; show a spinner until the observer returns.
+    progress_id <- showNotification(
+      tagList(icon("spinner", class = "fa-spin"),
+              " Fitting GCA model... This may take a while."),
+      duration = NULL, closeButton = FALSE, type = "message"
+    )
+    on.exit(removeNotification(progress_id), add = TRUE)
 
     data        <- active_data()
     token_var   <- input$gca_token_var

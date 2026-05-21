@@ -16,7 +16,7 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
           tags$li(tags$strong("Token ID:"), " A unique identifier for each token/syllable."),
           tags$li(tags$strong("f0:"), " An f0-related variable. Normalised f0 (e.g. semitone or z-score) is recommended for more interpretable results.",
             " Use the ", tags$strong("Normalise"), " tab first, then select ", tags$em("Normalised data"),
-            " from the dataset dropdown to access ", tags$code(style = code_style, "f0_normalised"), "."),
+            " from the dataset dropdown to access ", tags$code(style = code_style, "f0_st"), " or ", tags$code(style = code_style, "f0_zscore"), "."),
           tags$li(tags$strong("Time:"), " The time variable that orders f0 samples within each token. Will be normalised to [0, 1] per token before fitting."),
           tags$li(tags$strong("Speaker:"), " Grouping variable for by-speaker random effects."),
           tags$li(tags$strong("Item:"), " The word or syllable type (e.g. different segmental compositions). Grouping variable for by-item random effects."),
@@ -706,7 +706,7 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
       ) +
       theme_bw(base_size = 14) +
       theme(legend.position = "bottom")
-  }, height = function() { if (!is.null(gamm_plot_data())) 400 else 1 })
+  }, width = 800, height = 500)
 
   # --- Download handler (plot image) ---
   output$gamm_download <- downloadHandler(
