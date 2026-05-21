@@ -114,6 +114,77 @@ ui <- fluidPage(
         color: #ffffff;
         text-decoration: none;
       }
+      /* Showcase (Option B): image on the left, clickable feature list on the right */
+      .showcase-row {
+        display: grid;
+        grid-template-columns: 1.55fr 1fr;
+        gap: 24px;
+        align-items: stretch;
+        margin-top: 8px;
+      }
+      @media (max-width: 900px) {
+        .showcase-row { grid-template-columns: 1fr; }
+      }
+      .showcase-image {
+        background: #f7faf9;
+        border: 1px solid #d6e7df;
+        border-radius: 6px;
+        padding: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 280px;
+      }
+      .showcase-image img {
+        width: 100%;
+        max-height: 460px;
+        object-fit: contain;
+        border-radius: 4px;
+        box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+      }
+      .showcase-cards {
+        display: flex; flex-direction: column; gap: 8px;
+      }
+      .showcase-card {
+        background: #ffffff;
+        border: 1px solid #d6e7df;
+        border-left: 3px solid transparent;
+        border-radius: 4px;
+        padding: 11px 14px;
+        cursor: pointer;
+        transition: border-left-color 0.15s, background 0.15s, transform 0.1s;
+      }
+      .showcase-card:hover {
+        background: #f0faf7;
+        border-left-color: #78c2ad;
+        transform: translateY(-1px);
+      }
+      .showcase-card.active {
+        background: #e8f5f0;
+        border-left-color: #2c5f4f;
+      }
+      .showcase-card-title {
+        font-weight: 700; color: #2c5f4f;
+        font-size: 0.98rem; margin-bottom: 4px;
+      }
+      .showcase-card-icon { font-size: 1.1rem; margin-right: 6px; }
+      .showcase-card-desc {
+        font-size: 0.83rem; color: #555; line-height: 1.45;
+      }
+      /* Inline chip showing the corresponding tab name next to a friendly section heading */
+      .tab-ref-chip {
+        font-family: 'SFMono-Regular', Menlo, Consolas, monospace;
+        font-size: 0.7rem;
+        font-weight: 500;
+        color: #6b7d75;
+        background: #eef5f1;
+        border: 1px solid #d6e7df;
+        padding: 2px 8px;
+        border-radius: 10px;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+      }
+      .tab-ref-chip::before { content: '\\21AA  '; opacity: 0.6; margin-right: 2px; }
       /* FAQ subsection cards (Privacy & Data / Hosting / Usage) */
       .faq-section {
         background: #f0faf7;
@@ -210,52 +281,89 @@ ui <- fluidPage(
                           "Two complementary pipelines, from audio recordings to pitch contour analysis.")
                       ),
 
-                      # --- What you can do (feature cards) ---
+                      # --- What you can do (interactive showcase: image + clickable cards) ---
                       tags$div(style = "max-width: 1080px; margin: 0 auto; padding: 8px 15px 0 15px;",
-                        # Helper for one section's cards — no per-card link, single CTA below.
+                        # Inline JS handler — swaps the image and highlights the active card
+                        tags$script(HTML("
+                          window.shinytoneShowcase = function(section, file) {
+                            var img = document.getElementById('showcase-img-' + section);
+                            if (img) img.src = 'screenshots/' + file;
+                            document.querySelectorAll('.showcase-card[data-section=\"' + section + '\"]').forEach(function(c){
+                              c.classList.toggle('active', c.dataset.file === file);
+                            });
+                          };
+                        ")),
                         local({
-                          make_card <- function(emoji, name, desc) {
-                            tags$div(class = "feature-card",
-                              tags$div(class = "feature-card-title",
-                                HTML(paste0("<span class='feature-card-icon'>", emoji, "</span>", name))),
-                              tags$div(class = "feature-card-desc", desc)
+                          showcase_card <- function(section, emoji, name, file, desc, active = FALSE) {
+                            cls <- if (active) "showcase-card active" else "showcase-card"
+                            js  <- sprintf("shinytoneShowcase('%s', '%s'); return false;", section, file)
+                            tags$div(class = cls,
+                              `data-section` = section, `data-file` = file,
+                              onclick = js,
+                              tags$div(class = "showcase-card-title",
+                                HTML(paste0("<span class='showcase-card-icon'>", emoji, "</span>", name))),
+                              tags$div(class = "showcase-card-desc", desc)
                             )
                           }
                           section_cta <- function(main, label) {
                             js <- sprintf(
                               "Shiny.setInputValue('about_nav_target', '%s|Start', {priority:'event'}); return false;",
                               main)
-                            tags$div(style = "text-align: right;",
+                            tags$div(style = "text-align: right; margin-top: 12px;",
                               tags$a(class = "feature-section-cta",
                                      href = "#", onclick = js, label)
                             )
                           }
                           tagList(
+                            # --- F0 Analysis section ---
                             tags$div(class = "feature-section",
-                              h4(style = "color: #78c2ad; margin-top: 20px;", "F0 Analysis"),
+                              h4(style = "color: #78c2ad; margin-top: 20px; display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px;",
+                                 "Pitch Contour Analysis",
+                                 tags$span(class = "tab-ref-chip", "F0 Analysis tab")
+                              ),
                               tags$p(class = "lead",
                                 "Run the full citation-tone analysis pipeline on f0 measurements (CSV)."),
-                              tags$div(class = "feature-grid",
-                                make_card("\U0001F3A8", "Visualise",
-                                  "Plot f0 contours coloured by tone, with optional speaker faceting and normalisation (z-score or semitone). Export the plots and the underlying R code."),
-                                make_card("\U0001F50E", "Inspect",
-                                  "Flag likely f0 artefacts such as octave jumps, out-of-range outliers, and tracking errors, using by-speaker z-scores and sample-to-sample jump detection."),
-                                make_card("\U0001F4CA", "Model",
-                                  "Three modelling approaches for f0 contours: per-token Legendre polynomials, Growth Curve Analysis (GCA) with mixed effects, and Generalised Additive Mixed Models (GAMM)."),
-                                make_card("\U0001F4CB", "Summarise",
-                                  "Convert tone contours into Chao tone numerals (1–5 scale) for cross-language comparison. Compare reference-line and interval-based methods.")
+                              tags$div(class = "showcase-row",
+                                tags$div(class = "showcase-image",
+                                  tags$img(id = "showcase-img-analysis",
+                                           src = "screenshots/visualise.png",
+                                           alt = "F0 Analysis screenshot")
+                                ),
+                                tags$div(class = "showcase-cards",
+                                  showcase_card("analysis", "\U0001F3A8", "Visualise", "visualise.png",
+                                    "Plot f0 contours coloured by tone, with optional speaker faceting and normalisation (z-score or semitone). Export the plots and the underlying R code.",
+                                    active = TRUE),
+                                  showcase_card("analysis", "\U0001F50E", "Inspect", "inspect.png",
+                                    "Flag likely f0 artefacts such as octave jumps, out-of-range outliers, and tracking errors, using by-speaker z-scores and sample-to-sample jump detection."),
+                                  showcase_card("analysis", "\U0001F4CA", "Model", "model.png",
+                                    "Three modelling approaches: per-token Legendre polynomials, Growth Curve Analysis (GCA) with mixed effects, and Generalised Additive Mixed Models (GAMM)."),
+                                  showcase_card("analysis", "\U0001F4CB", "Summarise", "summarise.png",
+                                    "Convert tone contours into Chao tone numerals (1–5 scale) for cross-language comparison. Compare reference-line and interval-based methods.")
+                                )
                               ),
                               section_cta("F0 Analysis", "Get started →")
                             ),
+                            # --- F0 Processing section ---
                             tags$div(class = "feature-section",
-                              h4(style = "color: #78c2ad; margin-top: 20px;", "F0 Processing"),
+                              h4(style = "color: #78c2ad; margin-top: 20px; display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px;",
+                                 "Pitch Measurement",
+                                 tags$span(class = "tab-ref-chip", "F0 Processing tab")
+                              ),
                               tags$p(class = "lead",
                                 "Go from raw .wav files to clean f0 contours, ready for the analysis pipeline above."),
-                              tags$div(class = "feature-grid",
-                                make_card("\U0001F30A", "Extract",
-                                  "Extract f0 contours from .wav files using the wrassp R package, or import pre-computed Praat .Pitch and .PitchTier files."),
-                                make_card("\U0001F527", "Correct",
-                                  "Review and correct extraction artefacts by listening to the audio, inspecting the waveform, and editing individual frames (halve, double, interpolate, smooth, manual entry, etc.).")
+                              tags$div(class = "showcase-row",
+                                tags$div(class = "showcase-image",
+                                  tags$img(id = "showcase-img-processing",
+                                           src = "screenshots/extraction.png",
+                                           alt = "F0 Processing screenshot")
+                                ),
+                                tags$div(class = "showcase-cards",
+                                  showcase_card("processing", "\U0001F30A", "Extract", "extraction.png",
+                                    "Extract f0 contours from .wav files using the wrassp R package, or import pre-computed Praat .Pitch and .PitchTier files.",
+                                    active = TRUE),
+                                  showcase_card("processing", "\U0001F527", "Correct", "correction.png",
+                                    "Review and correct extraction artefacts by listening to the audio, inspecting the waveform, and editing individual frames (halve, double, interpolate, smooth, manual entry, etc.).")
+                                )
                               ),
                               section_cta("F0 Processing", "Get started →")
                             )
