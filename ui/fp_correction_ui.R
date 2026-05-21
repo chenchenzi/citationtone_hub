@@ -593,7 +593,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           xref = "paper", yref = "paper",
           xanchor = "right", text = tier$name,
           showarrow = FALSE,
-          font = list(size = 12, color = "#666")
+          font = list(size = 14, color = "#666")
         )
 
         if (identical(tier$type, "interval")) {
@@ -616,7 +616,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                 y = (y_min + y_max) / 2,
                 xref = "x", yref = "paper",
                 text = lbl, showarrow = FALSE,
-                font = list(size = 13, color = "#222")
+                font = list(size = 15, color = "#222")
               )
             }
           }
@@ -635,7 +635,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                 xref = "x", yref = "paper",
                 xanchor = "left", yanchor = "bottom",
                 text = paste0(" ", lbl), showarrow = FALSE,
-                font = list(size = 12, color = "#5a8caa")
+                font = list(size = 14, color = "#5a8caa")
               )
             }
           }
@@ -727,7 +727,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                                  fixedrange = TRUE)
     }
     p <- do.call(plotly::layout, c(list(p), layout_args))
-    plotly::config(p, displaylogo = FALSE)
+    plotly::config(p, displaylogo = FALSE, scrollZoom = TRUE)
   })
 
   # ---- Main panel layout ----
@@ -736,6 +736,46 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   output$fp_correction_guide <- renderUI({
     box_style <- "background-color: #f0faf7; border-left: 4px solid #78c2ad; padding: 10px 14px; margin-bottom: 12px; border-radius: 4px; font-size: 0.88rem; color: #555;"
     tagList(
+      # Keyboard zoom/pan handler — installed once per session
+      tags$script(HTML("
+        (function(){
+          if (window._fpCorrKeyboardZoom) return;
+          window._fpCorrKeyboardZoom = true;
+          document.addEventListener('keydown', function(e){
+            // Skip if focus is in a text-y input
+            var t = e.target && e.target.tagName ? e.target.tagName.toLowerCase() : '';
+            if (t === 'input' || t === 'textarea' || t === 'select') return;
+            // Only act when F0 Correction tab is visible
+            var fp = window.Shiny && Shiny.shinyapp ? Shiny.shinyapp.$inputValues : null;
+            if (!fp || fp.tabs_fp !== 'F0 Correction') return;
+            var nav = document.querySelector('.navbar .nav-link.active');
+            if (!nav || nav.textContent.trim() !== 'F0 Processing') return;
+            var gd = document.getElementById('fp_corr_plot');
+            if (!gd || !gd._fullLayout || !gd._fullLayout.xaxis) return;
+            var xa = gd._fullLayout.xaxis;
+            var range = xa.range; if (!range || range.length !== 2) return;
+            var lo = range[0], hi = range[1], span = hi - lo, mid = (lo + hi) / 2;
+            var newRange = null, reset = false, prevent = true;
+            switch (e.key) {
+              case '+': case '=':
+                newRange = [mid - span * 0.4,  mid + span * 0.4]; break;   // zoom in
+              case '-': case '_':
+                newRange = [mid - span * 0.625, mid + span * 0.625]; break; // zoom out
+              case 'ArrowLeft':
+                newRange = [lo - span * 0.2, hi - span * 0.2]; break;       // pan left
+              case 'ArrowRight':
+                newRange = [lo + span * 0.2, hi + span * 0.2]; break;       // pan right
+              case '0':
+                reset = true; break;                                        // reset
+              default:
+                prevent = false; return;
+            }
+            if (prevent) e.preventDefault();
+            if (reset)  Plotly.relayout(gd, {'xaxis.autorange': true});
+            else        Plotly.relayout(gd, {'xaxis.range': newRange});
+          });
+        })();
+      ")),
       tags$div(style = box_style,
         tags$strong("F0 Correction"),
         tags$p(style = "margin: 6px 0 6px 0;",
@@ -778,6 +818,11 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       tags$h4("Audio"),
       uiOutput("fp_corr_audio"),
       tags$h4(style = "margin-top: 14px;", "Waveform + f0"),
+      tags$p(style = "color: #888; font-size: 0.82rem; margin: 0 0 6px 0;",
+        "Zoom with the mouse wheel or use ",
+        tags$kbd("+"), " / ", tags$kbd("-"), " (zoom), ",
+        tags$kbd("←"), " / ", tags$kbd("→"), " (pan), ",
+        tags$kbd("0"), " (reset). Only the time axis zooms; f0 / waveform stay fixed."),
       plotly::plotlyOutput("fp_corr_plot", height = "560px"),
       tags$h4(style = "margin-top: 16px;", "Edit summary"),
       DT::dataTableOutput("fp_corr_edits_table")
