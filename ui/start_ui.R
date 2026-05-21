@@ -178,9 +178,10 @@ output$preview_title <- renderText({
 # Display preview (first 10 rows), structure, or summary based on user selection
 output$man_example <- renderUI({
   if (is.null(input$uploadfile)) {
-    return(NULL)
+    return(tags$div(style = "color: #888; font-style: italic; margin: 8px 0;",
+                    "No file uploaded yet."))
   }
-  
+
   if (input$dman_preview == "preview") {
     tagList(
       verbatimTextOutput("data_preview"),  
