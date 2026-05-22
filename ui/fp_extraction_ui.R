@@ -108,14 +108,21 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           tags$strong("Run extraction"), "."),
         tags$ul(style = "margin-bottom: 0; padding-left: 18px;",
           tags$li(tags$strong("wrassp"),
-            " runs the ksvF0 algorithm in R — no external dependencies, ",
-            "deploys cleanly on shinyapps.io."),
+            " runs the ksvF0 algorithm in R, with no external dependencies, and deploys cleanly on shinyapps.io. ",
+            "(",
+            tags$a(href = "https://cran.r-project.org/package=wrassp",
+                   target = "_blank", "CRAN"),
+            " · ",
+            tags$a(href = "https://github.com/IPS-LMU/wrassp",
+                   target = "_blank", "GitHub"),
+            "; algorithm: Schäfer-Vincent, 1983.)"),
           tags$li(tags$strong("Praat"),
             " uses the .Pitch / .PitchTier files you uploaded alongside the .wav files. ",
             "Choose this if you've already extracted pitch in Praat with custom settings."),
           tags$li(tags$strong("Metadata (optional):"),
-            " upload a CSV with one row per audio file (e.g., speaker, tone, word). ",
-            "It will be joined to the f0 output by filename, so the download is ready for F0 Analysis.")
+            " upload a metadata CSV with one row per audio file (e.g., speaker, tone, word). ",
+            "It will be joined to the f0 output by filename, so the download is ready for F0 Analysis. ",
+            "After upload, you'll be asked which column holds the audio filename.")
         )
       )
     )
