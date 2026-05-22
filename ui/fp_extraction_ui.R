@@ -102,27 +102,23 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     tagList(
       tags$div(
         style = box_style,
-        tags$strong("F0 Extraction"),
+        HTML("<strong>F0 Extraction</strong>"),
         tags$p(style = "margin: 6px 0 0 0;",
-          "Choose how to obtain f0 contours from your audio files, then click ",
-          tags$strong("Run extraction"), "."),
+          HTML("Choose how to obtain f0 contours from your audio files, then click <strong>Run extraction</strong>.")),
         tags$ul(style = "margin-bottom: 0; padding-left: 18px;",
-          tags$li(tags$strong("wrassp"),
-            " runs the ksvF0 algorithm in R, with no external dependencies, and deploys cleanly on shinyapps.io. ",
-            "(",
-            tags$a(href = "https://cran.r-project.org/package=wrassp",
-                   target = "_blank", "CRAN"),
-            " · ",
-            tags$a(href = "https://github.com/IPS-LMU/wrassp",
-                   target = "_blank", "GitHub"),
-            "; algorithm: Schäfer-Vincent, 1983.)"),
-          tags$li(tags$strong("Praat"),
-            " uses the .Pitch / .PitchTier files you uploaded alongside the .wav files. ",
-            "Choose this if you've already extracted pitch in Praat with custom settings."),
-          tags$li(tags$strong("Metadata (optional):"),
-            " upload a metadata CSV with one row per audio file (e.g., speaker, tone, word). ",
-            "It will be joined to the f0 output by filename, so the download is ready for F0 Analysis. ",
-            "After upload, you'll be asked which column holds the audio filename.")
+          tags$li(HTML(paste0(
+            "<strong>wrassp</strong> runs the ksvF0 algorithm in R, with no external dependencies, ",
+            "and deploys cleanly on shinyapps.io. (",
+            "<a href='https://cran.r-project.org/package=wrassp' target='_blank'>CRAN</a> &middot; ",
+            "<a href='https://github.com/IPS-LMU/wrassp' target='_blank'>GitHub</a>",
+            "; algorithm: Sch&auml;fer-Vincent, 1983.)"))),
+          tags$li(HTML(paste0(
+            "<strong>Praat</strong> uses the .Pitch / .PitchTier files you uploaded alongside ",
+            "the .wav files. Choose this if you've already extracted pitch in Praat with custom settings."))),
+          tags$li(HTML(paste0(
+            "<strong>Metadata (optional):</strong> upload a metadata CSV with one row per audio file ",
+            "(e.g., speaker, tone, word). It will be joined to the f0 output by filename, so the download ",
+            "is ready for F0 Analysis. After upload, you'll be asked which column holds the audio filename.")))
         )
       )
     )
