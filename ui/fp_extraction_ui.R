@@ -42,10 +42,12 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                       value = TRUE)
       ),
       tags$hr(),
-      conditionalPanel("output.fp_have_f0 === 'yes'",
-        h5("Download"),
-        textInput("fp_extract_filename", "Filename:", value = "extracted_f0"),
-        downloadButton("fp_extract_download", "Download f0 (CSV)")
+      h5("Download"),
+      textInput("fp_extract_filename", "Enter filename (without extension):", value = "extracted_f0"),
+      downloadButton("fp_extract_download", "Download f0 (CSV)"),
+      conditionalPanel("output.fp_have_f0 !== 'yes'",
+        tags$div(style = "color: #888; font-size: 0.8rem; margin-top: 6px; font-style: italic;",
+                 "Run extraction first to generate the file.")
       )
     )
   })
@@ -446,8 +448,16 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       paste0(input$fp_extract_filename, ".csv")
     },
     content = function(file) {
-      req(fp_f0_data())
       df <- fp_f0_data()
+      if (is.null(df) || nrow(df) == 0) {
+        showNotification(
+          "No f0 data yet — click Run extraction first.",
+          type = "warning", duration = 5
+        )
+        # Write a one-line placeholder so the browser doesn't hang on the request
+        writeLines("# Shinytone: no f0 data — run extraction first.", file)
+        return()
+      }
       md <- if (!is.null(fp_metadata)) fp_metadata() else NULL
       out <- df
       msg <- "f0 data saved as %s"
