@@ -91,6 +91,15 @@ fp_start_ui <- function(input, output, session, fp_audio_data) {
              tags$strong(".TextGrid"), ", ", tags$strong(".Pitch"),
              ", and ", tags$strong(".PitchTier"),
              " files exported from Praat can be uploaded alongside the audio."),
+      tags$div(
+        style = "background-color: #fff8e1; border-left: 4px solid #e0a800; padding: 10px 14px; margin-bottom: 12px; border-radius: 4px; font-size: 0.88rem; color: #555;",
+        tags$strong("Companion files:"),
+        " Use a common ", tags$em("basename"),
+        " across companion files. For example, ",
+        tags$code("ma1.wav"), ", ", tags$code("ma1.TextGrid"),
+        ", and ", tags$code("ma1.Pitch"),
+        " are treated as one token."
+      ),
       if (is.null(fp_audio_data())) {
         tags$p("Once uploaded, a per-token file summary will appear below.")
       },
@@ -109,15 +118,6 @@ fp_start_ui <- function(input, output, session, fp_audio_data) {
                 " Interactively review and correct extraction errors (octave jumps, halving, spurious frames, voiced/unvoiced boundaries).")
       ),
       tags$hr(),
-      tags$div(
-        style = "background-color: #fff8e1; border-left: 4px solid #e0a800; padding: 10px 14px; margin-bottom: 12px; border-radius: 4px; font-size: 0.88rem; color: #555;",
-        tags$strong("Companion files:"),
-        " Use a common ", tags$em("basename"),
-        " across companion files. For example, ",
-        tags$code("ma1.wav"), ", ", tags$code("ma1.TextGrid"),
-        ", and ", tags$code("ma1.Pitch"),
-        " are treated as one token."
-      ),
 
       # --- Recommended structured filename convention ---
       tags$style(HTML("
@@ -217,7 +217,9 @@ fp_start_ui <- function(input, output, session, fp_audio_data) {
         tags$li("Use ", tags$code("_"), " as the separator. Avoid spaces, dots, and other special symbols."),
         tags$li("Zero-pad numeric parts (", tags$code("S01"), " not ", tags$code("S1"),
                 ") so filenames sort naturally."),
-        tags$li("Keep each segment short but unambiguous."))
+        tags$li("Keep each segment short but unambiguous.")),
+      tags$hr(),
+      h4("File Preview")
     )
   })
 
@@ -240,8 +242,7 @@ fp_start_ui <- function(input, output, session, fp_audio_data) {
 
     tags$div(
       style = "background-color: #eef6f2; border: 1px solid #c8e1d6; padding: 10px 14px; margin-bottom: 12px; border-radius: 4px; font-size: 0.9rem;",
-      tags$strong("Upload summary"),
-      tags$ul(style = "margin: 6px 0 0 0; padding-left: 18px;",
+      tags$ul(style = "margin: 0; padding-left: 18px;",
         tags$li("Tokens (unique basenames): ", tags$strong(nrow(df))),
         tags$li(".wav files: ", tags$strong(n_wav),
                 "  (total ", tags$strong(format(total_kb, big.mark = ",")), " KB)"),
