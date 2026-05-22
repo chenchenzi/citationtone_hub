@@ -111,13 +111,113 @@ fp_start_ui <- function(input, output, session, fp_audio_data) {
       tags$hr(),
       tags$div(
         style = "background-color: #fff8e1; border-left: 4px solid #e0a800; padding: 10px 14px; margin-bottom: 12px; border-radius: 4px; font-size: 0.88rem; color: #555;",
-        tags$strong("File-naming convention:"),
+        tags$strong("Companion files:"),
         " Use a common ", tags$em("basename"),
         " across companion files. For example, ",
         tags$code("ma1.wav"), ", ", tags$code("ma1.TextGrid"),
         ", and ", tags$code("ma1.Pitch"),
         " are treated as one token."
-      )
+      ),
+
+      # --- Recommended structured filename convention ---
+      tags$style(HTML("
+        .fn-pattern, .fn-example {
+          font-family: 'SFMono-Regular', Menlo, Consolas, monospace;
+          font-size: 1.0rem; padding: 8px 10px; border-radius: 4px;
+          background: #ffffff; border: 1px solid #d6e7df;
+          display: inline-block; margin: 4px 0;
+        }
+        .fn-seg { display: inline-block; padding: 1px 6px; border-radius: 3px;
+                  font-weight: 600; }
+        .fn-sep { color: #aaa; padding: 0 1px; }
+        .fn-ext { color: #888; }
+        .fn-lang { background: #e8f5f0; color: #2a7a5a; }
+        .fn-spk  { background: #e3f2fd; color: #1565c0; }
+        .fn-tone { background: #fff3e0; color: #c2410c; }
+        .fn-word { background: #fce4ec; color: #c2185b; }
+        .fn-rep  { background: #f3e5f5; color: #6a1b9a; }
+        .fn-more { background: #ffffff; color: #888; border: 1px dashed #bbb; font-weight: 500; }
+        .fn-legend { display: flex; flex-wrap: wrap; gap: 10px 18px;
+                     margin: 6px 0 0 0; font-size: 0.82rem; color: #555; }
+        .fn-legend > div { display: inline-flex; align-items: center; gap: 6px; }
+        .fn-swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+        .fn-swatch.fn-more { border: 1px dashed #bbb; background: #ffffff; }
+        /* Highlight the token-ID portion of the filename (everything before .wav) */
+        .fn-tid {
+          background: #f4f4f6;
+          padding: 4px 8px;
+          border-radius: 4px;
+          border: 1px solid #d8d8de;
+          border-bottom: 2px solid #6c757d;
+          box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+        }
+        .fn-tid-caption {
+          font-size: 0.78rem;
+          color: #555;
+          font-style: italic;
+          margin: 4px 0 8px 4px;
+        }
+      ")),
+      h4("Recommended filename convention"),
+      tags$p("A consistent, structured filename makes downstream filtering and metadata joins much easier. ",
+             "Encode each piece of information you'd want to filter or group by as a separate ",
+             "underscore-separated segment:"),
+      tags$div(class = "fn-pattern",
+        HTML(paste0(
+          "<span class='fn-tid'>",
+            "<span class='fn-seg fn-lang'>{language}</span>",
+            "<span class='fn-sep'>_</span>",
+            "<span class='fn-seg fn-spk'>{speaker}</span>",
+            "<span class='fn-sep'>_</span>",
+            "<span class='fn-seg fn-tone'>{tone}</span>",
+            "<span class='fn-sep'>_</span>",
+            "<span class='fn-seg fn-word'>{word}</span>",
+            "<span class='fn-sep'>_</span>",
+            "<span class='fn-seg fn-rep'>{rep}</span>",
+            "<span class='fn-sep'>_</span>",
+            "<span class='fn-seg fn-more'>{your_variable}</span>",
+          "</span>",
+          "<span class='fn-ext'>.wav</span>"))),
+      tags$div(class = "fn-tid-caption",
+               HTML("↑ The shaded portion is the <strong>token ID</strong>.")),
+      tags$div(style = "margin-top: 4px;", "Example:"),
+      tags$div(class = "fn-example",
+        HTML(paste0(
+          "<span class='fn-tid'>",
+            "<span class='fn-seg fn-lang'>yue</span>",
+            "<span class='fn-sep'>_</span>",
+            "<span class='fn-seg fn-spk'>S01</span>",
+            "<span class='fn-sep'>_</span>",
+            "<span class='fn-seg fn-tone'>T2</span>",
+            "<span class='fn-sep'>_</span>",
+            "<span class='fn-seg fn-word'>ma</span>",
+            "<span class='fn-sep'>_</span>",
+            "<span class='fn-seg fn-rep'>r01</span>",
+          "</span>",
+          "<span class='fn-ext'>.wav</span>"))),
+      tags$div(class = "fn-tid-caption",
+               HTML("→ token ID: <code>yue_S01_T2_ma_r01</code>")),
+      tags$div(class = "fn-legend",
+        tags$div(tags$span(class = "fn-swatch fn-lang"), "language / project code"),
+        tags$div(tags$span(class = "fn-swatch fn-spk"),  "speaker ID (zero-padded)"),
+        tags$div(tags$span(class = "fn-swatch fn-tone"), "tone category"),
+        tags$div(tags$span(class = "fn-swatch fn-word"), "word (in IPA or romanisation)"),
+        tags$div(tags$span(class = "fn-swatch fn-rep"),  "repetition number"),
+        tags$div(tags$span(class = "fn-swatch fn-more"), "any extra factor you need (session, context, carrier, etc.)")
+      ),
+      tags$p(style = "margin-top: 14px; margin-bottom: 4px;", tags$strong("Why this helps")),
+      tags$ul(
+        tags$li("In ", tags$strong("F0 Correction"),
+                ", you can filter the token list by speaker or tone from your Inspect-tab CSV."),
+        tags$li("In ", tags$strong("F0 Extraction"),
+                ", the downloaded f0 already carries enough info in the token ID to split into metadata columns later."),
+        tags$li("Sorted file lists fall in a sensible order, so iterating through tokens is predictable.")),
+      tags$p(style = "margin-top: 10px; margin-bottom: 4px;", tags$strong("Tips")),
+      tags$ul(
+        tags$li("Use ", tags$code("_"), " as the separator. Avoid spaces, dots, and other special symbols."),
+        tags$li("Zero-pad numeric parts (", tags$code("S01"), " not ", tags$code("S1"),
+                ") so filenames sort naturally."),
+        tags$li("Keep each segment short but unambiguous."))
     )
   })
 

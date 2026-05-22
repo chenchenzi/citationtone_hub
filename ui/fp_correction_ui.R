@@ -164,6 +164,10 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                     accept = c(".csv", "text/csv"),
                     placeholder = "Upload Inspect-tab CSV"),
           uiOutput("fp_corr_flagged_col_picker"),
+          uiOutput("fp_corr_speaker_col_picker"),
+          uiOutput("fp_corr_speaker_keep_picker"),
+          uiOutput("fp_corr_tone_col_picker"),
+          uiOutput("fp_corr_tone_keep_picker"),
           checkboxInput("fp_corr_only_flagged",
                         "Only show flagged tokens", value = FALSE)
         )
@@ -313,9 +317,67 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     default <- if ("token" %in% cols) "token"
                else if ("token_id" %in% cols) "token_id"
                else cols[1]
-    selectInput("fp_corr_flagged_col",
-                "Token column",
+    tagList(
+      selectInput("fp_corr_flagged_col",
+                  "Token column (match key)",
+                  choices = cols, selected = default, width = "100%"),
+      tags$div(style = "color: #888; font-size: 0.75rem; margin-top: -8px; margin-bottom: 6px; font-style: italic;",
+        "Values in this column must match the audio file basenames ",
+        "(e.g. ", tags$code("S01_T1_001"), " for ", tags$code("S01_T1_001.wav"), ")."),
+      checkboxInput("fp_corr_strip_ext",
+                    "Strip file extensions when matching",
+                    value = TRUE)
+    )
+  })
+
+  # ---- Speaker column picker (optional) ----
+  output$fp_corr_speaker_col_picker <- renderUI({
+    df <- fp_flagged_raw()
+    if (is.null(df)) return(NULL)
+    cols <- c("(none)" = "", names(df))
+    guess <- names(df)[grepl("^(speaker|spk|talker|subject|participant)$",
+                             names(df), ignore.case = TRUE)]
+    default <- if (length(guess)) guess[1] else ""
+    selectInput("fp_corr_speaker_col",
+                "Speaker column (optional)",
                 choices = cols, selected = default, width = "100%")
+  })
+
+  # ---- Speaker keep-list (only when speaker column is picked) ----
+  output$fp_corr_speaker_keep_picker <- renderUI({
+    df <- fp_flagged_raw()
+    col <- input$fp_corr_speaker_col
+    if (is.null(df) || is.null(col) || !nzchar(col) || !(col %in% names(df))) return(NULL)
+    levs <- sort(unique(as.character(df[[col]])))
+    levs <- levs[!is.na(levs) & nzchar(levs)]
+    checkboxGroupInput("fp_corr_speaker_keep",
+                       "Keep speakers:",
+                       choices = levs, selected = levs, inline = TRUE)
+  })
+
+  # ---- Tone column picker (optional) ----
+  output$fp_corr_tone_col_picker <- renderUI({
+    df <- fp_flagged_raw()
+    if (is.null(df)) return(NULL)
+    cols <- c("(none)" = "", names(df))
+    guess <- names(df)[grepl("^(tone|tone_cat|tonecat|category|tonal_category)$",
+                             names(df), ignore.case = TRUE)]
+    default <- if (length(guess)) guess[1] else ""
+    selectInput("fp_corr_tone_col",
+                "Tone column (optional)",
+                choices = cols, selected = default, width = "100%")
+  })
+
+  # ---- Tone keep-list (only when tone column is picked) ----
+  output$fp_corr_tone_keep_picker <- renderUI({
+    df <- fp_flagged_raw()
+    col <- input$fp_corr_tone_col
+    if (is.null(df) || is.null(col) || !nzchar(col) || !(col %in% names(df))) return(NULL)
+    levs <- sort(unique(as.character(df[[col]])))
+    levs <- levs[!is.na(levs) & nzchar(levs)]
+    checkboxGroupInput("fp_corr_tone_keep",
+                       "Keep tones:",
+                       choices = levs, selected = levs, inline = TRUE)
   })
 
   # Extract unique flagged token IDs whenever the user (re-)picks the column.
@@ -340,13 +402,16 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       sub <- df[as.logical(df$flagged_jump) %in% TRUE, , drop = FALSE]
       sub <- sub[!is.na(sub[[col]]) & !is.na(sub[[time_col]]), , drop = FALSE]
       if (nrow(sub) > 0) {
+        # Normalise key (strip ext + lowercase) so per-frame lookup matches the
+        # extracted basenames regardless of how the CSV stored the filenames.
+        keys <- make_corr_key(sub[[col]], isTRUE(input$fp_corr_strip_ext))
         frames_by_token <- split(
           data.frame(
             time = as.numeric(sub[[time_col]]),
             note = if (!is.null(notes_col)) as.character(sub[[notes_col]]) else "",
             stringsAsFactors = FALSE
           ),
-          as.character(sub[[col]])
+          keys
         )
         fp_flagged_frames(frames_by_token)
         showNotification(sprintf("Found %d flagged frames across %d tokens.",
@@ -360,18 +425,66 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     }
   })
 
+  # Normalise a token-like string for matching:
+  # optionally strip file extension, then trim whitespace and lowercase.
+  make_corr_key <- function(x, strip_ext = TRUE) {
+    k <- as.character(x)
+    if (isTRUE(strip_ext)) k <- tools::file_path_sans_ext(k)
+    tolower(trimws(k))
+  }
+
   # Filtered list of tokens to populate the dropdown.
+  # Filters AND together (intersected with the set of extracted tokens):
+  #   - flagged-tokens checkbox (token IDs from the CSV's token column)
+  #   - speaker keep-list (when a speaker column is picked)
+  #   - tone keep-list    (when a tone column is picked)
+  # All comparisons normalise via make_corr_key() so case + extension
+  # differences don't cause silent mismatches.
   filtered_tokens <- reactive({
     df <- fp_f0_data()
     if (is.null(df)) return(character(0))
     all_t <- sort(unique(df$token))
+    strip_ext <- isTRUE(input$fp_corr_strip_ext)
+    all_key <- make_corr_key(all_t, strip_ext)
+    keep <- all_t
+
+    raw       <- fp_flagged_raw()
+    token_col <- input$fp_corr_flagged_col
+
+    # 1) Flagged-tokens checkbox
     if (isTRUE(input$fp_corr_only_flagged)) {
       flagged <- fp_flagged_tokens()
       if (!is.null(flagged) && length(flagged) > 0) {
-        return(intersect(all_t, flagged))
+        keep <- keep[all_key %in% make_corr_key(flagged, strip_ext)]
+        all_key <- make_corr_key(keep, strip_ext)
       }
     }
-    all_t
+
+    # 2) Speaker keep-list — if a speaker column is picked, the keep-list applies
+    # (even an empty keep-list means "exclude everyone").
+    spk_col <- input$fp_corr_speaker_col
+    if (!is.null(raw) && !is.null(spk_col) && nzchar(spk_col) &&
+        spk_col %in% names(raw) && !is.null(token_col) && token_col %in% names(raw)) {
+      spk_keep <- input$fp_corr_speaker_keep
+      if (is.null(spk_keep)) spk_keep <- character(0)
+      m  <- as.character(raw[[spk_col]]) %in% spk_keep
+      ok <- make_corr_key(unique(as.character(raw[[token_col]])[m]), strip_ext)
+      keep <- keep[all_key %in% ok]
+      all_key <- make_corr_key(keep, strip_ext)
+    }
+
+    # 3) Tone keep-list — same logic
+    tone_col <- input$fp_corr_tone_col
+    if (!is.null(raw) && !is.null(tone_col) && nzchar(tone_col) &&
+        tone_col %in% names(raw) && !is.null(token_col) && token_col %in% names(raw)) {
+      tone_keep <- input$fp_corr_tone_keep
+      if (is.null(tone_keep)) tone_keep <- character(0)
+      m  <- as.character(raw[[tone_col]]) %in% tone_keep
+      ok <- make_corr_key(unique(as.character(raw[[token_col]])[m]), strip_ext)
+      keep <- keep[all_key %in% ok]
+    }
+
+    keep
   })
 
   # NOTE: the token dropdown's choices are populated by ui_fp_correction's
@@ -386,9 +499,15 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     if (!has_data) return("")          # no extraction yet — keep area quiet
     toks <- filtered_tokens()
     if (length(toks) == 0) {
-      # Data exists but the active filter excludes everything.
-      if (isTRUE(input$fp_corr_only_flagged)) {
-        return("No tokens match the flagged-list filter.")
+      # Data exists but the active filter(s) exclude everything.
+      active <- character(0)
+      if (isTRUE(input$fp_corr_only_flagged)) active <- c(active, "flagged list")
+      if (!is.null(input$fp_corr_speaker_col) && nzchar(input$fp_corr_speaker_col)) active <- c(active, "speaker")
+      if (!is.null(input$fp_corr_tone_col)    && nzchar(input$fp_corr_tone_col))    active <- c(active, "tone")
+      if (length(active) > 0) {
+        return(sprintf("No tokens match the active filter%s (%s).",
+                       if (length(active) > 1) "s" else "",
+                       paste(active, collapse = " + ")))
       }
       return("")
     }
@@ -483,8 +602,9 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     # Match frames whose time is within half a frame-step of a flagged time.
     flagged_idx <- integer(0); flag_notes_full <- rep("", nrow(f0_df))
     frames_by_tok <- fp_flagged_frames()
-    if (!is.null(frames_by_tok) && tok %in% names(frames_by_tok)) {
-      fl <- frames_by_tok[[tok]]
+    tok_key <- make_corr_key(tok, isTRUE(input$fp_corr_strip_ext))
+    if (!is.null(frames_by_tok) && tok_key %in% names(frames_by_tok)) {
+      fl <- frames_by_tok[[tok_key]]
       step <- if (nrow(f0_df) >= 2) median(diff(f0_df$time), na.rm = TRUE) else 0.005
       if (is.na(step) || step <= 0) step <- 0.005
       tol <- step / 2
