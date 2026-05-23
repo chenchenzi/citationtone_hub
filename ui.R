@@ -264,6 +264,8 @@ ui <- fluidPage(
                         tags$p(style = "color: #777; font-size: 0.88rem; margin: 0;",
                           icon("laptop-code"), " ",
                           tags$a(href = "https://chenzixu.rbind.io/", target = "_blank", "Chenzi Xu"),
+                          " ",
+                          tags$a(href = "https://congzhang-linguist.github.io", target = "_blank", "Cong Zhang"),
                           tags$span(style = "margin: 0 10px; color: #ccc;", "·"),
                           icon("github"), " ",
                           tags$a(href = "https://github.com/chenchenzi/citationtone_hub", target = "_blank",
