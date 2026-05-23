@@ -27,19 +27,34 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       actionButton("fp_extract_run", "Run extraction", icon = icon("play")),
       tags$hr(),
       # ---- Metadata (optional) ----
-      h5("Metadata ", tags$small(style = "color: #888; font-weight: normal;", "(optional)")),
+      h5("Metadata"),
       tags$p(style = "color: #777; font-size: 0.8rem; margin-bottom: 6px;",
-        "Upload a CSV with one row per audio file. It will be joined to the f0 output by filename."),
-      fileInput("fp_meta_file", NULL,
-                multiple = FALSE,
-                accept = c("text/csv", "text/comma-separated-values,text/plain", ".csv"),
-                buttonLabel = "Choose CSV",
-                placeholder = "No file selected"),
-      conditionalPanel("output.fp_have_metadata === 'yes'",
-        uiOutput("fp_meta_keycol_ui"),
-        checkboxInput("fp_meta_strip_ext",
-                      "Strip file extensions when matching",
-                      value = TRUE)
+        "Attach metadata to each audio file so the downloaded dataframe is ready for F0 Analysis."),
+      radioButtons("fp_meta_source", NULL,
+                   choices = c("None"                    = "none",
+                               "Upload CSV"              = "csv",
+                               "Derive from filename"    = "filename"),
+                   selected = "none"),
+      # --- CSV upload path ---
+      conditionalPanel("input.fp_meta_source == 'csv'",
+        fileInput("fp_meta_file", NULL,
+                  multiple = FALSE,
+                  accept = c("text/csv", "text/comma-separated-values,text/plain", ".csv"),
+                  buttonLabel = "Choose CSV",
+                  placeholder = "No file selected"),
+        conditionalPanel("output.fp_have_metadata === 'yes'",
+          uiOutput("fp_meta_keycol_ui"),
+          checkboxInput("fp_meta_strip_ext",
+                        "Strip file extensions when matching",
+                        value = TRUE)
+        )
+      ),
+      # --- Derive-from-filename path ---
+      conditionalPanel("input.fp_meta_source == 'filename'",
+        textInput("fp_meta_split_sep", "Separator:", value = "_", width = "100%"),
+        uiOutput("fp_meta_split_status"),
+        uiOutput("fp_meta_split_cols"),
+        uiOutput("fp_meta_split_preview")
       ),
       tags$hr(),
       h5("Download"),
@@ -52,23 +67,148 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     )
   })
 
-  # ---- Read uploaded metadata CSV into fp_metadata ----
-  observeEvent(input$fp_meta_file, {
-    req(input$fp_meta_file)
-    df <- tryCatch(
+  # ---- Read uploaded CSV reactively (only when CSV source is active) ----
+  uploaded_csv <- reactive({
+    req(input$fp_meta_source == "csv", input$fp_meta_file)
+    tryCatch(
       utils::read.csv(input$fp_meta_file$datapath,
                       stringsAsFactors = FALSE, check.names = FALSE),
       error = function(e) NULL
     )
+  })
+  observeEvent(input$fp_meta_file, {
+    req(input$fp_meta_source == "csv", input$fp_meta_file)
+    df <- uploaded_csv()
     if (is.null(df) || ncol(df) == 0) {
       showNotification("Could not read metadata CSV.",
                        type = "error", duration = 5)
       return()
     }
-    if (!is.null(fp_metadata)) fp_metadata(df)
     showNotification(sprintf("Metadata loaded: %d row(s), %d column(s).",
                              nrow(df), ncol(df)),
                      type = "message", duration = 3)
+  })
+
+  # ---- Derive-from-filename path ----
+  # Default segment names matching the recommended convention.
+  default_seg_names <- function(n) {
+    base <- c("language", "speaker", "tone", "word", "rep")
+    if (n <= length(base)) base[seq_len(n)]
+    else c(base, sprintf("var%d", seq.int(length(base) + 1, n)))
+  }
+
+  # Reactive: each basename split by separator (list of character vectors).
+  fp_meta_splits <- reactive({
+    req(input$fp_meta_source == "filename")
+    audio <- fp_audio_data()
+    req(audio, nrow(audio) > 0)
+    sep <- input$fp_meta_split_sep
+    req(!is.null(sep), nzchar(sep))
+    strsplit(as.character(audio$basename), sep, fixed = TRUE)
+  })
+
+  # Status banner: how many segments, are they uniform?
+  output$fp_meta_split_status <- renderUI({
+    splits <- fp_meta_splits()
+    audio  <- fp_audio_data()
+    n_each <- vapply(splits, length, integer(1))
+    n_max  <- max(n_each)
+    n_min  <- min(n_each)
+    if (n_max == n_min) {
+      tags$div(style = "color: #2a7a5a; font-size: 0.8rem; margin-bottom: 8px;",
+        sprintf("Detected %d segment(s) in all %d file(s).", n_max, length(splits)))
+    } else {
+      tags$div(style = "color: #8a6d00; font-size: 0.8rem; margin-bottom: 8px;",
+        sprintf("Detected %d–%d segments across %d file(s). Shorter rows pad with NA.",
+                n_min, n_max, length(splits)))
+    }
+  })
+
+  # Dynamic column-name inputs (one per segment, up to the longest filename).
+  # We leave the inputs blank by default and surface our recommended-convention
+  # names only as greyed-out placeholders, so users actively choose names that
+  # match their own project schema rather than inheriting ours.
+  output$fp_meta_split_cols <- renderUI({
+    splits <- fp_meta_splits()
+    n_max  <- max(vapply(splits, length, integer(1)))
+    suggestions <- default_seg_names(n_max)
+    tagList(
+      tags$label("Column names:"),
+      tags$div(style = "color: #888; font-size: 0.75rem; margin-bottom: 4px;",
+               "Name each segment to match your project's metadata schema. ",
+               "Leave blank to use generic ", tags$code("column_N"), " names."),
+      tags$div(
+        lapply(seq_len(n_max), function(i) {
+          textInput(paste0("fp_meta_split_col_", i),
+                    label = sprintf("Segment %d:", i),
+                    value = "",
+                    placeholder = sprintf("e.g., %s", suggestions[i]),
+                    width = "100%")
+        })
+      )
+    )
+  })
+
+  # Read the (dynamic) column-name inputs into a character vector.
+  # Empty inputs fall back to a generic 'column_N' so the join still works.
+  fp_meta_split_colnames <- reactive({
+    splits <- fp_meta_splits()
+    n_max  <- max(vapply(splits, length, integer(1)))
+    vapply(seq_len(n_max), function(i) {
+      v <- input[[paste0("fp_meta_split_col_", i)]]
+      if (is.null(v) || !nzchar(trimws(v))) sprintf("column_%d", i) else trimws(v)
+    }, character(1))
+  })
+
+  # Derived metadata data.frame: token + named segment columns.
+  derived_metadata <- reactive({
+    splits <- fp_meta_splits()
+    audio  <- fp_audio_data()
+    n_max  <- max(vapply(splits, length, integer(1)))
+    cols   <- fp_meta_split_colnames()
+    # Pad each split to n_max with NA, then bind into a matrix
+    padded <- lapply(splits, function(x) c(x, rep(NA_character_, n_max - length(x))))
+    mat    <- do.call(rbind, padded)
+    colnames(mat) <- cols
+    data.frame(token = as.character(audio$basename), mat,
+               stringsAsFactors = FALSE, check.names = FALSE)
+  })
+
+  # Small preview (first 3 rows) shown right below the column-name inputs.
+  output$fp_meta_split_preview <- renderUI({
+    df <- derived_metadata()
+    req(nrow(df) > 0)
+    sub <- utils::head(df, 3)
+    hdr <- tags$tr(lapply(names(sub), function(n)
+      tags$th(style = "padding: 2px 6px; border-bottom: 1px solid #ccc; font-size: 0.78rem;", n)))
+    rows <- lapply(seq_len(nrow(sub)), function(i)
+      tags$tr(lapply(names(sub), function(n)
+        tags$td(style = "padding: 2px 6px; font-size: 0.78rem; color: #555;",
+                as.character(sub[i, n])))))
+    tags$div(style = "margin-top: 6px;",
+      tags$div(style = "font-size: 0.78rem; color: #777; margin-bottom: 3px;",
+               sprintf("Preview (first 3 of %d rows):", nrow(df))),
+      tags$table(style = "border-collapse: collapse; width: 100%;",
+                 hdr, rows)
+    )
+  })
+
+  # Active metadata: drive fp_metadata reactively from whichever source is on.
+  observe({
+    src <- input$fp_meta_source
+    if (is.null(src) || src == "none") {
+      fp_metadata(NULL)
+    } else if (src == "csv") {
+      fp_metadata(uploaded_csv())
+    } else if (src == "filename") {
+      fp_metadata(derived_metadata())
+    }
+  })
+
+  # Active join-key column: 'token' for the derived path, user's pick for CSV.
+  active_keycol <- reactive({
+    if (isTRUE(input$fp_meta_source == "filename")) "token"
+    else input$fp_meta_keycol
   })
 
   # Flag for conditionalPanel: do we have metadata loaded?
@@ -118,9 +258,10 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
             "<strong>Praat</strong> uses the .Pitch / .PitchTier files you uploaded alongside ",
             "the .wav files. Choose this if you've already extracted pitch in Praat with custom settings."))),
           tags$li(HTML(paste0(
-            "<strong>Metadata (optional):</strong> upload a metadata CSV with one row per audio file ",
-            "(e.g., speaker, tone, word). It will be joined to the f0 output by filename, so the download ",
-            "is ready for F0 Analysis. After upload, you'll be asked which column holds the audio filename.")))
+            "<strong>Metadata (optional):</strong> either upload a metadata CSV (one row per audio file) ",
+            "or have Shinytone derive metadata by splitting each filename on a separator (default ",
+            "<code>_</code>) and naming the segments. Either way, the metadata is joined to the f0 ",
+            "output so the download is ready for F0 Analysis.")))
         )
       )
     )
@@ -346,7 +487,7 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     md <- if (!is.null(fp_metadata)) fp_metadata() else NULL
     df <- fp_f0_data()
     if (is.null(md) || is.null(df) || nrow(df) == 0) return(NULL)
-    keycol <- input$fp_meta_keycol
+    keycol <- active_keycol()
     req(keycol)
     res <- metadata_join(df, md, keycol,
                          strip_ext = isTRUE(input$fp_meta_strip_ext))
@@ -459,10 +600,11 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         return()
       }
       md <- if (!is.null(fp_metadata)) fp_metadata() else NULL
+      keycol <- active_keycol()
       out <- df
       msg <- "f0 data saved as %s"
-      if (!is.null(md) && nrow(md) > 0 && !is.null(input$fp_meta_keycol)) {
-        res <- metadata_join(df, md, input$fp_meta_keycol,
+      if (!is.null(md) && nrow(md) > 0 && !is.null(keycol)) {
+        res <- metadata_join(df, md, keycol,
                              strip_ext = isTRUE(input$fp_meta_strip_ext))
         out <- res$joined
         n_ok <- if (is.null(res$matched)) 0 else res$matched
