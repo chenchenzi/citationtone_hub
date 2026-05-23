@@ -176,6 +176,7 @@ fp_start_ui <- function(input, output, session, fp_audio_data) {
             "<span class='fn-seg fn-rep'>{rep}</span>",
             "<span class='fn-sep'>_</span>",
             "<span class='fn-seg fn-more'>{your_variable}</span>",
+            "<span class='fn-sep' style='font-weight:600;'>*</span>",
           "</span>",
           "<span class='fn-ext'>.wav</span>"))),
       tags$div(class = "fn-tid-caption",
@@ -201,23 +202,26 @@ fp_start_ui <- function(input, output, session, fp_audio_data) {
         tags$div(tags$span(class = "fn-swatch fn-lang"), "language / project code"),
         tags$div(tags$span(class = "fn-swatch fn-spk"),  "speaker ID (zero-padded)"),
         tags$div(tags$span(class = "fn-swatch fn-tone"), "tone category"),
-        tags$div(tags$span(class = "fn-swatch fn-word"), "word (in IPA or romanisation)"),
+        tags$div(tags$span(class = "fn-swatch fn-word"), "word (in IPA or orthography)"),
         tags$div(tags$span(class = "fn-swatch fn-rep"),  "repetition number"),
-        tags$div(tags$span(class = "fn-swatch fn-more"), "any extra factor you need (session, context, carrier, etc.)")
+        tags$div(tags$span(class = "fn-swatch fn-more"),
+                 "any extra factor(s) you need (session, context, carrier, etc.)")
       ),
       tags$p(style = "margin-top: 14px; margin-bottom: 4px;", tags$strong("Why this helps")),
       tags$ul(
         tags$li("In ", tags$strong("F0 Correction"),
                 ", you can filter the token list by speaker or tone from your Inspect-tab CSV."),
         tags$li("In ", tags$strong("F0 Extraction"),
-                ", the downloaded f0 already carries enough info in the token ID to split into metadata columns later."),
+                ", the filename / token ID in the output dataframe already carries enough info to split into metadata columns later."),
         tags$li("Sorted file lists fall in a sensible order, so iterating through tokens is predictable.")),
       tags$p(style = "margin-top: 10px; margin-bottom: 4px;", tags$strong("Tips")),
       tags$ul(
         tags$li("Use ", tags$code("_"), " as the separator. Avoid spaces, dots, and other special symbols."),
         tags$li("Zero-pad numeric parts (", tags$code("S01"), " not ", tags$code("S1"),
                 ") so filenames sort naturally."),
-        tags$li("Keep each segment short but unambiguous.")),
+        tags$li("Keep each segment short but unambiguous."),
+        tags$li("If your orthography uses non-ASCII characters, consider romanising in the filename ",
+                "for portability across operating systems and downstream tools.")),
       tags$hr(),
       h4("File Preview")
     )
