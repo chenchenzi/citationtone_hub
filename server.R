@@ -37,6 +37,7 @@ source("ui/model_ui.R")
 source("ui/gca_ui.R")
 source("ui/gamm_ui.R")
 source("ui/checklist_ui.R")
+source("ui/filename_guide_ui.R")
 source("ui/summarise_ui.R")
 source("ui/fp_start_ui.R")
 source("ui/fp_extraction_ui.R")
@@ -89,6 +90,7 @@ server <- function(input, output, session) {
   gca_ui(input, output, session, dataset, normalised_data, gca_pred_data)
   gamm_ui(input, output, session, dataset, normalised_data, gamm_pred_data)
   checklist_ui(input, output, session)
+  filename_guide_ui(input, output, session)
   summarise_ui(input, output, session, dataset, normalised_data, gca_pred_data, gamm_pred_data)
 
   # f0 processing tab modules
@@ -105,6 +107,7 @@ server <- function(input, output, session) {
     main <- parts[1]; sub <- parts[2]
     sub_id <- if (main == "F0 Analysis") "tabs_data"
               else if (main == "F0 Processing") "tabs_fp"
+              else if (main == "Data Collection") "tabs_collection"
               else NULL
     updateNavbarPage(session, "main_nav", selected = main)
     if (!is.null(sub_id)) {

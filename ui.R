@@ -590,6 +590,8 @@ ui <- fluidPage(
              tabPanel("Data Collection",
                       icon = icon("clipboard-check"),
                       tabsetPanel(id = "tabs_collection",
+                        tabPanel("Filename",
+                                 uiOutput("filename_guide_content")),
                         tabPanel("Checklist",
                                  uiOutput("checklist_content"))
                       )
