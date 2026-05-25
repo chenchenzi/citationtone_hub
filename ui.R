@@ -386,7 +386,7 @@ ui <- fluidPage(
                           h4("Privacy & Data"),
                           tags$div(class = "faq-item",
                             tags$p(tags$strong("Is my data stored or shared?")),
-                            tags$p("No. When you upload a CSV file, it is loaded into temporary server memory for in-session analysis only. It is never written to any persistent database, cloud storage, or file system, and is never transmitted to the developer or any third party.")
+                            tags$p("No. When you upload a CSV or audio file, it is loaded into temporary server memory for in-session analysis only. It is never written to any persistent database, cloud storage, or file system, and is never transmitted to the developer or any third party.")
                           ),
                           tags$div(class = "faq-item",
                             tags$p(tags$strong("What happens when I close the app?")),
@@ -397,8 +397,18 @@ ui <- fluidPage(
                             tags$p("No. No individual, including the developer, can access, retrieve, or view data uploaded during your session. The source code is publicly available for independent verification.")
                           ),
                           tags$div(class = "faq-item",
+                            tags$p(tags$strong("What about audio recordings? Aren't those personal data?")),
+                            tags$p("Yes — voice recordings are personal data under GDPR (biometric data), CCPA, and most institutional ethics frameworks, especially when paired with speaker IDs or demographic metadata. Shinytone processes audio in temporary server memory only and never writes it to persistent storage, but the data does pass through Posit/AWS infrastructure during your session."),
+                            tags$p("Before uploading audio:"),
+                            tags$ul(style = "margin-top: -4px;",
+                              tags$li("Confirm your participant consent covers web-based processing on third-party infrastructure (Posit, AWS)."),
+                              tags$li("For sensitive populations (children, clinical, endangered-language, or otherwise identifiable participants), running Shinytone locally is strongly recommended. Clone the repo and run ", tags$code("shiny::runApp()"), " — your audio never leaves your machine."),
+                              tags$li("If in doubt, ask your IRB / ethics committee.")
+                            )
+                          ),
+                          tags$div(class = "faq-item",
                             tags$p(tags$strong("Should I upload sensitive or personal data?")),
-                            tags$p("This app is designed for linguistic research data (e.g., acoustic measurements, tone labels). Do not upload personally identifiable information (PII) or protected health information (PHI). The developer accepts no liability for data uploaded in violation of applicable privacy regulations.")
+                            tags$p("This app is designed for linguistic research data (acoustic measurements, tone labels, and field recordings). Do not upload personally identifiable information beyond the voice and metadata your participants have consented to share. For sensitive recordings (children, clinical populations, etc.), use the local installation. The developer accepts no liability for data uploaded in violation of applicable privacy regulations or ethics approvals.")
                           )
                         ),
 
