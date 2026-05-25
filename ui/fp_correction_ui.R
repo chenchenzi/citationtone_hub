@@ -193,6 +193,9 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           fileInput("fp_corr_flagged_csv", NULL,
                     accept = c(".csv", "text/csv"),
                     placeholder = "Upload Inspect-tab CSV"),
+          tags$div(style = "color: #888; font-size: 0.72rem; font-style: italic; margin-top: -8px; margin-bottom: 6px;",
+            HTML("Either the <strong>full</strong> or the <strong>flagged-only</strong> ",
+                 "download from the Inspect tab works.")),
           uiOutput("fp_corr_flagged_col_picker"),
           uiOutput("fp_corr_speaker_col_picker"),
           uiOutput("fp_corr_speaker_keep_picker"),
@@ -320,8 +323,16 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   observe({
     toks <- filtered_tokens()
     if (length(toks) == 0) {
+      # Pick a more specific placeholder depending on why the list is empty:
+      # no extracted data yet vs. all extracted tokens filtered out.
+      df <- fp_f0_data()
+      placeholder <- if (is.null(df) || nrow(df) == 0) {
+        "(run F0 Extraction first)"
+      } else {
+        "(no tokens match active filters)"
+      }
       updateSelectInput(session, "fp_corr_token",
-                        choices  = c("(run F0 Extraction first)" = ""),
+                        choices  = setNames("", placeholder),
                         selected = "")
       return()
     }
@@ -566,13 +577,17 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       }
     }
 
-    # 2) Speaker keep-list — if a speaker column is picked, the keep-list applies
-    # (even an empty keep-list means "exclude everyone").
-    spk_col <- input$fp_corr_speaker_col
+    # 2) Speaker keep-list — apply only when both the column AND the keep-list
+    # input have been registered. NULL means "input not loaded yet" (transient
+    # state right after CSV upload before the keep-list renderUI completes);
+    # we skip the filter so the dropdown doesn't briefly empty out. An empty
+    # character(0) means "user actively unchecked all", which DOES filter to
+    # nothing — we honour that.
+    spk_col  <- input$fp_corr_speaker_col
+    spk_keep <- input$fp_corr_speaker_keep
     if (!is.null(raw) && !is.null(spk_col) && nzchar(spk_col) &&
-        spk_col %in% names(raw) && !is.null(token_col) && token_col %in% names(raw)) {
-      spk_keep <- input$fp_corr_speaker_keep
-      if (is.null(spk_keep)) spk_keep <- character(0)
+        spk_col %in% names(raw) && !is.null(token_col) && token_col %in% names(raw) &&
+        !is.null(spk_keep)) {
       m  <- as.character(raw[[spk_col]]) %in% spk_keep
       ok <- make_corr_key(unique(as.character(raw[[token_col]])[m]), strip_ext)
       keep <- keep[all_key %in% ok]
@@ -580,11 +595,11 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     }
 
     # 3) Tone keep-list — same logic
-    tone_col <- input$fp_corr_tone_col
+    tone_col  <- input$fp_corr_tone_col
+    tone_keep <- input$fp_corr_tone_keep
     if (!is.null(raw) && !is.null(tone_col) && nzchar(tone_col) &&
-        tone_col %in% names(raw) && !is.null(token_col) && token_col %in% names(raw)) {
-      tone_keep <- input$fp_corr_tone_keep
-      if (is.null(tone_keep)) tone_keep <- character(0)
+        tone_col %in% names(raw) && !is.null(token_col) && token_col %in% names(raw) &&
+        !is.null(tone_keep)) {
       m  <- as.character(raw[[tone_col]]) %in% tone_keep
       ok <- make_corr_key(unique(as.character(raw[[token_col]])[m]), strip_ext)
       keep <- keep[all_key %in% ok]
