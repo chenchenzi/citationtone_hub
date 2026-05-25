@@ -49,7 +49,10 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                       "Strip file extensions when matching",
                       value = TRUE),
         tags$div(style = "color: #888; font-size: 0.75rem; font-style: italic; margin-top: -4px;",
-                 "Values in the chosen column can be with or without the ",
+                 "Your CSV needs a column that links each row to an audio file ",
+                 "(e.g., a ", tags$code("token"), ", ", tags$code("filename"),
+                 ", or ", tags$code("basename"), " column). ",
+                 "Values can be with or without the ",
                  tags$code(".wav"), " extension.")
       ),
       # --- Derive-from-filename path ---
