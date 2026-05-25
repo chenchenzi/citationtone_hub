@@ -19,6 +19,28 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   fp_corrections <- reactiveVal(list())
   # Named list: token -> list of past states (for undo)
   fp_history <- reactiveVal(list())
+  # Chronological log of edit actions. One row per apply_edit() / undo call.
+  # Surfaced in the "Edit log" table and downloadable as CSV.
+  fp_edit_log <- reactiveVal(data.frame(
+    time     = character(0),
+    token    = character(0),
+    action   = character(0),
+    n_frames = integer(0),
+    details  = character(0),
+    stringsAsFactors = FALSE
+  ))
+  log_edit <- function(token, action, n_frames, details = "") {
+    cur <- fp_edit_log()
+    new_row <- data.frame(
+      time     = format(Sys.time(), "%H:%M:%S"),
+      token    = as.character(token),
+      action   = as.character(action),
+      n_frames = as.integer(n_frames),
+      details  = as.character(details),
+      stringsAsFactors = FALSE
+    )
+    fp_edit_log(rbind(cur, new_row))
+  }
   # Optional flagged-token filter: raw uploaded CSV + extracted token IDs.
   # fp_flagged_frames (if the CSV came from the Inspect tab) holds per-frame
   # flag info keyed by token: a named list, token -> data.frame(time, note).
@@ -60,7 +82,9 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   }
 
   # Helper: apply an edit fn to selected indices for current token
-  apply_edit <- function(edit_fn, label) {
+  # action  : short verb shown in the Edit log (e.g., "Halve", "Smooth")
+  # details : extra context (e.g., "median, window=3")  — optional
+  apply_edit <- function(edit_fn, action, details = "") {
     tok <- input$fp_corr_token
     sel <- selected_indices()
     if (length(sel) == 0) {
@@ -75,7 +99,8 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     corr <- fp_corrections()
     corr[[tok]] <- new_df
     fp_corrections(corr)
-    showNotification(sprintf("%s applied to %d frame(s).", label, length(sel)),
+    log_edit(tok, action, length(sel), details)
+    showNotification(sprintf("%s applied to %d frame(s).", action, length(sel)),
                      type = "message", duration = 2)
   }
 
@@ -151,6 +176,9 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       selectInput("fp_corr_token", "Token:",
                   choices = token_choices, selected = token_selected,
                   selectize = FALSE),
+      tags$div(style = "color: #888; font-size: 0.72rem; margin-top: -8px; margin-bottom: 4px; font-style: italic;",
+        HTML("Tokens prefixed with <strong>●</strong> have frame-level flags (visible markers on the plot). ",
+             "Unprefixed tokens are flagged for out-of-range only, so look at the whole contour.")),
       verbatimTextOutput("fp_corr_progress", placeholder = TRUE),
       div(style = "display:flex; gap:4px; align-items:center; margin-top: 6px;",
         actionButton("fp_corr_prev", HTML("&#9664;"), title = "Previous token"),
@@ -277,10 +305,18 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   # Eager render so Shiny binds the selectInput even before the conditional
   # panel becomes visible (avoids unbound input$fp_corr_token).
   outputOptions(output, "ui_fp_correction", suspendWhenHidden = FALSE)
+  # NOTE: outputOptions for the filter-drawer child uiOutputs
+  # (fp_corr_flagged_col_picker, _speaker_col_picker, etc.) is set further
+  # down, *after* each output$... <- renderUI(...) is defined. Setting
+  # them here errors with "not in list of output objects".
 
   # Keep the token dropdown in sync with filtered_tokens() WITHOUT re-rendering
   # the sidebar. The currently-selected token is preserved if it still appears
   # in the new filtered list; otherwise we fall back to the first token.
+  # Display labels are prefixed with a small bullet for tokens that have
+  # frame-level flags (so you can tell them apart from range-only flagged
+  # tokens at a glance). Underlying values stay as plain token names so all
+  # downstream matching logic keeps working.
   observe({
     toks <- filtered_tokens()
     if (length(toks) == 0) {
@@ -289,11 +325,23 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                         selected = "")
       return()
     }
+
+    frames_by_tok <- fp_flagged_frames()
+    labels <- if (!is.null(frames_by_tok) && length(frames_by_tok) > 0) {
+      strip_ext  <- isTRUE(input$fp_corr_strip_ext)
+      tok_keys   <- make_corr_key(toks, strip_ext)
+      flagged_set <- names(frames_by_tok)
+      ifelse(tok_keys %in% flagged_set, paste("●", toks), toks)
+    } else {
+      toks
+    }
+    named_choices <- setNames(toks, labels)
+
     current  <- isolate(input$fp_corr_token)
     selected <- if (!is.null(current) && nzchar(current) && current %in% toks) current
                 else toks[1]
     updateSelectInput(session, "fp_corr_token",
-                      choices  = toks,
+                      choices  = named_choices,
                       selected = selected)
   })
 
@@ -401,25 +449,60 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                        choices = levs, selected = levs, inline = TRUE)
   })
 
-  # Extract unique flagged token IDs whenever the user (re-)picks the column.
-  # If the CSV looks like Inspect output (has flagged_jump / time / flag_notes),
-  # also build per-frame flag info so we can highlight individual points later.
+  # The filter drawer's child uiOutputs sit inside a <details> element that is
+  # closed on first render. Without suspendWhenHidden = FALSE, Shiny suspends
+  # them and skips re-evaluation when fp_flagged_raw() updates (CSV upload),
+  # so the speaker / tone column pickers never appear.
+  outputOptions(output, "fp_corr_flagged_col_picker",  suspendWhenHidden = FALSE)
+  outputOptions(output, "fp_corr_speaker_col_picker",  suspendWhenHidden = FALSE)
+  outputOptions(output, "fp_corr_speaker_keep_picker", suspendWhenHidden = FALSE)
+  outputOptions(output, "fp_corr_tone_col_picker",     suspendWhenHidden = FALSE)
+  outputOptions(output, "fp_corr_tone_keep_picker",    suspendWhenHidden = FALSE)
+
+  # Extract the set of "flagged tokens" whenever the user (re-)picks the column.
+  # Detection rules (first match wins):
+  #   1. CSV has 'flagged_token'  -> use rows where flagged_token == TRUE
+  #      (token-level flag from the Inspect tab: out-of-range OR jump-flagged)
+  #   2. CSV has 'flagged_jump'   -> use rows where flagged_jump == TRUE
+  #      (frame-level only — token is flagged if any of its frames are)
+  #   3. Neither column           -> every row is treated as a flagged entry
+  #      (CSV is treated as a pre-filtered list of bad tokens)
+  #
+  # If the CSV has flagged_jump + time, also build per-frame info so individual
+  # samples get highlighted in the plot.
   observeEvent(input$fp_corr_flagged_col, {
     df <- fp_flagged_raw()
     col <- input$fp_corr_flagged_col
     req(df, col, col %in% names(df))
-    toks <- unique(as.character(df[[col]]))
+
+    # --- 1) Token-level flag detection ---
+    if ("flagged_token" %in% names(df)) {
+      flagged_df <- df[as.logical(df$flagged_token) %in% TRUE, , drop = FALSE]
+      flag_source <- "flagged_token column"
+    } else if ("flagged_jump" %in% names(df)) {
+      flagged_df <- df[as.logical(df$flagged_jump) %in% TRUE, , drop = FALSE]
+      flag_source <- "flagged_jump column (any-frame match)"
+    } else {
+      flagged_df <- df
+      flag_source <- "every row in CSV"
+    }
+    toks <- unique(as.character(flagged_df[[col]]))
     toks <- toks[!is.na(toks) & nzchar(toks)]
     fp_flagged_tokens(toks)
 
-    # Per-frame flag info (Inspect-tab format detection)
+    showNotification(
+      sprintf("Flagged tokens identified from %s: %d unique.",
+              flag_source, length(toks)),
+      type = "message", duration = 4
+    )
+
+    # --- 2) Per-frame flag info (for in-plot highlighting) ---
     has_jump <- "flagged_jump" %in% names(df)
     has_time <- "time" %in% names(df) || any(grepl("^time$", names(df), ignore.case = TRUE))
     if (has_jump && has_time) {
-      time_col <- if ("time" %in% names(df)) "time" else grep("^time$", names(df), ignore.case = TRUE, value = TRUE)[1]
+      time_col <- if ("time" %in% names(df)) "time"
+                  else grep("^time$", names(df), ignore.case = TRUE, value = TRUE)[1]
       notes_col <- if ("flag_notes" %in% names(df)) "flag_notes" else NULL
-      sub <- df[isTRUE(as.logical(df$flagged_jump)) | df$flagged_jump %in% c(TRUE, "TRUE", "true", 1L, "1"), , drop = FALSE]
-      # Defensive: ensure boolean filter actually filters
       sub <- df[as.logical(df$flagged_jump) %in% TRUE, , drop = FALSE]
       sub <- sub[!is.na(sub[[col]]) & !is.na(sub[[time_col]]), , drop = FALSE]
       if (nrow(sub) > 0) {
@@ -435,9 +518,11 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           keys
         )
         fp_flagged_frames(frames_by_token)
-        showNotification(sprintf("Found %d flagged frames across %d tokens.",
-                                 nrow(sub), length(frames_by_token)),
-                         type = "message", duration = 4)
+        showNotification(
+          sprintf("Per-frame highlights: %d flagged frames across %d tokens.",
+                  nrow(sub), length(frames_by_token)),
+          type = "message", duration = 4
+        )
       } else {
         fp_flagged_frames(NULL)
       }
@@ -966,53 +1051,83 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         tags$kbd("←"), " / ", tags$kbd("→"), " (pan), ",
         tags$kbd("0"), " (reset). Only the time axis zooms; f0 / waveform stay fixed."),
       plotly::plotlyOutput("fp_corr_plot", height = "560px"),
-      tags$h4(style = "margin-top: 16px;", "Edit summary"),
+      tags$h4(style = "margin-top: 16px;", "Edit log"),
+      tags$div(style = "display: flex; align-items: center; gap: 12px; margin-bottom: 6px;",
+        downloadButton("fp_corr_log_download", "Download edit log (CSV)",
+                       icon = icon("download")),
+        actionButton("fp_corr_log_clear", "Clear log", icon = icon("eraser"),
+                     class = "btn-sm"),
+        tags$span(style = "color: #888; font-size: 0.8rem; font-style: italic;",
+                  "Chronological record of every edit applied in this session.")
+      ),
       DT::dataTableOutput("fp_corr_edits_table")
     )
   })
 
-  # Per-token edit count: how many frames differ from the original extraction
+  # Chronological edit log: one row per apply_edit / undo call this session.
   output$fp_corr_edits_table <- DT::renderDataTable({
-    corr <- fp_corrections()
-    orig <- fp_f0_data()
-    req(orig)
-    tokens_all <- sort(unique(orig$token))
-    rows <- lapply(tokens_all, function(tok) {
-      orig_f0 <- orig$f0[orig$token == tok]
-      if (tok %in% names(corr)) {
-        new_f0 <- corr[[tok]]$f0
-        n_len <- min(length(orig_f0), length(new_f0))
-        # A frame "differs" if NA-status changes, or values differ
-        diff_mask <- xor(is.na(orig_f0[seq_len(n_len)]), is.na(new_f0[seq_len(n_len)])) |
-                     (!is.na(orig_f0[seq_len(n_len)]) & !is.na(new_f0[seq_len(n_len)]) &
-                      orig_f0[seq_len(n_len)] != new_f0[seq_len(n_len)])
-        n_diff <- sum(diff_mask)
-      } else {
-        n_diff <- 0L
-      }
-      data.frame(token = tok, edits = n_diff, stringsAsFactors = FALSE)
-    })
-    df <- do.call(rbind, rows)
-    df <- df[order(-df$edits, df$token), , drop = FALSE]
+    df <- fp_edit_log()
+    if (nrow(df) == 0) {
+      return(DT::datatable(
+        data.frame(time = character(0), token = character(0), action = character(0),
+                   n_frames = integer(0), details = character(0),
+                   stringsAsFactors = FALSE, check.names = FALSE),
+        rownames = FALSE,
+        options = list(pageLength = 10, dom = "tip",
+                       language = list(emptyTable = "No edits yet."))
+      ))
+    }
+    # Show most-recent first; readable column names
+    df_show <- df[seq.int(nrow(df), 1L), , drop = FALSE]
+    names(df_show) <- c("time", "token", "action", "n frames", "details")
     DT::datatable(
-      df, rownames = FALSE,
+      df_show, rownames = FALSE,
       options = list(pageLength = 10, dom = "tip",
-                     columnDefs = list(list(className = "dt-center", targets = "_all")))
+                     columnDefs = list(list(className = "dt-center", targets = c(0, 3))))
     )
+  })
+
+  output$fp_corr_log_download <- downloadHandler(
+    filename = function() {
+      sprintf("edit_log_%s.csv", format(Sys.time(), "%Y%m%d_%H%M%S"))
+    },
+    content = function(file) {
+      df <- fp_edit_log()
+      if (nrow(df) == 0) {
+        writeLines("# Shinytone: edit log is empty.", file)
+        showNotification("Edit log is empty — nothing to download yet.",
+                         type = "warning", duration = 4)
+        return()
+      }
+      utils::write.csv(df, file, row.names = FALSE)
+    }
+  )
+
+  observeEvent(input$fp_corr_log_clear, {
+    if (nrow(fp_edit_log()) == 0) return()
+    fp_edit_log(data.frame(
+      time     = character(0),
+      token    = character(0),
+      action   = character(0),
+      n_frames = integer(0),
+      details  = character(0),
+      stringsAsFactors = FALSE
+    ))
+    showNotification("Edit log cleared.", type = "message", duration = 2)
   })
 
   # ---- Edit handlers ----
   observeEvent(input$fp_corr_halve, {
     apply_edit(function(df, idx) { df$f0[idx] <- df$f0[idx] / 2; df },
-               "Halve")
+               "Halve", "f0 / 2")
   })
   observeEvent(input$fp_corr_double, {
     apply_edit(function(df, idx) { df$f0[idx] <- df$f0[idx] * 2; df },
-               "Double")
+               "Double", "f0 * 2")
   })
   observeEvent(input$fp_corr_delete, {
     apply_edit(function(df, idx) { df$f0[idx] <- NA_real_; df },
-               "Delete")
+               "Delete", "set to NA")
   })
   observeEvent(input$fp_corr_interp, {
     # Method × window controls how each selected frame is interpolated.
@@ -1073,8 +1188,8 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
 
       y[idx] <- new_vals
       df$f0 <- y; df
-    }, sprintf("Interpolate (%s, window %s)", method,
-               if (win == -1L) "all" else as.character(win)))
+    }, "Interpolate",
+       sprintf("%s, window=%s", method, if (win == -1L) "all" else as.character(win)))
   })
   observeEvent(input$fp_corr_smooth, {
     method <- input$fp_corr_smooth_method
@@ -1092,7 +1207,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         if (any(!is.na(vals))) new_y[i] <- agg(vals, na.rm = TRUE)
       }
       df$f0 <- new_y; df
-    }, sprintf("Smooth (%s, window %d)", method, win))
+    }, "Smooth", sprintf("%s, window=%d", method, win))
   })
   observeEvent(input$fp_corr_manual_apply, {
     v <- suppressWarnings(as.numeric(input$fp_corr_manual_value))
@@ -1102,7 +1217,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       return()
     }
     apply_edit(function(df, idx) { df$f0[idx] <- v; df },
-               sprintf("Set to %.2f Hz", v))
+               "Manual", sprintf("set to %.2f Hz", v))
   })
   observeEvent(input$fp_corr_undo, {
     tok <- input$fp_corr_token
@@ -1120,6 +1235,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     corr <- fp_corrections()
     corr[[tok]] <- last
     fp_corrections(corr)
+    log_edit(tok, "Undo", NA_integer_, "previous edit reverted")
     showNotification("Undone.", type = "message", duration = 2)
   })
 
@@ -1198,7 +1314,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       # Praat unvoiced is freq = 0 → write NA
       df$f0[idx] <- if (v == 0) NA_real_ else v
       df
-    }, sprintf("Pick candidate (%.2f Hz)", v))
+    }, "Pick candidate", sprintf("%.2f Hz", v))
   })
 
   # ---- Helper: build full (orig + corrected) dataframe ----

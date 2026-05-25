@@ -374,11 +374,18 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       f0_max  <- as.numeric(input$fp_f0_max)
       step_ms <- as.numeric(input$fp_window_ms)
 
+      # Wipe any previous extraction so the user sees a clean transition,
+      # and announce that work has started (the progress bar can be subtle).
+      fp_f0_data(NULL)
+      showNotification(sprintf("Running wrassp extraction on %d file(s)…", nrow(wavs)),
+                       type = "message", duration = 3, id = "fp_extract_starting")
+
       withProgress(message = "Extracting f0 (wrassp)", value = 0, {
         results <- list()
         for (i in seq_len(nrow(wavs))) {
           b <- wavs$basename[i]
-          incProgress(1 / nrow(wavs), detail = b)
+          incProgress(1 / nrow(wavs),
+                      detail = sprintf("%d / %d  ·  %s", i, nrow(wavs), b))
           one <- extract_wrassp_one(wavs$wav_path[i], b, f0_min, f0_max, step_ms)
           if (!is.null(one)) results[[b]] <- one
         }
@@ -389,9 +396,16 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         }
         fp_f0_data(do.call(rbind, lapply(results, `[[`, "df")))
         if (!is.null(fp_pitch_candidates)) fp_pitch_candidates(list())  # wrassp has no candidates
-        showNotification(sprintf("Extracted f0 for %d / %d tokens.",
-                                 length(results), nrow(wavs)),
-                         type = "message", duration = 4)
+        n_fail <- nrow(wavs) - length(results)
+        msg <- if (n_fail == 0) {
+          sprintf("Extracted f0 for all %d tokens. ✅", length(results))
+        } else {
+          sprintf("Extracted f0 for %d / %d tokens (%d failed).",
+                  length(results), nrow(wavs), n_fail)
+        }
+        showNotification(msg,
+                         type = if (n_fail == 0) "message" else "warning",
+                         duration = 5)
       })
     } else {
       # Praat mode
@@ -402,11 +416,17 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         return()
       }
 
+      # Wipe any previous extraction and announce start.
+      fp_f0_data(NULL)
+      showNotification(sprintf("Parsing %d Praat pitch file(s)…", nrow(has_praat)),
+                       type = "message", duration = 3, id = "fp_extract_starting")
+
       withProgress(message = "Parsing Praat pitch files", value = 0, {
         results <- list()
         for (i in seq_len(nrow(has_praat))) {
           b <- has_praat$basename[i]
-          incProgress(1 / nrow(has_praat), detail = b)
+          incProgress(1 / nrow(has_praat),
+                      detail = sprintf("%d / %d  ·  %s", i, nrow(has_praat), b))
           one <- extract_praat_one(has_praat$pitch_path[i],
                                    has_praat$pitchtier_path[i], b)
           if (!is.null(one)) results[[b]] <- one
@@ -424,9 +444,16 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           }
           fp_pitch_candidates(cands)
         }
-        showNotification(sprintf("Parsed f0 for %d / %d tokens.",
-                                 length(results), nrow(has_praat)),
-                         type = "message", duration = 4)
+        n_fail <- nrow(has_praat) - length(results)
+        msg <- if (n_fail == 0) {
+          sprintf("Parsed f0 for all %d tokens. ✅", length(results))
+        } else {
+          sprintf("Parsed f0 for %d / %d tokens (%d failed).",
+                  length(results), nrow(has_praat), n_fail)
+        }
+        showNotification(msg,
+                         type = if (n_fail == 0) "message" else "warning",
+                         duration = 5)
       })
     }
   })
