@@ -107,20 +107,22 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   })
 
   # ---- Sidebar ----
-  # We render the choices reactively from filtered_tokens() AND use a plain
-  # (non-selectize) select. The selectize widget caused brittle Shiny bind
-  # state when the renderUI re-ran on data changes; the plain <select>
-  # rebinds cleanly on each render.
+  # We render the sidebar ONCE per session, with an empty/placeholder dropdown.
+  # An observer (below) updates the dropdown's choices via updateSelectInput()
+  # as filtered_tokens() changes — so uploading the flagged-tokens CSV updates
+  # the token list WITHOUT re-rendering (and therefore resetting) the sidebar,
+  # the open <details> drawer, or the fileInput element.
   #
   # suspendWhenHidden = FALSE is required: this uiOutput lives inside a
   # conditionalPanel and Shiny does not always call bindAll() on the new
   # content when the panel becomes visible, leaving input$fp_corr_token
   # unregistered. Eager rendering side-steps that.
+  #
+  # Plain (non-selectize) select is also intentional — selectize caused
+  # brittle Shiny bind state on first render of dynamic content.
   output$ui_fp_correction <- renderUI({
-    toks <- filtered_tokens()
-    has_data <- length(toks) > 0
-    token_choices  <- if (has_data) toks else c("(run F0 Extraction first)" = "")
-    token_selected <- if (has_data) toks[1] else ""
+    token_choices  <- c("(run F0 Extraction first)" = "")
+    token_selected <- ""
     tagList(
       # ---- Per-group styling (injected once per re-render of this sidebar) ----
       tags$style(HTML("
@@ -275,6 +277,25 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   # Eager render so Shiny binds the selectInput even before the conditional
   # panel becomes visible (avoids unbound input$fp_corr_token).
   outputOptions(output, "ui_fp_correction", suspendWhenHidden = FALSE)
+
+  # Keep the token dropdown in sync with filtered_tokens() WITHOUT re-rendering
+  # the sidebar. The currently-selected token is preserved if it still appears
+  # in the new filtered list; otherwise we fall back to the first token.
+  observe({
+    toks <- filtered_tokens()
+    if (length(toks) == 0) {
+      updateSelectInput(session, "fp_corr_token",
+                        choices  = c("(run F0 Extraction first)" = ""),
+                        selected = "")
+      return()
+    }
+    current  <- isolate(input$fp_corr_token)
+    selected <- if (!is.null(current) && nzchar(current) && current %in% toks) current
+                else toks[1]
+    updateSelectInput(session, "fp_corr_token",
+                      choices  = toks,
+                      selected = selected)
+  })
 
   # Prev / Next handlers — step through the *filtered* token list, wrap at ends
   observeEvent(input$fp_corr_prev, {
@@ -487,10 +508,11 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     keep
   })
 
-  # NOTE: the token dropdown's choices are populated by ui_fp_correction's
-  # renderUI directly (reactive on filtered_tokens). No separate
-  # updateSelectInput observer needed — keeping one source of truth avoids
-  # the bind / replace race that caused input$fp_corr_token to go undefined.
+  # NOTE: the sidebar (ui_fp_correction) is rendered once with an empty
+  # placeholder dropdown. The observer above (next to the Prev / Next handlers)
+  # keeps fp_corr_token's choices in sync with filtered_tokens() via
+  # updateSelectInput, so uploading the flagged-tokens CSV no longer
+  # re-renders the sidebar and reset the file input / drawer state.
 
   # Progress counter: current position + how many tokens have been edited
   output$fp_corr_progress <- renderText({
