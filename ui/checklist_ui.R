@@ -37,7 +37,7 @@ checklist_ui <- function(input, output, session) {
         style = "background-color: #f0faf7; border-left: 4px solid #78c2ad; padding: 12px 16px; margin-bottom: 20px; border-radius: 4px; font-size: 0.88rem; color: #555;",
         tags$strong("Checklist for citation tone research"),
         tags$p(style = "margin-top: 6px; margin-bottom: 6px;",
-          "The following checklist is designed to guide researchers through the critical stages of conducting rigorous and reproducible research on the production of lexical tones. It will serve as a valuable roadmap for your production study, from the initial planning phase to the analysis and interpretation of results."
+          "The following checklist is designed to guide researchers through the critical stages of conducting rigorous and reproducible research on the production of lexical tones. It will serve as a roadmap for your production study, from the initial planning phase through analysis, interpretation of results, and report write-up."
         ),
         tags$p(style = "margin-bottom: 0; font-size: 0.84rem;",
           tags$em("Source: "),
