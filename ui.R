@@ -398,12 +398,12 @@ ui <- fluidPage(
                           ),
                           tags$div(class = "faq-item",
                             tags$p(tags$strong("What about audio recordings? Aren't those personal data?")),
-                            tags$p("Yes — voice recordings are personal data under GDPR (biometric data), CCPA, and most institutional ethics frameworks, especially when paired with speaker IDs or demographic metadata. Shinytone processes audio in temporary server memory only and never writes it to persistent storage, but the data does pass through Posit/AWS infrastructure during your session."),
+                            tags$p("Yes. Voice recordings count as personal data under GDPR (which classifies them as biometric data), CCPA, and most institutional ethics frameworks, especially when paired with speaker IDs or demographic metadata. Shinytone processes audio in temporary server memory only and never writes it to persistent storage, but the data still passes through Posit and AWS infrastructure during your session."),
                             tags$p("Before uploading audio:"),
                             tags$ul(style = "margin-top: -4px;",
-                              tags$li("Confirm your participant consent covers web-based processing on third-party infrastructure (Posit, AWS)."),
-                              tags$li("For sensitive populations (children, clinical, endangered-language, or otherwise identifiable participants), running Shinytone locally is strongly recommended. Clone the repo and run ", tags$code("shiny::runApp()"), " — your audio never leaves your machine."),
-                              tags$li("If in doubt, ask your IRB / ethics committee.")
+                              tags$li("Confirm that your participant consent covers web-based processing on third-party infrastructure (Posit, AWS)."),
+                              tags$li("For sensitive recordings (children, clinical participants, endangered-language speakers, or any identifiable individuals), running Shinytone locally is strongly recommended. Clone the repo and run ", tags$code("shiny::runApp()"), "; your audio never leaves your machine."),
+                              tags$li("If in doubt, consult your IRB or ethics committee.")
                             )
                           ),
                           tags$div(class = "faq-item",
