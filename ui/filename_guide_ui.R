@@ -101,7 +101,7 @@ filename_guide_ui <- function(input, output, session) {
         tags$div(tags$span(class = "fn-swatch fn-lang"), "language / project code"),
         tags$div(tags$span(class = "fn-swatch fn-spk"),  "speaker ID (zero-padded)"),
         tags$div(tags$span(class = "fn-swatch fn-tone"), "tone category"),
-        tags$div(tags$span(class = "fn-swatch fn-word"), "word (in IPA or orthography)"),
+        tags$div(tags$span(class = "fn-swatch fn-word"), "word (in orthography or romanised form)"),
         tags$div(tags$span(class = "fn-swatch fn-rep"),  "repetition number"),
         tags$div(tags$span(class = "fn-swatch fn-more"),
                  "any extra factor(s) you need (session, context, carrier, etc.)")
