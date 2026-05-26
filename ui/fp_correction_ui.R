@@ -320,7 +320,10 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       div(style = "margin-top: 4px;",
         checkboxInput("fp_corr_show_pulses",
                       "Glottal pulses on waveform",
-                      value = FALSE)
+                      value = FALSE),
+        checkboxInput("fp_corr_show_candidates",
+                      "Top-3 Praat candidates on f0 plot",
+                      value = TRUE)
       ),
 
       # Praat candidates (only when current token came from .Pitch).
@@ -832,6 +835,53 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         line = list(width = 0.6, color = "#5a5a5a"),
         showlegend = FALSE, hoverinfo = "skip"
       )
+    }
+
+    # --- Praat top-N pitch candidates as faint grey markers (under main f0) ---
+    # Only when the current token came from a .Pitch file (so per-frame
+    # candidates exist) AND the user has the toggle on.
+    if (isTRUE(input$fp_corr_show_candidates) && !is.null(fp_pitch_candidates)) {
+      cands_by_tok <- fp_pitch_candidates()
+      cands_list   <- if (!is.null(cands_by_tok) && tok %in% names(cands_by_tok))
+                        cands_by_tok[[tok]] else NULL
+      if (!is.null(cands_list) && length(cands_list) == nrow(f0_df)) {
+        n_top <- 3L
+        cand_x <- numeric(0); cand_y <- numeric(0); cand_rank <- integer(0)
+        cand_str <- numeric(0)
+        for (i in seq_along(cands_list)) {
+          cs <- cands_list[[i]]
+          if (is.null(cs) || nrow(cs) == 0) next
+          n_show <- min(n_top, nrow(cs))
+          for (j in seq_len(n_show)) {
+            freq <- cs$frequency[j]
+            if (is.na(freq) || freq == 0) next      # skip unvoiced
+            cand_x   <- c(cand_x, f0_df$time[i])
+            cand_y   <- c(cand_y, freq)
+            cand_rank<- c(cand_rank, j)
+            cand_str <- c(cand_str, cs$strength[j])
+          }
+        }
+        if (length(cand_x) > 0) {
+          cand_hover <- sprintf(
+            "candidate %d<br>time: %.3fs<br>f0: %.1f Hz<br>strength: %.2f",
+            cand_rank, cand_x, cand_y, cand_str
+          )
+          # Rank 1 grey gets slightly larger; ranks 2,3 are smaller and fainter.
+          cand_sizes  <- ifelse(cand_rank == 1L, 6L, 5L)
+          cand_colors <- ifelse(cand_rank == 1L, "#a8a8a8", "#cccccc")
+          p <- plotly::add_trace(
+            p,
+            x = cand_x, y = cand_y,
+            type = "scatter", mode = "markers",
+            yaxis = "y",
+            marker = list(size = cand_sizes, color = cand_colors,
+                          opacity = 0.65,
+                          line = list(width = 0)),
+            text = cand_hover, hoverinfo = "text",
+            showlegend = FALSE
+          )
+        }
+      }
     }
 
     p <- plotly::add_trace(
