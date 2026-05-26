@@ -837,9 +837,13 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       )
     }
 
-    # --- Praat top-N pitch candidates as faint grey markers (under main f0) ---
+    # --- Praat top-N pitch candidates as grey markers (under main f0) ---
     # Only when the current token came from a .Pitch file (so per-frame
     # candidates exist) AND the user has the toggle on.
+    # Rank is encoded by both size and opacity (more prominent = more likely).
+    # Each marker carries customdata of the form "cand_<frame_idx>_<freq>" so
+    # the click handler below can route it to the same Pick-candidate logic
+    # that the sidebar list uses (skipping the "select frame first" step).
     if (isTRUE(input$fp_corr_show_candidates) && !is.null(fp_pitch_candidates)) {
       cands_by_tok <- fp_pitch_candidates()
       cands_list   <- if (!is.null(cands_by_tok) && tok %in% names(cands_by_tok))
@@ -847,7 +851,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       if (!is.null(cands_list) && length(cands_list) == nrow(f0_df)) {
         n_top <- 3L
         cand_x <- numeric(0); cand_y <- numeric(0); cand_rank <- integer(0)
-        cand_str <- numeric(0)
+        cand_str <- numeric(0); cand_frame <- integer(0)
         for (i in seq_along(cands_list)) {
           cs <- cands_list[[i]]
           if (is.null(cs) || nrow(cs) == 0) next
@@ -855,29 +859,36 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           for (j in seq_len(n_show)) {
             freq <- cs$frequency[j]
             if (is.na(freq) || freq == 0) next      # skip unvoiced
-            cand_x   <- c(cand_x, f0_df$time[i])
-            cand_y   <- c(cand_y, freq)
-            cand_rank<- c(cand_rank, j)
-            cand_str <- c(cand_str, cs$strength[j])
+            cand_x     <- c(cand_x, f0_df$time[i])
+            cand_y     <- c(cand_y, freq)
+            cand_rank  <- c(cand_rank, j)
+            cand_str   <- c(cand_str, cs$strength[j])
+            cand_frame <- c(cand_frame, i)
           }
         }
         if (length(cand_x) > 0) {
           cand_hover <- sprintf(
-            "candidate %d<br>time: %.3fs<br>f0: %.1f Hz<br>strength: %.2f",
+            "candidate %d  (click to apply)<br>time: %.3fs<br>f0: %.1f Hz<br>strength: %.2f",
             cand_rank, cand_x, cand_y, cand_str
           )
-          # Rank 1 grey gets slightly larger; ranks 2,3 are smaller and fainter.
-          cand_sizes  <- ifelse(cand_rank == 1L, 6L, 5L)
-          cand_colors <- ifelse(cand_rank == 1L, "#a8a8a8", "#cccccc")
+          # Rank-based size + opacity: more visible = higher rank (Praat-likelier)
+          size_by_rank    <- c(7L, 6L, 5L)
+          opacity_by_rank <- c(0.75, 0.55, 0.40)
+          cand_sizes      <- size_by_rank[cand_rank]
+          cand_opacities  <- opacity_by_rank[cand_rank]
           p <- plotly::add_trace(
             p,
             x = cand_x, y = cand_y,
-            type = "scatter", mode = "markers",
+            type = "scatter", mode = "markers+text",
             yaxis = "y",
-            marker = list(size = cand_sizes, color = cand_colors,
-                          opacity = 0.65,
+            marker = list(size = cand_sizes, color = "#777777",
+                          opacity = cand_opacities,
                           line = list(width = 0)),
-            text = cand_hover, hoverinfo = "text",
+            text = as.character(cand_rank),            # tiny "1" / "2" / "3" label
+            textposition = "top right",
+            textfont = list(size = 9, color = "#888888"),
+            hovertext = cand_hover, hoverinfo = "text",
+            customdata = sprintf("cand_%d_%.4f", cand_frame, cand_y),
             showlegend = FALSE
           )
         }
@@ -1430,6 +1441,39 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       df$f0[idx] <- if (v == 0) NA_real_ else v
       df
     }, "Pick candidate", sprintf("%.2f Hz", v))
+  })
+
+  # Click directly on a grey candidate marker in the plot → apply that
+  # candidate to its frame, no need to select a frame first.
+  # customdata for candidate markers is "cand_<frame_idx>_<freq>"; the regular
+  # f0 trace's customdata is a plain integer, so the prefix check cleanly
+  # distinguishes them.
+  observeEvent(plotly::event_data("plotly_click", source = "fp_corr_plot"), {
+    click <- plotly::event_data("plotly_click", source = "fp_corr_plot")
+    if (is.null(click) || is.null(click$customdata)) return()
+    cd <- as.character(click$customdata)
+    if (!startsWith(cd, "cand_")) return()
+    parts <- strsplit(sub("^cand_", "", cd), "_", fixed = TRUE)[[1]]
+    if (length(parts) < 2) return()
+    frame_idx <- suppressWarnings(as.integer(parts[1]))
+    freq      <- suppressWarnings(as.numeric(parts[2]))
+    if (is.na(frame_idx) || is.na(freq)) return()
+
+    tok <- input$fp_corr_token
+    cur <- current_f0()
+    if (is.null(cur) || frame_idx < 1 || frame_idx > nrow(cur)) return()
+    push_history(tok, cur)
+    cur$f0[frame_idx] <- if (freq == 0) NA_real_ else freq
+    corr <- fp_corrections()
+    corr[[tok]] <- cur
+    fp_corrections(corr)
+    log_edit(tok, "Pick candidate (plot click)", 1L,
+             sprintf("%.2f Hz", freq),
+             indices = frame_idx, times = cur$time[frame_idx], n_total = nrow(cur))
+    showNotification(
+      sprintf("Set frame %d to %.2f Hz (Praat candidate).", frame_idx, freq),
+      type = "message", duration = 2
+    )
   })
 
   # ---- Helper: build full (orig + corrected) dataframe ----
