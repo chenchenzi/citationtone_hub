@@ -285,15 +285,14 @@ ui <- fluidPage(
                           position: sticky;
                           top: 56px;   /* sit right under the Shinytone navbar */
                           z-index: 100;
-                          background: rgba(255, 255, 255, 0.95);
+                          background: rgba(255, 255, 255, 0.92);
                           backdrop-filter: blur(6px);
                           -webkit-backdrop-filter: blur(6px);
-                          border-bottom: 1px solid #e0e8e3;
-                          padding: 10px 16px;
+                          padding: 16px 16px;
                           text-align: center;
-                          font-size: 0.88rem;
+                          font-size: 0.9rem;
                           color: #6b7d75;
-                          margin-bottom: 4px;
+                          margin-bottom: 12px;
                         }
                         .about-toc a {
                           color: #2c5f4f; font-weight: 600;
@@ -329,7 +328,7 @@ ui <- fluidPage(
                         tags$h2(style = "color: #2c5f4f; margin: 0 0 8px 0; font-weight: 700;",
                                 "What you can do"),
                         tags$p(style = "color: #777; font-size: 0.95rem; margin: 0;",
-                          "Two complementary pipelines, from audio recordings to pitch contour analysis.")
+                          "Two complementary workspaces, from audio recordings to pitch contour analysis.")
                       ),
 
                       # --- What you can do (interactive showcase: image + clickable cards) ---
