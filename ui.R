@@ -869,7 +869,7 @@ ui <- fluidPage(
                                                  tags$p("Once uploaded, a preview of the first 10 rows will appear below.")
                                                ),
                                                uiOutput("instruction_text"),
-                                               h2(textOutput("preview_title")),
+                                               h4(textOutput("preview_title")),
                                                uiOutput("man_example"),
                                                tags$script(HTML("
                                                  $(document).on('shiny:value', function(e) {

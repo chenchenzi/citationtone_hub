@@ -52,20 +52,29 @@ theme_set(theme_bw(base_size = 16))
 
 server <- function(input, output, session) {
 
-  # Reactive dataset storage
+  # Reactive dataset storage. Sources, in priority order:
+  #   1. An uploaded CSV (input$uploadfile)
+  #   2. The bundled sample data, loaded when "Try with sample data" was clicked
   dataset <- reactive({
-    #req(input$uploadfile)
-    if (is.null(input$uploadfile)) {
+    if (!is.null(input$uploadfile)) {
+      dat <- read.csv(input$uploadfile$datapath, stringsAsFactors = FALSE)
+    } else if (isTRUE(input$try_sample > 0)) {
+      dat <- read.csv("test/csvdata_sample.csv", stringsAsFactors = FALSE)
+    } else {
       return(NULL)
     }
-    dat <-read.csv(input$uploadfile$datapath, stringsAsFactors = FALSE)
 
-    if (input$convert_to_factor) {
+    if (isTRUE(input$convert_to_factor)) {
       dat <- dat %>%
         dplyr::mutate(across(where(is.character), as.factor))
     }
 
     return(dat)
+  })
+
+  # Set the dataset name to "csvdata_sample" when the sample is loaded.
+  observeEvent(input$try_sample, {
+    updateTextInput(session, "dataset_name", value = "csvdata_sample")
   })
   
   # Shared storage for normalised dataset (written by Normalise tab, read by Model tab)
