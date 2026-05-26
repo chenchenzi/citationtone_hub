@@ -103,6 +103,17 @@ fp_start_ui <- function(input, output, session, fp_audio_data) {
       if (is.null(fp_audio_data())) {
         tags$p("Once uploaded, a per-token file summary will appear below.")
       },
+      tags$div(
+        style = "color: #555; font-size: 0.85rem; margin-top: -4px; margin-bottom: 12px;",
+        tags$p(style = "margin: 0 0 2px 0; font-weight: 600;",
+               "Already have f0 extracted with another tool?"),
+        tags$p(style = "margin: 0;",
+               HTML(paste0(
+                 "You can load it directly as a CSV (with ",
+                 "<code>token</code> / wav filename, <code>time</code>, <code>f0</code> ",
+                 "columns) from the <strong>F0 Extraction</strong> tab to proceed to ",
+                 "<strong>F0 Correction</strong>.")))
+      ),
       tags$hr(),
       h4("What each tab does"),
       tags$ul(
@@ -114,8 +125,10 @@ fp_start_ui <- function(input, output, session, fp_audio_data) {
                 " Offline alternative: a downloadable Praat script that batch-extracts f0 from a folder of .wav files. Output (.Pitch + CSV) feeds back into the in-app workflow."),
         tags$li(HTML("&#127908; "),
                 tags$strong(style = "color: #78c2ad;", "F0 Extraction"),
-                " In-app extraction: run ", tags$code("wrassp::ksvF0()"),
-                " on the uploaded .wav, or read already-computed .Pitch / .PitchTier files from Praat."),
+                " Pick a source for f0 data: run ",
+                tags$code("wrassp::ksvF0()"), " on the uploaded .wav, parse already-computed ",
+                ".Pitch / .PitchTier files from Praat, or upload a pre-extracted f0 CSV. ",
+                "Optionally attaches metadata (upload CSV or derive from filename) and downloads a tidy result."),
         tags$li(HTML("&#128295; "),
                 tags$strong(style = "color: #78c2ad;", "F0 Correction"),
                 " Interactively review and correct extraction errors (octave jumps, halving, spurious frames, voiced/unvoiced boundaries).")

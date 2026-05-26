@@ -21,7 +21,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   fp_history <- reactiveVal(list())
   # Chronological log of edit actions. One row per apply_edit() / undo call.
   # Surfaced in the "Edit log" table and downloadable as CSV.
-  #   wall_time      : when the edit was applied (HH:MM:SS)
+  #   date           : YYYY-MM-DD when the edit was applied
   #   token          : which token
   #   action         : edit type ("Halve", "Smooth", ...)
   #   n_frames       : how many frames were touched
@@ -32,7 +32,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   #                    edit happened across tokens of different durations)
   #   details        : free-text method / parameters (e.g., "median, window=3")
   fp_edit_log <- reactiveVal(data.frame(
-    wall_time     = character(0),
+    date          = character(0),
     token         = character(0),
     action        = character(0),
     n_frames      = integer(0),
@@ -54,7 +54,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
            else (indices - 1) / (n_total - 1) * 100
     cur <- fp_edit_log()
     new_row <- data.frame(
-      wall_time     = format(Sys.time(), "%H:%M:%S"),
+      date          = format(Sys.Date(), "%Y-%m-%d"),
       token         = as.character(token),
       action        = as.character(action),
       n_frames      = as.integer(n_frames),
@@ -337,10 +337,10 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         downloadButton("fp_corr_download_current", "Current token"),
         downloadButton("fp_corr_download_all",     "All tokens")
       ),
-      tags$small(style = "color:#888; display:block; margin-top:4px;",
+      tags$small(style = "color:#888; display:block; margin-top:4px; line-height: 1.5;",
         HTML(paste0(
-          "<strong>Current token</strong> &rarr; <code>&lt;token&gt;_f0.csv</code>. ",
-          "<strong>All tokens</strong> &rarr; <code>all_correctedf0.csv</code>.")))
+          "<strong>Current token</strong> &rarr; <code>&lt;token&gt;_f0.csv</code><br>",
+          "<strong>All tokens</strong> &rarr; <code>all_correctedf0.csv</code>")))
     )
   })
   # Eager render so Shiny binds the selectInput even before the conditional
@@ -1189,7 +1189,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     df <- fp_edit_log()
     if (nrow(df) == 0) {
       return(DT::datatable(
-        data.frame(time = character(0), token = character(0), action = character(0),
+        data.frame(date = character(0), token = character(0), action = character(0),
                    `n frames` = integer(0), `frame indices` = character(0),
                    `frame times (s)` = character(0), `frame %` = character(0),
                    details = character(0),
@@ -1201,7 +1201,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     }
     # Show most-recent first; readable column names
     df_show <- df[seq.int(nrow(df), 1L), , drop = FALSE]
-    names(df_show) <- c("time", "token", "action", "n frames",
+    names(df_show) <- c("date", "token", "action", "n frames",
                         "frame indices", "frame times (s)", "frame %", "details")
     DT::datatable(
       df_show, rownames = FALSE,
@@ -1229,7 +1229,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   observeEvent(input$fp_corr_log_clear, {
     if (nrow(fp_edit_log()) == 0) return()
     fp_edit_log(data.frame(
-      wall_time     = character(0),
+      date          = character(0),
       token         = character(0),
       action        = character(0),
       n_frames      = integer(0),

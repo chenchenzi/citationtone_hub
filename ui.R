@@ -377,9 +377,9 @@ ui <- fluidPage(
                       tags$div(style = "max-width: 1080px; margin: 56px auto 8px auto; text-align: center; padding: 0 15px;",
                         tags$div(style = "width: 56px; height: 3px; background: #78c2ad; margin: 0 auto 24px auto; border-radius: 2px;"),
                         tags$h2(style = "color: #2c5f4f; margin: 0 0 8px 0; font-weight: 700;",
-                                "Typical workflows"),
+                                "Recommended Workflows"),
                         tags$p(style = "color: #777; font-size: 0.95rem; margin: 0;",
-                          "Four common paths through Shinytone. Outputs of one chain in as inputs of the next.")
+                          "Four common pipelines through Shinytone. The output of each step chains into the input of the next (see the arrows between rows).")
                       ),
                       tags$style(HTML("
                         .workflows-section { max-width: 1080px; margin: 0 auto; padding: 20px 15px 8px 15px; }
@@ -420,6 +420,15 @@ ui <- fluidPage(
                           background: #e3f2fd; border: 1.5px solid #90caf9;
                           color: #1565c0; font-weight: 600;
                         }
+                        .wf-step.wf-optional {
+                          background: #f4faff; border: 1.5px dashed #90caf9;
+                          color: #1565c0; font-weight: 500;
+                        }
+                        .workflow-chain-arrow {
+                          text-align: center; color: #b6c4be;
+                          font-size: 1.5rem; line-height: 1;
+                          margin: -4px 0;
+                        }
                         .wf-step.wf-app {
                           background: #e8f5f0; border: 1.5px solid #78c2ad;
                           color: #2a7a5a;
@@ -429,8 +438,8 @@ ui <- fluidPage(
                           color: #8a6d00; font-style: italic;
                         }
                         .wf-step.wf-result {
-                          background: #e9f5e9; border: 1.5px solid #6abf6a;
-                          color: #2d6a2d; font-weight: 600;
+                          background: #fde6e7; border: 1.5px solid #f3969a;
+                          color: #a85a5d; font-weight: 700;
                         }
                         .wf-or {
                           display: inline-flex; align-items: center;
@@ -446,39 +455,45 @@ ui <- fluidPage(
                         .wf-legend > div { display: inline-flex; align-items: center; gap: 6px; }
                         .wf-swatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; }
                       ")),
-                      tags$div(class = "workflows-section",
+                      tags$div(class = "workflows-section", id = "workflows-section",
+                        style = "position: relative;",
+
+                        # SVG overlay for dynamic output->input curves (paths injected by JS).
+                        # Sits ABOVE the workflow rows (z-index 5) so the curves are not
+                        # clipped by the rows' white backgrounds at start/end points.
+                        HTML("<svg id='workflow-connectors' xmlns='http://www.w3.org/2000/svg' style='position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:5; overflow:visible;'><defs><marker id='wf-arrowhead' viewBox='0 0 10 10' refX='8' refY='5' markerWidth='7' markerHeight='7' orient='auto'><path d='M 0 0 L 10 5 L 0 10 z' fill='#a85a5d'/></marker></defs></svg>"),
 
                         # --- Workflow 1 ---
-                        tags$div(class = "workflow-row",
+                        tags$div(class = "workflow-row", style = "position: relative; z-index: 1;",
                           tags$div(class = "workflow-head",
                             tags$span(class = "workflow-num", "1"),
                             tags$span(class = "workflow-title", "Pitch extraction")
                           ),
                           tags$div(class = "workflow-desc",
-                            "Turn audio recordings into a tidy f0 dataframe with metadata. Three sources to choose from."),
+                            "The F0 Extraction tab is a hub: pick a source, attach metadata, and download a tidy CSV."),
                           tags$div(class = "workflow-flow",
                             tags$span(class = "wf-step wf-data", HTML("&#127908; .wav")),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
-                            tags$span(class = "wf-step wf-external", "F0 extraction with Praat"),
+                            tags$span(class = "wf-step wf-external", HTML("&#128202; .Pitch (Praat)")),
                             tags$span(class = "wf-or", "or"),
-                            tags$span(class = "wf-step wf-app", "F0 Extraction (wrassp)"),
-                            tags$span(class = "wf-or", "or"),
-                            tags$span(class = "wf-step wf-data", HTML("&#128202; pre-extracted f0 .csv")),
+                            tags$span(class = "wf-step wf-optional", HTML("&#128202; pre-extracted f0 .csv (optional)")),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
-                            tags$span(class = "wf-step wf-result", HTML("&#128202; f0 + metadata .csv"))
+                            tags$span(class = "wf-step wf-app", "F0 Extraction (+ metadata)"),
+                            tags$span(class = "wf-arrow", HTML("&#10132;")),
+                            tags$span(class = "wf-step wf-result", `data-flow-out` = "extracted-f0", HTML("&#128202; f0 + metadata .csv"))
                           )
                         ),
 
                         # --- Workflow 2 ---
-                        tags$div(class = "workflow-row",
+                        tags$div(class = "workflow-row", style = "position: relative; z-index: 1;",
                           tags$div(class = "workflow-head",
                             tags$span(class = "workflow-num", "2"),
-                            tags$span(class = "workflow-title", "Quality check")
+                            tags$span(class = "workflow-title", "Pitch-tracking quality check")
                           ),
                           tags$div(class = "workflow-desc",
                             "Normalise, visualise, and inspect to flag pitch-tracking errors."),
                           tags$div(class = "workflow-flow",
-                            tags$span(class = "wf-step wf-data", HTML("&#128202; f0 .csv")),
+                            tags$span(class = "wf-step wf-data", `data-flow-in` = "extracted-f0", HTML("&#128202; f0 .csv")),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
                             tags$span(class = "wf-step wf-app", "Normalise"),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
@@ -486,44 +501,43 @@ ui <- fluidPage(
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
                             tags$span(class = "wf-step wf-app", "Inspect"),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
-                            tags$span(class = "wf-step wf-result", HTML("&#128202; .csv with flags"))
+                            tags$span(class = "wf-step wf-result", `data-flow-out` = "flagged-f0", HTML("&#128202; .csv with flags"))
                           )
                         ),
 
                         # --- Workflow 3 ---
-                        tags$div(class = "workflow-row",
+                        tags$div(class = "workflow-row", style = "position: relative; z-index: 1;",
                           tags$div(class = "workflow-head",
                             tags$span(class = "workflow-num", "3"),
-                            tags$span(class = "workflow-title", "Correction")
+                            tags$span(class = "workflow-title", "Pitch-tracking correction")
                           ),
                           tags$div(class = "workflow-desc",
                             "Bring the audio and the flagged tokens back together to fix problematic frames by ear."),
                           tags$div(class = "workflow-flow",
                             tags$span(class = "wf-step wf-data", HTML("&#127908; .wav")),
                             tags$span(class = "wf-or", "+"),
-                            tags$span(class = "wf-step wf-data", HTML("&#128202; .csv with flags")),
+                            tags$span(class = "wf-step wf-data", `data-flow-in` = "flagged-f0", HTML("&#128202; .csv with flags")),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
                             tags$span(class = "wf-step wf-app", "F0 Correction"),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
-                            tags$span(class = "wf-step wf-result", HTML("&#128202; cleaned f0 .csv"))
+                            tags$span(class = "wf-step wf-result", `data-flow-out` = "cleaned-f0", HTML("&#128202; cleaned f0 .csv"))
                           )
                         ),
 
                         # --- Workflow 4 ---
-                        tags$div(class = "workflow-row",
+                        tags$div(class = "workflow-row", style = "position: relative; z-index: 1;",
                           tags$div(class = "workflow-head",
                             tags$span(class = "workflow-num", "4"),
-                            tags$span(class = "workflow-title", "Modelling & summary")
+                            tags$span(class = "workflow-title", "Pitch contour modelling and summary")
                           ),
                           tags$div(class = "workflow-desc",
                             "Fit polynomial / GCA / GAMM models and convert contours into Chao tone numerals."),
                           tags$div(class = "workflow-flow",
-                            tags$span(class = "wf-step wf-data", HTML("&#128202; clean f0 .csv")),
+                            tags$span(class = "wf-step wf-data", `data-flow-in` = "cleaned-f0", HTML("&#128202; clean f0 .csv")),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
                             tags$span(class = "wf-step wf-app", "Normalise"),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
                             tags$span(class = "wf-step wf-app", "Model"),
-                            tags$span(class = "wf-or", "(Polynomials / GCA / GAMM)"),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
                             tags$span(class = "wf-step wf-app", "Summarise"),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
@@ -534,10 +548,73 @@ ui <- fluidPage(
                         # --- Legend ---
                         tags$div(class = "wf-legend",
                           tags$div(tags$span(class = "wf-swatch", style = "background:#e3f2fd; border:1px solid #90caf9;"), "Data file"),
+                          tags$div(tags$span(class = "wf-swatch", style = "background:#f4faff; border:1px dashed #90caf9;"), "Optional data"),
                           tags$div(tags$span(class = "wf-swatch", style = "background:#e8f5f0; border:1px solid #78c2ad;"), "In-app step"),
                           tags$div(tags$span(class = "wf-swatch", style = "background:#fff8e1; border:1px dashed #e0a800;"), "External step (Praat)"),
-                          tags$div(tags$span(class = "wf-swatch", style = "background:#e9f5e9; border:1px solid #6abf6a;"), "Output")
-                        )
+                          tags$div(tags$span(class = "wf-swatch", style = "background:#fde6e7; border:1px solid #f3969a;"), "Output")
+                        ),
+
+                        # --- JS: draw curved SVG paths from each output chip to its
+                        # matching input chip on the next row. Re-runs on resize so
+                        # paths stay correct when chips reflow.
+                        tags$script(HTML("
+                          (function() {
+                            function drawWorkflowConnectors() {
+                              var section = document.getElementById('workflows-section');
+                              var svg     = document.getElementById('workflow-connectors');
+                              if (!section || !svg) return;
+                              // Clear previously drawn paths (keep <defs>)
+                              Array.prototype.slice.call(svg.querySelectorAll('path')).forEach(function(p){ p.remove(); });
+
+                              var sRect = section.getBoundingClientRect();
+                              svg.setAttribute('width',  section.offsetWidth);
+                              svg.setAttribute('height', section.offsetHeight);
+
+                              var outs = section.querySelectorAll('[data-flow-out]');
+                              outs.forEach(function(out) {
+                                var id  = out.getAttribute('data-flow-out');
+                                var ins = section.querySelectorAll('[data-flow-in=\"' + id + '\"]');
+                                ins.forEach(function(inEl) {
+                                  var oR = out.getBoundingClientRect();
+                                  var iR = inEl.getBoundingClientRect();
+
+                                  // Output: bottom-centre; Input: top-centre
+                                  var x1 = oR.left - sRect.left + oR.width / 2;
+                                  var y1 = oR.bottom - sRect.top;
+                                  var x2 = iR.left - sRect.left + iR.width / 2;
+                                  var y2 = iR.top - sRect.top - 4; // small gap before arrowhead
+
+                                  var dy = Math.max(20, (y2 - y1) / 2);
+                                  var d  = 'M ' + x1 + ' ' + y1 +
+                                           ' C ' + x1 + ' ' + (y1 + dy) +
+                                           ', '  + x2 + ' ' + (y2 - dy) +
+                                           ', '  + x2 + ' ' + y2;
+
+                                  var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                                  path.setAttribute('d', d);
+                                  path.setAttribute('fill', 'none');
+                                  path.setAttribute('stroke', '#a85a5d');
+                                  path.setAttribute('stroke-width', '1.8');
+                                  path.setAttribute('stroke-dasharray', '6 4');
+                                  path.setAttribute('opacity', '0.55');
+                                  path.setAttribute('marker-end', 'url(#wf-arrowhead)');
+                                  svg.appendChild(path);
+                                });
+                              });
+                            }
+
+                            // Draw after Shiny is ready (the About tab is visible by default)
+                            $(document).on('shiny:connected', function() {
+                              setTimeout(drawWorkflowConnectors, 100);
+                            });
+                            window.addEventListener('resize', function() {
+                              clearTimeout(window.__wfRedraw);
+                              window.__wfRedraw = setTimeout(drawWorkflowConnectors, 80);
+                            });
+                            // Also redraw when navigating back to the About tab
+                            $(document).on('shown.bs.tab', function(){ setTimeout(drawWorkflowConnectors, 80); });
+                          })();
+                        "))
                       ),
 
                       # --- FAQ ---

@@ -31,10 +31,10 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                   accept = c("text/csv", "text/comma-separated-values,text/plain", ".csv"),
                   buttonLabel = "Choose CSV",
                   placeholder = "No file selected"),
-        tags$div(style = "color: #888; font-size: 0.75rem; margin-top: -8px; font-style: italic;",
-                 "The CSV needs columns ", tags$code("token"), ", ",
-                 tags$code("time"), ", ", tags$code("f0"),
-                 ". Token values must match the .wav basenames uploaded in Start.")
+        # Column pickers appear after upload; auto-detected from common names.
+        uiOutput("fp_f0_csv_col_pickers"),
+        tags$div(style = "color: #888; font-size: 0.75rem; margin-top: 4px; font-style: italic;",
+                 "Token values must match the .wav basenames uploaded in Start.")
       ),
       tags$hr(),
       uiOutput("fp_extract_run_btn"),
@@ -287,8 +287,9 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           tags$li(HTML(paste0(
             "<strong>Upload existing f0 CSV</strong> skips extraction entirely. Useful if you've already ",
             "run wrassp / Praat / any other tool elsewhere and just want to use F0 Correction or the ",
-            "metadata join. CSV must have <code>token</code>, <code>time</code>, <code>f0</code>; ",
-            "<code>token</code> values must match the .wav basenames uploaded in Start."))),
+            "metadata join. The CSV needs columns for token / filename, time, and f0 — ",
+            "Shinytone auto-detects common column names and lets you remap if needed. ",
+            "Token values must match the .wav basenames uploaded in Start."))),
           tags$li(HTML(paste0(
             "<strong>Metadata (optional):</strong> either upload a metadata CSV (one row per audio file) ",
             "or have Shinytone derive metadata by splitting each filename on a separator (default ",
@@ -370,15 +371,103 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     NULL
   }
 
-  # Contextual button label: "Run extraction" for wrassp/Praat, "Load CSV"
-  # for the upload-CSV source.
+  # Action button: only shown for wrassp / Praat sources. CSV upload
+  # auto-loads via the observe() below as soon as file + column picks are valid.
   output$fp_extract_run_btn <- renderUI({
     mode <- input$fp_extract_mode
     if (is.null(mode)) mode <- "wrassp"
     if (mode == "csv") {
-      actionButton("fp_extract_run", "Load CSV", icon = icon("upload"))
+      tags$div(style = "color: #888; font-size: 0.78rem; font-style: italic;",
+        "f0 data loads automatically once you choose a CSV and the columns are mapped.")
     } else {
       actionButton("fp_extract_run", "Run extraction", icon = icon("play"))
+    }
+  })
+
+  # ---- CSV column auto-detection + auto-load ----
+  # When the user picks a CSV in "Upload existing f0 CSV" mode, we read it
+  # once into a reactive cache, surface three column-pickers (token / time / f0)
+  # with auto-detected defaults, and load fp_f0_data automatically whenever
+  # the picks are valid.
+  fp_f0_csv_raw <- reactive({
+    req(input$fp_extract_mode == "csv", input$fp_f0_upload_file)
+    tryCatch(
+      utils::read.csv(input$fp_f0_upload_file$datapath,
+                      stringsAsFactors = FALSE, check.names = FALSE),
+      error = function(e) NULL
+    )
+  })
+
+  output$fp_f0_csv_col_pickers <- renderUI({
+    df <- fp_f0_csv_raw()
+    if (is.null(df) || ncol(df) == 0) return(NULL)
+    cols <- names(df)
+    # Case-insensitive auto-match against likely column names.
+    auto_match <- function(candidates) {
+      hit <- cols[tolower(cols) %in% tolower(candidates)]
+      if (length(hit) > 0) hit[1] else cols[1]
+    }
+    tok_default  <- auto_match(c("token", "wav", "filename", "basename",
+                                 "audio", "file", "token_id"))
+    time_default <- auto_match(c("time", "t", "timestamp", "time_s", "time_ms"))
+    f0_default   <- auto_match(c("f0", "f0_hz", "f0_Hz", "pitch",
+                                 "frequency", "freq"))
+    tagList(
+      selectInput("fp_f0_col_token", "Token / filename column:",
+                  choices = cols, selected = tok_default, selectize = FALSE),
+      selectInput("fp_f0_col_time", "Time column:",
+                  choices = cols, selected = time_default, selectize = FALSE),
+      selectInput("fp_f0_col_f0", "f0 column:",
+                  choices = cols, selected = f0_default, selectize = FALSE)
+    )
+  })
+  outputOptions(output, "fp_f0_csv_col_pickers", suspendWhenHidden = FALSE)
+
+  # Auto-load fp_f0_data whenever the CSV + column picks are valid and audio
+  # is uploaded.
+  observe({
+    req(input$fp_extract_mode == "csv")
+    df <- fp_f0_csv_raw()
+    req(df)
+    tcol <- input$fp_f0_col_token
+    scol <- input$fp_f0_col_time
+    fcol <- input$fp_f0_col_f0
+    req(tcol, scol, fcol)
+    if (!all(c(tcol, scol, fcol) %in% names(df))) return()
+
+    audio <- fp_audio_data()
+    if (is.null(audio) || nrow(audio) == 0) return()  # wait for .wav uploads
+
+    out <- data.frame(
+      token = as.character(df[[tcol]]),
+      time  = suppressWarnings(as.numeric(df[[scol]])),
+      f0    = suppressWarnings(as.numeric(df[[fcol]])),
+      stringsAsFactors = FALSE
+    )
+    have_wav <- audio$basename[!is.na(audio$wav_path)]
+    keep <- out$token %in% have_wav
+    n_unmatched <- length(setdiff(unique(out$token), have_wav))
+    out <- out[keep, , drop = FALSE]
+    if (nrow(out) == 0) {
+      showNotification(
+        "No CSV tokens match any uploaded .wav basename. Check the Start tab.",
+        type = "warning", duration = 5, id = "fp_csv_load"
+      )
+      return()
+    }
+    # Only fire the success toast when fp_f0_data is actually changing.
+    cur <- isolate(fp_f0_data())
+    same <- !is.null(cur) && identical(cur, out)
+    fp_f0_data(out)
+    if (!is.null(fp_pitch_candidates)) fp_pitch_candidates(list())
+    if (!same) {
+      msg <- sprintf("Loaded f0 for %d token(s) from CSV. ✅",
+                     length(unique(out$token)))
+      if (n_unmatched > 0) {
+        msg <- paste0(msg, sprintf(" (%d CSV token(s) had no matching .wav and were skipped.)",
+                                   n_unmatched))
+      }
+      showNotification(msg, type = "message", duration = 4, id = "fp_csv_load")
     }
   })
 
@@ -437,65 +526,6 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                          type = if (n_fail == 0) "message" else "warning",
                          duration = 5)
       })
-    } else if (mode == "csv") {
-      # Pre-extracted f0 CSV path: just load it into fp_f0_data.
-      if (is.null(input$fp_f0_upload_file)) {
-        showNotification("Choose a pre-extracted f0 CSV file first.",
-                         type = "warning", duration = 4)
-        return()
-      }
-      df <- tryCatch(
-        utils::read.csv(input$fp_f0_upload_file$datapath,
-                        stringsAsFactors = FALSE, check.names = FALSE),
-        error = function(e) NULL
-      )
-      if (is.null(df) || ncol(df) == 0) {
-        showNotification("Could not read the f0 CSV.",
-                         type = "error", duration = 5)
-        return()
-      }
-      req_cols <- c("token", "time", "f0")
-      missing <- setdiff(req_cols, names(df))
-      if (length(missing) > 0) {
-        showNotification(
-          sprintf("CSV is missing required column(s): %s.",
-                  paste(missing, collapse = ", ")),
-          type = "error", duration = 6
-        )
-        return()
-      }
-      # Ensure correct types
-      df$token <- as.character(df$token)
-      df$time  <- as.numeric(df$time)
-      df$f0    <- suppressWarnings(as.numeric(df$f0))
-
-      # Filter to tokens that actually have audio uploaded (require .wav).
-      have_wav <- audio$basename[!is.na(audio$wav_path)]
-      keep <- df$token %in% have_wav
-      missing_audio <- setdiff(unique(df$token), have_wav)
-      if (length(missing_audio) > 0) {
-        showNotification(
-          sprintf("Ignoring %d token(s) in CSV with no matching .wav uploaded (e.g. %s).",
-                  length(missing_audio),
-                  paste(utils::head(missing_audio, 3), collapse = ", ")),
-          type = "warning", duration = 6
-        )
-      }
-      df <- df[keep, , drop = FALSE]
-      if (nrow(df) == 0) {
-        showNotification(
-          "No CSV tokens match any uploaded .wav basename. Check the Start tab.",
-          type = "error", duration = 6
-        )
-        return()
-      }
-      fp_f0_data(df)
-      if (!is.null(fp_pitch_candidates)) fp_pitch_candidates(list())
-      showNotification(
-        sprintf("Loaded f0 for %d token(s) from CSV. ✅",
-                length(unique(df$token))),
-        type = "message", duration = 5
-      )
     } else {
       # Praat mode
       has_praat <- audio[!is.na(audio$pitch_path) | !is.na(audio$pitchtier_path), , drop = FALSE]
