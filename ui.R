@@ -373,6 +373,173 @@ ui <- fluidPage(
                         })
                       ),
 
+                      # --- Typical workflows (visual data-journey diagram) ---
+                      tags$div(style = "max-width: 1080px; margin: 56px auto 8px auto; text-align: center; padding: 0 15px;",
+                        tags$div(style = "width: 56px; height: 3px; background: #78c2ad; margin: 0 auto 24px auto; border-radius: 2px;"),
+                        tags$h2(style = "color: #2c5f4f; margin: 0 0 8px 0; font-weight: 700;",
+                                "Typical workflows"),
+                        tags$p(style = "color: #777; font-size: 0.95rem; margin: 0;",
+                          "Four common paths through Shinytone. Outputs of one chain in as inputs of the next.")
+                      ),
+                      tags$style(HTML("
+                        .workflows-section { max-width: 1080px; margin: 0 auto; padding: 20px 15px 8px 15px; }
+                        .workflow-row {
+                          margin-bottom: 20px; padding: 14px 18px;
+                          background: #ffffff;
+                          border: 1px solid #e0e8e3; border-radius: 8px;
+                          box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+                        }
+                        .workflow-head {
+                          display: flex; align-items: baseline; gap: 10px;
+                          margin-bottom: 4px;
+                        }
+                        .workflow-num {
+                          display: inline-flex; align-items: center; justify-content: center;
+                          width: 24px; height: 24px; border-radius: 50%;
+                          background: #78c2ad; color: #ffffff;
+                          font-size: 0.82rem; font-weight: 700;
+                          flex-shrink: 0;
+                        }
+                        .workflow-title {
+                          font-weight: 700; color: #2c5f4f; font-size: 1.0rem;
+                        }
+                        .workflow-desc {
+                          color: #777; font-size: 0.85rem; margin: 0 0 12px 34px;
+                        }
+                        .workflow-flow {
+                          display: flex; align-items: center; flex-wrap: wrap;
+                          gap: 6px; margin-left: 34px;
+                        }
+                        .wf-step {
+                          display: inline-flex; align-items: center;
+                          padding: 5px 12px; border-radius: 6px;
+                          font-size: 0.82rem; font-weight: 500;
+                          white-space: nowrap;
+                        }
+                        .wf-step.wf-data {
+                          background: #e3f2fd; border: 1.5px solid #90caf9;
+                          color: #1565c0; font-weight: 600;
+                        }
+                        .wf-step.wf-app {
+                          background: #e8f5f0; border: 1.5px solid #78c2ad;
+                          color: #2a7a5a;
+                        }
+                        .wf-step.wf-external {
+                          background: #fff8e1; border: 1.5px dashed #e0a800;
+                          color: #8a6d00; font-style: italic;
+                        }
+                        .wf-step.wf-result {
+                          background: #e9f5e9; border: 1.5px solid #6abf6a;
+                          color: #2d6a2d; font-weight: 600;
+                        }
+                        .wf-or {
+                          display: inline-flex; align-items: center;
+                          color: #888; font-size: 0.75rem; font-style: italic;
+                          padding: 0 2px;
+                        }
+                        .wf-arrow { color: #aaa; font-size: 1.2rem; margin: 0 2px; display: inline-flex; align-items: center; }
+                        .wf-legend {
+                          display: flex; flex-wrap: wrap; gap: 16px;
+                          margin-top: 18px; font-size: 0.78rem; color: #777;
+                          justify-content: center;
+                        }
+                        .wf-legend > div { display: inline-flex; align-items: center; gap: 6px; }
+                        .wf-swatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; }
+                      ")),
+                      tags$div(class = "workflows-section",
+
+                        # --- Workflow 1 ---
+                        tags$div(class = "workflow-row",
+                          tags$div(class = "workflow-head",
+                            tags$span(class = "workflow-num", "1"),
+                            tags$span(class = "workflow-title", "Pitch extraction")
+                          ),
+                          tags$div(class = "workflow-desc",
+                            "Turn audio recordings into a tidy f0 dataframe with metadata. Three sources to choose from."),
+                          tags$div(class = "workflow-flow",
+                            tags$span(class = "wf-step wf-data", HTML("&#127908; .wav")),
+                            tags$span(class = "wf-arrow", HTML("&#10132;")),
+                            tags$span(class = "wf-step wf-external", "F0 extraction with Praat"),
+                            tags$span(class = "wf-or", "or"),
+                            tags$span(class = "wf-step wf-app", "F0 Extraction (wrassp)"),
+                            tags$span(class = "wf-or", "or"),
+                            tags$span(class = "wf-step wf-data", HTML("&#128202; pre-extracted f0 .csv")),
+                            tags$span(class = "wf-arrow", HTML("&#10132;")),
+                            tags$span(class = "wf-step wf-result", HTML("&#128202; f0 + metadata .csv"))
+                          )
+                        ),
+
+                        # --- Workflow 2 ---
+                        tags$div(class = "workflow-row",
+                          tags$div(class = "workflow-head",
+                            tags$span(class = "workflow-num", "2"),
+                            tags$span(class = "workflow-title", "Quality check")
+                          ),
+                          tags$div(class = "workflow-desc",
+                            "Normalise, visualise, and inspect to flag pitch-tracking errors."),
+                          tags$div(class = "workflow-flow",
+                            tags$span(class = "wf-step wf-data", HTML("&#128202; f0 .csv")),
+                            tags$span(class = "wf-arrow", HTML("&#10132;")),
+                            tags$span(class = "wf-step wf-app", "Normalise"),
+                            tags$span(class = "wf-arrow", HTML("&#10132;")),
+                            tags$span(class = "wf-step wf-app", "Visualise"),
+                            tags$span(class = "wf-arrow", HTML("&#10132;")),
+                            tags$span(class = "wf-step wf-app", "Inspect"),
+                            tags$span(class = "wf-arrow", HTML("&#10132;")),
+                            tags$span(class = "wf-step wf-result", HTML("&#128202; .csv with flags"))
+                          )
+                        ),
+
+                        # --- Workflow 3 ---
+                        tags$div(class = "workflow-row",
+                          tags$div(class = "workflow-head",
+                            tags$span(class = "workflow-num", "3"),
+                            tags$span(class = "workflow-title", "Correction")
+                          ),
+                          tags$div(class = "workflow-desc",
+                            "Bring the audio and the flagged tokens back together to fix problematic frames by ear."),
+                          tags$div(class = "workflow-flow",
+                            tags$span(class = "wf-step wf-data", HTML("&#127908; .wav")),
+                            tags$span(class = "wf-or", "+"),
+                            tags$span(class = "wf-step wf-data", HTML("&#128202; .csv with flags")),
+                            tags$span(class = "wf-arrow", HTML("&#10132;")),
+                            tags$span(class = "wf-step wf-app", "F0 Correction"),
+                            tags$span(class = "wf-arrow", HTML("&#10132;")),
+                            tags$span(class = "wf-step wf-result", HTML("&#128202; cleaned f0 .csv"))
+                          )
+                        ),
+
+                        # --- Workflow 4 ---
+                        tags$div(class = "workflow-row",
+                          tags$div(class = "workflow-head",
+                            tags$span(class = "workflow-num", "4"),
+                            tags$span(class = "workflow-title", "Modelling & summary")
+                          ),
+                          tags$div(class = "workflow-desc",
+                            "Fit polynomial / GCA / GAMM models and convert contours into Chao tone numerals."),
+                          tags$div(class = "workflow-flow",
+                            tags$span(class = "wf-step wf-data", HTML("&#128202; clean f0 .csv")),
+                            tags$span(class = "wf-arrow", HTML("&#10132;")),
+                            tags$span(class = "wf-step wf-app", "Normalise"),
+                            tags$span(class = "wf-arrow", HTML("&#10132;")),
+                            tags$span(class = "wf-step wf-app", "Model"),
+                            tags$span(class = "wf-or", "(Polynomials / GCA / GAMM)"),
+                            tags$span(class = "wf-arrow", HTML("&#10132;")),
+                            tags$span(class = "wf-step wf-app", "Summarise"),
+                            tags$span(class = "wf-arrow", HTML("&#10132;")),
+                            tags$span(class = "wf-step wf-result", HTML("&#128203; coefficients / Chao numerals"))
+                          )
+                        ),
+
+                        # --- Legend ---
+                        tags$div(class = "wf-legend",
+                          tags$div(tags$span(class = "wf-swatch", style = "background:#e3f2fd; border:1px solid #90caf9;"), "Data file"),
+                          tags$div(tags$span(class = "wf-swatch", style = "background:#e8f5f0; border:1px solid #78c2ad;"), "In-app step"),
+                          tags$div(tags$span(class = "wf-swatch", style = "background:#fff8e1; border:1px dashed #e0a800;"), "External step (Praat)"),
+                          tags$div(tags$span(class = "wf-swatch", style = "background:#e9f5e9; border:1px solid #6abf6a;"), "Output")
+                        )
+                      ),
+
                       # --- FAQ ---
                       tags$div(style = "max-width: 900px; margin: 48px auto 0 auto; text-align: center; padding: 0 15px;",
                         tags$div(style = "width: 56px; height: 3px; background: #78c2ad; margin: 0 auto 24px auto; border-radius: 2px;"),

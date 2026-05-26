@@ -15,7 +15,8 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     tagList(
       radioButtons("fp_extract_mode", "f0 source:",
                    choices = c("Extract from .wav (wrassp)" = "wrassp",
-                               "Use uploaded .Pitch / .PitchTier (Praat)" = "praat"),
+                               "Use uploaded .Pitch / .PitchTier (Praat)" = "praat",
+                               "Upload existing f0 CSV" = "csv"),
                    selected = "wrassp"),
       conditionalPanel("input.fp_extract_mode == 'wrassp'",
         tags$hr(),
@@ -23,8 +24,20 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         numericInput("fp_f0_max",   "Max f0 (Hz)",   value = 600, min = 200, max = 1000),
         numericInput("fp_window_ms","Frame step (ms)", value = 5,  min = 1,   max = 50)
       ),
+      conditionalPanel("input.fp_extract_mode == 'csv'",
+        tags$hr(),
+        fileInput("fp_f0_upload_file", "Pre-extracted f0 CSV",
+                  multiple = FALSE,
+                  accept = c("text/csv", "text/comma-separated-values,text/plain", ".csv"),
+                  buttonLabel = "Choose CSV",
+                  placeholder = "No file selected"),
+        tags$div(style = "color: #888; font-size: 0.75rem; margin-top: -8px; font-style: italic;",
+                 "The CSV needs columns ", tags$code("token"), ", ",
+                 tags$code("time"), ", ", tags$code("f0"),
+                 ". Token values must match the .wav basenames uploaded in Start.")
+      ),
       tags$hr(),
-      actionButton("fp_extract_run", "Run extraction", icon = icon("play")),
+      uiOutput("fp_extract_run_btn"),
       tags$hr(),
       # ---- Metadata (optional) ----
       h5("Metadata"),
@@ -272,6 +285,11 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
             "<strong>Praat</strong> uses the .Pitch / .PitchTier files you uploaded alongside ",
             "the .wav files. Choose this if you've already extracted pitch in Praat with custom settings."))),
           tags$li(HTML(paste0(
+            "<strong>Upload existing f0 CSV</strong> skips extraction entirely. Useful if you've already ",
+            "run wrassp / Praat / any other tool elsewhere and just want to use F0 Correction or the ",
+            "metadata join. CSV must have <code>token</code>, <code>time</code>, <code>f0</code>; ",
+            "<code>token</code> values must match the .wav basenames uploaded in Start."))),
+          tags$li(HTML(paste0(
             "<strong>Metadata (optional):</strong> either upload a metadata CSV (one row per audio file) ",
             "or have Shinytone derive metadata by splitting each filename on a separator (default ",
             "<code>_</code>) and naming the segments. Either way, the metadata is joined to the f0 ",
@@ -352,7 +370,19 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     NULL
   }
 
-  # ---- Run extraction ----
+  # Contextual button label: "Run extraction" for wrassp/Praat, "Load CSV"
+  # for the upload-CSV source.
+  output$fp_extract_run_btn <- renderUI({
+    mode <- input$fp_extract_mode
+    if (is.null(mode)) mode <- "wrassp"
+    if (mode == "csv") {
+      actionButton("fp_extract_run", "Load CSV", icon = icon("upload"))
+    } else {
+      actionButton("fp_extract_run", "Run extraction", icon = icon("play"))
+    }
+  })
+
+  # ---- Run extraction (or load CSV) ----
   observeEvent(input$fp_extract_run, {
     audio <- fp_audio_data()
     if (is.null(audio) || nrow(audio) == 0) {
@@ -407,6 +437,65 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                          type = if (n_fail == 0) "message" else "warning",
                          duration = 5)
       })
+    } else if (mode == "csv") {
+      # Pre-extracted f0 CSV path: just load it into fp_f0_data.
+      if (is.null(input$fp_f0_upload_file)) {
+        showNotification("Choose a pre-extracted f0 CSV file first.",
+                         type = "warning", duration = 4)
+        return()
+      }
+      df <- tryCatch(
+        utils::read.csv(input$fp_f0_upload_file$datapath,
+                        stringsAsFactors = FALSE, check.names = FALSE),
+        error = function(e) NULL
+      )
+      if (is.null(df) || ncol(df) == 0) {
+        showNotification("Could not read the f0 CSV.",
+                         type = "error", duration = 5)
+        return()
+      }
+      req_cols <- c("token", "time", "f0")
+      missing <- setdiff(req_cols, names(df))
+      if (length(missing) > 0) {
+        showNotification(
+          sprintf("CSV is missing required column(s): %s.",
+                  paste(missing, collapse = ", ")),
+          type = "error", duration = 6
+        )
+        return()
+      }
+      # Ensure correct types
+      df$token <- as.character(df$token)
+      df$time  <- as.numeric(df$time)
+      df$f0    <- suppressWarnings(as.numeric(df$f0))
+
+      # Filter to tokens that actually have audio uploaded (require .wav).
+      have_wav <- audio$basename[!is.na(audio$wav_path)]
+      keep <- df$token %in% have_wav
+      missing_audio <- setdiff(unique(df$token), have_wav)
+      if (length(missing_audio) > 0) {
+        showNotification(
+          sprintf("Ignoring %d token(s) in CSV with no matching .wav uploaded (e.g. %s).",
+                  length(missing_audio),
+                  paste(utils::head(missing_audio, 3), collapse = ", ")),
+          type = "warning", duration = 6
+        )
+      }
+      df <- df[keep, , drop = FALSE]
+      if (nrow(df) == 0) {
+        showNotification(
+          "No CSV tokens match any uploaded .wav basename. Check the Start tab.",
+          type = "error", duration = 6
+        )
+        return()
+      }
+      fp_f0_data(df)
+      if (!is.null(fp_pitch_candidates)) fp_pitch_candidates(list())
+      showNotification(
+        sprintf("Loaded f0 for %d token(s) from CSV. ✅",
+                length(unique(df$token))),
+        type = "message", duration = 5
+      )
     } else {
       # Praat mode
       has_praat <- audio[!is.na(audio$pitch_path) | !is.na(audio$pitchtier_path), , drop = FALSE]
