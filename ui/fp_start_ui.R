@@ -121,7 +121,7 @@ fp_start_ui <- function(input, output, session, fp_audio_data) {
                 tags$strong(style = "color: #78c2ad;", "Start"),
                 " Upload your audio files (.wav) and optional companion files (.TextGrid, .Pitch, .PitchTier) and preview their specifications."),
         tags$li(HTML("&#128195; "),
-                tags$strong(style = "color: #78c2ad;", "F0 Extraction with Praat"),
+                tags$strong(style = "color: #78c2ad;", "Measure f0 with Praat"),
                 " Offline alternative: a downloadable Praat script that batch-extracts f0 from a folder of .wav files. Output (.Pitch + CSV) feeds back into the in-app workflow."),
         tags$li(HTML("&#127908; "),
                 tags$strong(style = "color: #78c2ad;", "F0 Extraction"),

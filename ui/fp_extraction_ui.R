@@ -31,12 +31,14 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                   accept = c("text/csv", "text/comma-separated-values,text/plain", ".csv"),
                   buttonLabel = "Choose CSV",
                   placeholder = "No file selected"),
-        # Column pickers appear after upload; auto-detected from common names.
-        uiOutput("fp_f0_csv_col_pickers"),
-        tags$div(style = "color: #888; font-size: 0.75rem; margin-top: 4px; font-style: italic;",
-                 "Token values must match the .wav basenames uploaded in Start.")
+        # Column pickers (with inline token-match note); auto-detected names.
+        uiOutput("fp_f0_csv_col_pickers")
       ),
-      tags$hr(),
+      # Separator before the Run button (only for sources that need one — for
+      # CSV the auto-load hint sits visually close to the pickers).
+      conditionalPanel("input.fp_extract_mode != 'csv'",
+        tags$hr()
+      ),
       uiOutput("fp_extract_run_btn"),
       tags$hr(),
       # ---- Metadata (optional) ----
@@ -399,8 +401,36 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   })
 
   output$fp_f0_csv_col_pickers <- renderUI({
-    df <- fp_f0_csv_raw()
-    if (is.null(df) || ncol(df) == 0) return(NULL)
+    # Always render the three selects when the CSV source is active so users
+    # can see the full setup up front. Before a file is uploaded they show a
+    # placeholder option; once a file is uploaded they populate with auto-
+    # detected column names from the CSV header.
+    if (!isTRUE(input$fp_extract_mode == "csv")) return(NULL)
+    # Only call fp_f0_csv_raw() once a file is actually picked, since the
+    # reactive uses req() and would silentStop this renderUI otherwise.
+    df <- if (!is.null(input$fp_f0_upload_file)) fp_f0_csv_raw() else NULL
+    has_csv <- !is.null(df) && ncol(df) > 0
+
+    # Inline note attached to the token picker (the only column whose values
+    # need to match audio basenames).
+    token_match_note <- tags$div(
+      style = "color: #888; font-size: 0.75rem; margin-top: -8px; margin-bottom: 6px; font-style: italic;",
+      "Values must match the .wav basenames uploaded in Start."
+    )
+
+    if (!has_csv) {
+      placeholder <- c("Upload a CSV first" = "")
+      return(tagList(
+        selectInput("fp_f0_col_token", "Token / filename column:",
+                    choices = placeholder, selected = "", selectize = FALSE),
+        token_match_note,
+        selectInput("fp_f0_col_time", "Time column:",
+                    choices = placeholder, selected = "", selectize = FALSE),
+        selectInput("fp_f0_col_f0", "f0 column:",
+                    choices = placeholder, selected = "", selectize = FALSE)
+      ))
+    }
+
     cols <- names(df)
     # Case-insensitive auto-match against likely column names.
     auto_match <- function(candidates) {
@@ -415,6 +445,7 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     tagList(
       selectInput("fp_f0_col_token", "Token / filename column:",
                   choices = cols, selected = tok_default, selectize = FALSE),
+      token_match_note,
       selectInput("fp_f0_col_time", "Time column:",
                   choices = cols, selected = time_default, selectize = FALSE),
       selectInput("fp_f0_col_f0", "f0 column:",
