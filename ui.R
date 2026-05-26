@@ -592,7 +592,9 @@ ui <- fluidPage(
                                                uiOutput("fp_extraction_guide"),
                                                uiOutput("fp_extraction_results")),
                                       tabPanel("F0 Correction",
-                                               uiOutput("fp_correction_guide"))
+                                               uiOutput("fp_correction_guide")),
+                                      tabPanel("F0 extraction with Praat",
+                                               uiOutput("fp_praat_script_content"))
                           )
                         )
                       )
