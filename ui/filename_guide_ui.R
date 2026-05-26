@@ -54,7 +54,10 @@ filename_guide_ui <- function(input, output, session) {
         }
       ")),
 
-      # --- Pattern ---
+      tags$hr(),
+
+      # ===================== Section 1: The filename structure =====================
+      h4("The filename structure"),
       tags$div(class = "fn-pattern",
         HTML(paste0(
           "<span class='fn-tid'>",
@@ -75,8 +78,7 @@ filename_guide_ui <- function(input, output, session) {
       tags$div(class = "fn-tid-caption",
                HTML("↑ The shaded portion is the <strong>token ID</strong>.")),
 
-      # --- Example ---
-      tags$div(style = "margin-top: 4px;", "Example:"),
+      tags$div(style = "margin-top: 12px;", tags$strong("Example:")),
       tags$div(class = "fn-example",
         HTML(paste0(
           "<span class='fn-tid'>",
@@ -94,7 +96,7 @@ filename_guide_ui <- function(input, output, session) {
       tags$div(class = "fn-tid-caption",
                HTML("→ token ID: <code>yue_S01_T2_ma_r01</code>")),
 
-      # --- Legend ---
+      tags$div(style = "margin-top: 12px;", tags$strong("Legend:")),
       tags$div(class = "fn-legend",
         tags$div(tags$span(class = "fn-swatch fn-lang"), "language / project code"),
         tags$div(tags$span(class = "fn-swatch fn-spk"),  "speaker ID (zero-padded)"),
@@ -105,8 +107,10 @@ filename_guide_ui <- function(input, output, session) {
                  "any extra factor(s) you need (session, context, carrier, etc.)")
       ),
 
-      # --- Why this helps ---
-      tags$p(style = "margin-top: 14px; margin-bottom: 4px;", tags$strong("Why this helps")),
+      tags$hr(),
+
+      # ===================== Section 2: Why this helps =====================
+      h4("Why this helps"),
       tags$ul(
         tags$li(tags$strong("Self-documenting data."),
                 " Each filename carries its own metadata, so you can tell what a file contains just by looking at it."),
@@ -122,8 +126,10 @@ filename_guide_ui <- function(input, output, session) {
         tags$li(tags$strong("Easier collaboration."),
                 " A consistent convention lets collaborators (and your future self) pick up the dataset without needing a separate key.")),
 
-      # --- Tips ---
-      tags$p(style = "margin-top: 10px; margin-bottom: 4px;", tags$strong("Tips")),
+      tags$hr(),
+
+      # ===================== Section 3: Tips =====================
+      h4("Tips"),
       tags$ul(
         tags$li("Use ", tags$code("_"), " as the separator. Avoid spaces, dots, and other special symbols."),
         tags$li("Zero-pad numeric parts (", tags$code("S01"), " not ", tags$code("S1"),
