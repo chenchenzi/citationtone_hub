@@ -21,22 +21,47 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   fp_history <- reactiveVal(list())
   # Chronological log of edit actions. One row per apply_edit() / undo call.
   # Surfaced in the "Edit log" table and downloadable as CSV.
+  #   wall_time      : when the edit was applied (HH:MM:SS)
+  #   token          : which token
+  #   action         : edit type ("Halve", "Smooth", ...)
+  #   n_frames       : how many frames were touched
+  #   frame_indices  : 1-based positions in the contour (comma-separated)
+  #   frame_times_s  : the corresponding within-token times in seconds
+  #   frame_pct      : positions normalised to [0, 100]% within the token
+  #                    (useful for comparing where in the tonal contour the
+  #                    edit happened across tokens of different durations)
+  #   details        : free-text method / parameters (e.g., "median, window=3")
   fp_edit_log <- reactiveVal(data.frame(
-    time     = character(0),
-    token    = character(0),
-    action   = character(0),
-    n_frames = integer(0),
-    details  = character(0),
+    wall_time     = character(0),
+    token         = character(0),
+    action        = character(0),
+    n_frames      = integer(0),
+    frame_indices = character(0),
+    frame_times_s = character(0),
+    frame_pct     = character(0),
+    details       = character(0),
     stringsAsFactors = FALSE
   ))
-  log_edit <- function(token, action, n_frames, details = "") {
+  log_edit <- function(token, action, n_frames, details = "",
+                       indices = integer(0), times = numeric(0), n_total = NA_integer_) {
+    # Format multi-frame fields as compact comma-separated strings.
+    fmt_int <- function(x) if (length(x) == 0) NA_character_
+                           else paste(x, collapse = ",")
+    fmt_num <- function(x, digits = 3)
+      if (length(x) == 0) NA_character_
+      else paste(formatC(x, format = "f", digits = digits), collapse = ",")
+    pct <- if (length(indices) == 0 || is.na(n_total) || n_total <= 1) numeric(0)
+           else (indices - 1) / (n_total - 1) * 100
     cur <- fp_edit_log()
     new_row <- data.frame(
-      time     = format(Sys.time(), "%H:%M:%S"),
-      token    = as.character(token),
-      action   = as.character(action),
-      n_frames = as.integer(n_frames),
-      details  = as.character(details),
+      wall_time     = format(Sys.time(), "%H:%M:%S"),
+      token         = as.character(token),
+      action        = as.character(action),
+      n_frames      = as.integer(n_frames),
+      frame_indices = fmt_int(indices),
+      frame_times_s = fmt_num(times, 3),
+      frame_pct     = fmt_num(pct, 1),
+      details       = as.character(details),
       stringsAsFactors = FALSE
     )
     fp_edit_log(rbind(cur, new_row))
@@ -99,7 +124,11 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     corr <- fp_corrections()
     corr[[tok]] <- new_df
     fp_corrections(corr)
-    log_edit(tok, action, length(sel), details)
+    # Capture which frames were edited and their within-token times for the log
+    sel_sorted <- sort(sel)
+    times_at_sel <- if ("time" %in% names(cur)) cur$time[sel_sorted] else numeric(0)
+    log_edit(tok, action, length(sel), details,
+             indices = sel_sorted, times = times_at_sel, n_total = nrow(cur))
     showNotification(sprintf("%s applied to %d frame(s).", action, length(sel)),
                      type = "message", duration = 2)
   }
@@ -202,7 +231,11 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           uiOutput("fp_corr_tone_col_picker"),
           uiOutput("fp_corr_tone_keep_picker"),
           checkboxInput("fp_corr_only_flagged",
-                        "Only show flagged tokens", value = FALSE)
+                        "Only show flagged tokens", value = FALSE),
+          actionButton("fp_corr_clear_filters", "Clear filters",
+                       icon = icon("filter-circle-xmark"),
+                       title = "Reset all filters (CSV stays uploaded)",
+                       class = "btn-sm")
         )
       ),
 
@@ -302,7 +335,9 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         downloadButton("fp_corr_download_all",     "All tokens")
       ),
       tags$small(style = "color:#888; display:block; margin-top:4px;",
-        "Files are named after the token or ", tags$code("all_correctedf0.csv"), ".")
+        HTML(paste0(
+          "<strong>Current token</strong> &rarr; <code>&lt;token&gt;_f0.csv</code>. ",
+          "<strong>All tokens</strong> &rarr; <code>all_correctedf0.csv</code>.")))
     )
   })
   # Eager render so Shiny binds the selectInput even before the conditional
@@ -373,6 +408,16 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   })
 
   # ---- Flagged-token filter handlers ----
+  # Clear filters: reset all filter inputs back to "off" state, but keep the
+  # CSV uploaded so the user can re-enable filtering without re-uploading.
+  observeEvent(input$fp_corr_clear_filters, {
+    updateSelectInput(session,    "fp_corr_speaker_col", selected = "")
+    updateSelectInput(session,    "fp_corr_tone_col",    selected = "")
+    updateCheckboxInput(session,  "fp_corr_only_flagged", value = FALSE)
+    showNotification("Filters cleared. The uploaded CSV is still loaded.",
+                     type = "message", duration = 3)
+  })
+
   observeEvent(input$fp_corr_flagged_csv, {
     req(input$fp_corr_flagged_csv)
     df <- tryCatch(
@@ -1070,8 +1115,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       tags$div(style = "display: flex; align-items: center; gap: 12px; margin-bottom: 6px;",
         downloadButton("fp_corr_log_download", "Download edit log (CSV)",
                        icon = icon("download")),
-        actionButton("fp_corr_log_clear", "Clear log", icon = icon("eraser"),
-                     class = "btn-sm"),
+        actionButton("fp_corr_log_clear", "Clear log", icon = icon("eraser")),
         tags$span(style = "color: #888; font-size: 0.8rem; font-style: italic;",
                   "Chronological record of every edit applied in this session.")
       ),
@@ -1085,7 +1129,9 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     if (nrow(df) == 0) {
       return(DT::datatable(
         data.frame(time = character(0), token = character(0), action = character(0),
-                   n_frames = integer(0), details = character(0),
+                   `n frames` = integer(0), `frame indices` = character(0),
+                   `frame times (s)` = character(0), `frame %` = character(0),
+                   details = character(0),
                    stringsAsFactors = FALSE, check.names = FALSE),
         rownames = FALSE,
         options = list(pageLength = 10, dom = "tip",
@@ -1094,10 +1140,11 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     }
     # Show most-recent first; readable column names
     df_show <- df[seq.int(nrow(df), 1L), , drop = FALSE]
-    names(df_show) <- c("time", "token", "action", "n frames", "details")
+    names(df_show) <- c("time", "token", "action", "n frames",
+                        "frame indices", "frame times (s)", "frame %", "details")
     DT::datatable(
       df_show, rownames = FALSE,
-      options = list(pageLength = 10, dom = "tip",
+      options = list(pageLength = 10, dom = "tip", scrollX = TRUE,
                      columnDefs = list(list(className = "dt-center", targets = c(0, 3))))
     )
   })
@@ -1121,11 +1168,14 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   observeEvent(input$fp_corr_log_clear, {
     if (nrow(fp_edit_log()) == 0) return()
     fp_edit_log(data.frame(
-      time     = character(0),
-      token    = character(0),
-      action   = character(0),
-      n_frames = integer(0),
-      details  = character(0),
+      wall_time     = character(0),
+      token         = character(0),
+      action        = character(0),
+      n_frames      = integer(0),
+      frame_indices = character(0),
+      frame_times_s = character(0),
+      frame_pct     = character(0),
+      details       = character(0),
       stringsAsFactors = FALSE
     ))
     showNotification("Edit log cleared.", type = "message", duration = 2)
@@ -1353,7 +1403,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     filename = function() {
       tok <- input$fp_corr_token
       if (is.null(tok) || !nzchar(tok)) tok <- "current"
-      paste0(tok, "_correctedf0.csv")
+      paste0(tok, "_f0.csv")
     },
     content = function(file) {
       out <- build_corrected_df()
@@ -1361,7 +1411,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       tok <- input$fp_corr_token
       req(tok)
       sub <- out[out$token == tok, , drop = FALSE]
-      fname <- paste0(tok, "_correctedf0.csv")
+      fname <- paste0(tok, "_f0.csv")
       write.csv(sub, file, row.names = FALSE)
       showNotification(paste("Saved", fname),
                        type = "message", duration = 4)
