@@ -379,7 +379,7 @@ ui <- fluidPage(
                         tags$h2(style = "color: #2c5f4f; margin: 0 0 8px 0; font-weight: 700;",
                                 "Recommended Workflows"),
                         tags$p(style = "color: #777; font-size: 0.95rem; margin: 0;",
-                          "Four common pipelines through Shinytone. The output of each step chains into the input of the next (see the arrows between rows).")
+                          "Four major pipelines through Shinytone. The output of each pipeline chains into the input of the next.")
                       ),
                       tags$style(HTML("
                         .workflows-section { max-width: 1080px; margin: 0 auto; padding: 20px 15px 8px 15px; }
@@ -461,13 +461,14 @@ ui <- fluidPage(
                         # SVG overlay for dynamic output->input curves (paths injected by JS).
                         # Sits ABOVE the workflow rows (z-index 5) so the curves are not
                         # clipped by the rows' white backgrounds at start/end points.
-                        HTML("<svg id='workflow-connectors' xmlns='http://www.w3.org/2000/svg' style='position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:5; overflow:visible;'><defs><marker id='wf-arrowhead' viewBox='0 0 10 10' refX='8' refY='5' markerWidth='7' markerHeight='7' orient='auto'><path d='M 0 0 L 10 5 L 0 10 z' fill='#a85a5d'/></marker></defs></svg>"),
+                        HTML("<svg id='workflow-connectors' xmlns='http://www.w3.org/2000/svg' style='position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:5; overflow:visible;'></svg>"),
 
                         # --- Workflow 1 ---
                         tags$div(class = "workflow-row", style = "position: relative; z-index: 1;",
                           tags$div(class = "workflow-head",
                             tags$span(class = "workflow-num", "1"),
-                            tags$span(class = "workflow-title", "Pitch extraction")
+                            tags$span(class = "workflow-title", "Pitch extraction"),
+                            tags$span(class = "tab-ref-chip", "F0 Processing tab")
                           ),
                           tags$div(class = "workflow-desc",
                             "The F0 Extraction tab is a hub: pick a source, attach metadata, and download a tidy CSV."),
@@ -488,7 +489,8 @@ ui <- fluidPage(
                         tags$div(class = "workflow-row", style = "position: relative; z-index: 1;",
                           tags$div(class = "workflow-head",
                             tags$span(class = "workflow-num", "2"),
-                            tags$span(class = "workflow-title", "Pitch-tracking quality check")
+                            tags$span(class = "workflow-title", "Pitch-tracking quality check"),
+                            tags$span(class = "tab-ref-chip", "F0 Analysis tab")
                           ),
                           tags$div(class = "workflow-desc",
                             "Normalise, visualise, and inspect to flag pitch-tracking errors."),
@@ -509,7 +511,8 @@ ui <- fluidPage(
                         tags$div(class = "workflow-row", style = "position: relative; z-index: 1;",
                           tags$div(class = "workflow-head",
                             tags$span(class = "workflow-num", "3"),
-                            tags$span(class = "workflow-title", "Pitch-tracking correction")
+                            tags$span(class = "workflow-title", "Pitch-tracking correction"),
+                            tags$span(class = "tab-ref-chip", "F0 Processing tab")
                           ),
                           tags$div(class = "workflow-desc",
                             "Bring the audio and the flagged tokens back together to fix problematic frames by ear."),
@@ -528,7 +531,8 @@ ui <- fluidPage(
                         tags$div(class = "workflow-row", style = "position: relative; z-index: 1;",
                           tags$div(class = "workflow-head",
                             tags$span(class = "workflow-num", "4"),
-                            tags$span(class = "workflow-title", "Pitch contour modelling and summary")
+                            tags$span(class = "workflow-title", "Pitch contour modelling and summary"),
+                            tags$span(class = "tab-ref-chip", "F0 Analysis tab")
                           ),
                           tags$div(class = "workflow-desc",
                             "Fit polynomial / GCA / GAMM models and convert contours into Chao tone numerals."),
@@ -559,12 +563,87 @@ ui <- fluidPage(
                         # paths stay correct when chips reflow.
                         tags$script(HTML("
                           (function() {
+                            // Build a single filled brush-stroke arrow as one closed path.
+                            // Both edges are cubic beziers offset perpendicular to the
+                            // endpoint tangents. For laterally-offset arrows the bezier
+                            // can pinch in the middle, so we use a generous ctrlScale and
+                            // a wide body width to keep the rendered shape uniform.
+                            function buildArrowPath(x1, y1, x2, y2) {
+                              var dy_total = y2 - y1;
+                              var dx_total = Math.abs(x2 - x1);
+                              var bend = Math.max(24, dy_total / 2);
+                              var c1x = x1, c1y = y1 + bend;
+                              var c2x = x2, c2y = y2 - bend;
+
+                              // Tangent at start (toward c1)
+                              var sx = c1x - x1, sy = c1y - y1;
+                              var slen = Math.sqrt(sx * sx + sy * sy) || 1;
+                              sx /= slen; sy /= slen;
+                              var spx = -sy, spy = sx;
+
+                              // Tangent at end (from c2 toward end)
+                              var tx = x2 - c2x, ty = y2 - c2y;
+                              var tlen = Math.sqrt(tx * tx + ty * ty) || 1;
+                              tx /= tlen; ty /= tlen;
+                              var px = -ty, py = tx;
+
+                              var bodyW   = 11;   // body half-width (slim)
+                              var tailW   = bodyW;
+                              var neckW   = bodyW;
+                              var headW   = 22;   // arrowhead flare (2x body — clearly an arrow)
+                              var headLen = 18;
+
+                              // Adaptive ctrlScale: laterally-heavier curves need bigger
+                              // control-point offsets to keep the middle from pinching.
+                              var ratio = dx_total / Math.max(40, dy_total);
+                              var ctrlScale = 1.7 + 0.9 * Math.min(1.4, ratio);
+
+                              // Neck point (where the head starts)
+                              var nx = x2 - tx * headLen;
+                              var ny = y2 - ty * headLen;
+
+                              // Outer / inner neck edges
+                              var noX = nx + px * neckW, noY = ny + py * neckW;
+                              var niX = nx - px * neckW, niY = ny - py * neckW;
+
+                              // Arrowhead flare points
+                              var ahLX = nx + px * headW, ahLY = ny + py * headW;
+                              var ahRX = nx - px * headW, ahRY = ny - py * headW;
+
+                              // Tail edges
+                              var taoX = x1 + spx * tailW, taoY = y1 + spy * tailW;
+                              var taiX = x1 - spx * tailW, taiY = y1 - spy * tailW;
+
+                              // Bezier control points for outer / inner edges
+                              var oc1X = c1x + spx * tailW * ctrlScale, oc1Y = c1y + spy * tailW * ctrlScale;
+                              var oc2X = c2x + px  * neckW * ctrlScale, oc2Y = c2y + py  * neckW * ctrlScale;
+                              var ic1X = c1x - spx * tailW * ctrlScale, ic1Y = c1y - spy * tailW * ctrlScale;
+                              var ic2X = c2x - px  * neckW * ctrlScale, ic2Y = c2y - py  * neckW * ctrlScale;
+
+                              return 'M ' + taoX + ' ' + taoY +
+                                     ' C ' + oc1X + ' ' + oc1Y + ', ' +
+                                              oc2X + ' ' + oc2Y + ', ' +
+                                              noX + ' ' + noY +
+                                     ' L ' + ahLX + ' ' + ahLY +
+                                     ' L ' + x2 + ' ' + y2 +
+                                     ' L ' + ahRX + ' ' + ahRY +
+                                     ' L ' + niX + ' ' + niY +
+                                     ' C ' + ic2X + ' ' + ic2Y + ', ' +
+                                              ic1X + ' ' + ic1Y + ', ' +
+                                              taiX + ' ' + taiY +
+                                     ' Z';
+                            }
+
                             function drawWorkflowConnectors() {
                               var section = document.getElementById('workflows-section');
                               var svg     = document.getElementById('workflow-connectors');
                               if (!section || !svg) return;
-                              // Clear previously drawn paths (keep <defs>)
-                              Array.prototype.slice.call(svg.querySelectorAll('path')).forEach(function(p){ p.remove(); });
+                              // Clear previously drawn arrows.
+                              Array.prototype.slice.call(svg.children).forEach(function(node){
+                                if (!node.tagName) return;
+                                var t = node.tagName.toLowerCase();
+                                if (t === 'g' || t === 'path') node.remove();
+                              });
 
                               var sRect = section.getBoundingClientRect();
                               svg.setAttribute('width',  section.offsetWidth);
@@ -578,26 +657,17 @@ ui <- fluidPage(
                                   var oR = out.getBoundingClientRect();
                                   var iR = inEl.getBoundingClientRect();
 
-                                  // Output: bottom-centre; Input: top-centre
                                   var x1 = oR.left - sRect.left + oR.width / 2;
                                   var y1 = oR.bottom - sRect.top;
                                   var x2 = iR.left - sRect.left + iR.width / 2;
-                                  var y2 = iR.top - sRect.top - 4; // small gap before arrowhead
+                                  var y2 = iR.top - sRect.top - 2;
 
-                                  var dy = Math.max(20, (y2 - y1) / 2);
-                                  var d  = 'M ' + x1 + ' ' + y1 +
-                                           ' C ' + x1 + ' ' + (y1 + dy) +
-                                           ', '  + x2 + ' ' + (y2 - dy) +
-                                           ', '  + x2 + ' ' + y2;
-
+                                  var d = buildArrowPath(x1, y1, x2, y2);
                                   var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                                   path.setAttribute('d', d);
-                                  path.setAttribute('fill', 'none');
-                                  path.setAttribute('stroke', '#a85a5d');
-                                  path.setAttribute('stroke-width', '1.8');
-                                  path.setAttribute('stroke-dasharray', '6 4');
-                                  path.setAttribute('opacity', '0.55');
-                                  path.setAttribute('marker-end', 'url(#wf-arrowhead)');
+                                  path.setAttribute('fill', '#f3969a');
+                                  path.setAttribute('fill-opacity', '0.18');
+                                  path.setAttribute('stroke', 'none');
                                   svg.appendChild(path);
                                 });
                               });
