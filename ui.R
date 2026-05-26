@@ -286,14 +286,19 @@ ui <- fluidPage(
                           "It integrates the full citation tone analysis workflow into an interactive tool. ",
                           "It is designed for phoneticians, typologists, fieldworkers, and students working on lexical tone production."),
                         tags$p(style = "color: #777; font-size: 0.88rem; margin: 0;",
-                          icon("laptop-code"), " ",
+                          icon("laptop-code"), " Developer: ",
                           tags$a(href = "https://chenzixu.rbind.io/", target = "_blank", "Chenzi Xu"),
-                          " ",
-                          tags$a(href = "https://congzhang-linguist.github.io", target = "_blank", "Cong Zhang"),
                           tags$span(style = "margin: 0 10px; color: #ccc;", "·"),
                           icon("github"), " ",
                           tags$a(href = "https://github.com/chenchenzi/citationtone_hub", target = "_blank",
                                  "github.com/chenchenzi/citationtone_hub")
+                        ),
+                        tags$p(style = "color: #777; font-size: 0.88rem; margin: 6px 0 0 0;",
+                          tags$span(style = "color: #78c2ad;", icon("seedling")), " ",
+                          "Shinytone creators: ",
+                          tags$a(href = "https://chenzixu.rbind.io/", target = "_blank", "Chenzi Xu"),
+                          " & ",
+                          tags$a(href = "https://congzhang-linguist.github.io", target = "_blank", "Cong Zhang")
                         )
                       ),
 
