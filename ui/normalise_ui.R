@@ -26,10 +26,30 @@ normalised_ui <- function(input, output, session, dataset, normalised_data) {
 
   # Render UI for selecting f0, speaker, and tone variables
   output$ui_normalise <- renderUI({
-    vars <- if (!is.null(dataset())) names(dataset()) else c("No dataset available")
-    #req(vars)
-    data_types <- if (!is.null(dataset())) sapply(dataset(), class) else rep("NA", length(vars))
-    var_types <- paste0(vars, " {", data_types, "}")
+    ds   <- dataset()
+    vars <- if (!is.null(ds)) names(ds) else c("No dataset available")
+    data_types <- if (!is.null(ds)) sapply(ds, class) else rep("NA", length(vars))
+    var_types  <- paste0(vars, " {", data_types, "}")
+
+    # Smart default detection: look for columns whose names hint at what
+    # they hold. Falls back to the first numeric column for f0, and to
+    # vars[2]/vars[3] for speaker/tone if no name match is found.
+    pick_by_name <- function(needles, prefer_class = NULL) {
+      lname <- tolower(vars)
+      for (n in needles) {
+        hit <- which(grepl(n, lname, fixed = TRUE))
+        if (length(hit) > 0) return(vars[hit[1]])
+      }
+      if (!is.null(prefer_class) && !is.null(ds)) {
+        is_num <- vapply(ds, is.numeric, logical(1))
+        if (any(is_num)) return(vars[which(is_num)[1]])
+      }
+      NULL
+    }
+    `%or%` <- function(a, b) if (is.null(a)) b else a
+    default_f0      <- pick_by_name(c("f0_hz", "f0hz", "f0", "pitch"), prefer_class = "numeric") %or% vars[1]
+    default_speaker <- pick_by_name(c("speaker", "spk", "subject")) %or% (if (length(vars) > 1) vars[2] else vars[1])
+    default_tone    <- pick_by_name(c("tone", "category", "label"))  %or% (if (length(vars) > 2) vars[3] else vars[1])
 
     tagList(
       wellPanel(
@@ -37,11 +57,11 @@ normalised_ui <- function(input, output, session, dataset, normalised_data) {
            tags$small(style = "color: #777; margin-left: 6px; font-weight: 400;",
                       input$dataset_name)),
         selectInput("f0_var", "Select f0 (Hz) variable:",
-                    choices = setNames(vars, var_types), selected = vars[1], multiple = FALSE),
+                    choices = setNames(vars, var_types), selected = default_f0, multiple = FALSE),
         selectInput("speaker_var", "Select Speaker variable:",
-                    choices = setNames(vars, var_types), selected = ifelse(length(vars) > 1, vars[2], vars[1]), multiple = FALSE),
+                    choices = setNames(vars, var_types), selected = default_speaker, multiple = FALSE),
         selectInput("tone_var", "Select Tone category variable:",
-                    choices = setNames(vars, var_types), selected = ifelse(length(vars) > 2, vars[3], vars[1]), multiple = FALSE),
+                    choices = setNames(vars, var_types), selected = default_tone, multiple = FALSE),
         tags$hr(),
         radioButtons("mean_calc_method", "Speaker Mean f0 Options",
                      choices = list("Simple average" = "simple",
