@@ -110,16 +110,8 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
     # Default: best available
     default_src <- if (has_gamm) "gamm" else if (has_gca) "gca" else if (has_norm) "normalised" else if (has_data) "raw_hz" else "none"
 
-    # Helper: guess best column match by name patterns
-    guess_var <- function(vars, patterns, fallback_idx = 1) {
-      for (pat in patterns) {
-        match <- grep(pat, vars, ignore.case = TRUE, value = TRUE)
-        if (length(match) > 0) return(match[1])
-      }
-      if (fallback_idx <= length(vars)) vars[fallback_idx] else vars[1]
-    }
-
     # Column info for raw data
+    # (guess_var() helper is defined globally in server.R)
     raw_data <- dataset()
     raw_vars <- if (!is.null(raw_data)) names(raw_data) else c("No dataset available")
     raw_types <- if (!is.null(raw_data)) sapply(raw_data, class) else rep("NA", length(raw_vars))
