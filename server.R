@@ -42,6 +42,7 @@ source("ui/summarise_ui.R")
 source("ui/fp_start_ui.R")
 source("ui/fp_extraction_ui.R")
 source("ui/fp_correction_ui.R")
+source("ui/fp_praat_script_ui.R")
 options(shiny.maxRequestSize = 100 * 1024^2)  # 100 MB cap for batch WAV uploads
 #options(shiny.useragg = TRUE)
 
@@ -97,6 +98,7 @@ server <- function(input, output, session) {
   fp_start_ui(input, output, session, fp_audio_data)
   fp_extraction_ui(input, output, session, fp_audio_data, fp_f0_data, fp_pitch_candidates, fp_metadata)
   fp_correction_ui(input, output, session, fp_audio_data, fp_f0_data, fp_pitch_candidates)
+  fp_praat_script_ui(input, output, session)
 
   # Feature-card navigation from the About tab.
   # Cards fire Shiny.setInputValue('about_nav_target', 'F0 Analysis|View'), etc.

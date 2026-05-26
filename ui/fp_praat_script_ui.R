@@ -194,6 +194,45 @@ appendInfoLine: "  ", n_files, " .Pitch file(s) in: ", output_folder$
 appendInfoLine: "  Combined CSV: ", csv_path$
 '
 
+  # ---- Sidebar (shown when this tab is active) ----
+  # Praat icon + offline-workflow note + download button. Keeps the main
+  # panel uncluttered and makes the script's "you'll need Praat on your
+  # machine" framing visible at all times.
+  output$ui_fp_praat_sidebar <- renderUI({
+    tagList(
+      # Icon + label header: 48px icon on the left, "Praat" link + subtitle on the right.
+      tags$div(
+        style = "display: flex; align-items: center; gap: 12px; margin-bottom: 12px;",
+        tags$img(src = "Praat_icon.png", height = "48px", alt = "Praat",
+                 style = "flex-shrink: 0;"),
+        tags$div(
+          tags$div(
+            tags$a(href = "https://www.fon.hum.uva.nl/praat/",
+                   target = "_blank", rel = "noopener noreferrer",
+                   style = "font-weight: 700; font-size: 1.05rem; color: #222; line-height: 1.1; text-decoration: none;",
+                   "Praat")
+          ),
+          tags$div(style = "color: #888; font-size: 0.75rem; margin-top: 2px;",
+                   "Open-source acoustic analysis")
+        )
+      ),
+      tags$div(
+        style = "background-color: #fff8e1; border-left: 4px solid #e0a800; padding: 10px 12px; margin-bottom: 12px; border-radius: 4px; font-size: 0.82rem; color: #555;",
+        tags$strong("Offline workflow."),
+        " The script runs in Praat on your machine, not in the browser. ",
+        "Use it when you want algorithm choice or fine-grained control ",
+        "beyond what ", tags$code("wrassp::ksvF0()"), " in ",
+        tags$strong("F0 Extraction"), " offers."
+      ),
+      tags$hr(),
+      h5("Get the script"),
+      downloadButton("fp_praat_script_download", "Download .praat",
+                     icon = icon("download")),
+      tags$div(style = "color: #888; font-size: 0.78rem; margin-top: 6px; font-style: italic;",
+               "Saves as ", tags$code("shinytone_f0_extract.praat"), ".")
+    )
+  })
+
   output$fp_praat_script_content <- renderUI({
     tagList(
       h2(style = "display: flex; align-items: center; gap: 12px;",
@@ -201,18 +240,13 @@ appendInfoLine: "  Combined CSV: ", csv_path$
                   alt = "Praat",
                   style = "display: inline-block;"),
          tags$span("Extract f0 with Praat")),
-      tags$div(
-        style = "background-color: #fff8e1; border-left: 4px solid #e0a800; padding: 10px 14px; margin-bottom: 14px; border-radius: 4px; font-size: 0.88rem; color: #555;",
-        tags$strong("Offline workflow."),
-        " This script runs in Praat on your own machine, not in the browser. ",
-        "Use it when you want algorithm choice or fine-grained control beyond what ",
-        tags$code("wrassp::ksvF0()"), " in ", tags$strong("F0 Extraction"),
-        " offers. Once the script finishes, upload its outputs back to Shinytone."
-      ),
-      tags$p("Praat is one of the most established tools for f0 extraction, with several algorithm choices ",
-             "and fine-grained control over voicing and octave-jump parameters. ",
-             "The script below batch-processes a folder of ", tags$code(".wav"),
-             " files and produces output that integrates cleanly with the rest of Shinytone."),
+      tags$p(
+        tags$a(href = "https://www.fon.hum.uva.nl/praat/",
+               target = "_blank", rel = "noopener noreferrer", "Praat"),
+        " is one of the most established tools for f0 extraction, with several algorithm choices ",
+        "and fine-grained control over voicing and octave-jump parameters. ",
+        "The script below batch-processes a folder of ", tags$code(".wav"),
+        " files and produces output that integrates cleanly with the rest of Shinytone."),
 
       h4("Why use Praat?"),
       tags$ul(
@@ -243,13 +277,11 @@ appendInfoLine: "  Combined CSV: ", csv_path$
                 " (long format), one row per frame per token.")
       ),
 
-      h4("Get the script"),
-      tags$div(style = "display: flex; gap: 12px; align-items: center; margin-bottom: 10px;",
-        downloadButton("fp_praat_script_download", "Download .praat file",
-                       icon = icon("download")),
-        tags$span(style = "color: #888; font-size: 0.85rem;",
-                  "Saves as ", tags$code("shinytone_f0_extract.praat"), ".")
-      ),
+      h4("The script"),
+      tags$p(style = "color: #777; font-size: 0.85rem; margin-bottom: 6px;",
+        "Use the ", tags$strong("Download .praat"),
+        " button in the left sidebar to save the script as ",
+        tags$code("shinytone_f0_extract.praat"), ", or copy from the block below."),
       tags$pre(style = "background: #f6f8fa; border: 1px solid #d6e7df; padding: 12px; border-radius: 4px; font-size: 0.78rem; line-height: 1.4; overflow-x: auto; max-height: 480px;",
         tags$code(praat_script_text)
       ),

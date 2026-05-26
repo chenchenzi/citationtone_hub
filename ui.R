@@ -577,6 +577,8 @@ ui <- fluidPage(
                           titlePanel("Audio files"),
                           conditionalPanel("input.tabs_fp == 'Start'",
                                            uiOutput("ui_fp_upload")),
+                          conditionalPanel("input.tabs_fp == 'F0 Extraction with Praat'",
+                                           uiOutput("ui_fp_praat_sidebar")),
                           conditionalPanel("input.tabs_fp == 'F0 Extraction'",
                                            uiOutput("ui_fp_extraction")),
                           conditionalPanel("input.tabs_fp == 'F0 Correction'",
@@ -588,13 +590,13 @@ ui <- fluidPage(
                                                uiOutput("fp_start_guide"),
                                                uiOutput("fp_files_summary"),
                                                DT::dataTableOutput("fp_files_table")),
+                                      tabPanel("F0 Extraction with Praat",
+                                               uiOutput("fp_praat_script_content")),
                                       tabPanel("F0 Extraction",
                                                uiOutput("fp_extraction_guide"),
                                                uiOutput("fp_extraction_results")),
                                       tabPanel("F0 Correction",
-                                               uiOutput("fp_correction_guide")),
-                                      tabPanel("F0 extraction with Praat",
-                                               uiOutput("fp_praat_script_content"))
+                                               uiOutput("fp_correction_guide"))
                           )
                         )
                       )
