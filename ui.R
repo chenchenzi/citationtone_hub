@@ -234,6 +234,30 @@ ui <- fluidPage(
         var el = document.getElementById('loading-screen');
         if (el) { el.classList.add('fade-out'); setTimeout(function(){ el.remove(); }, 500); }
       });
+      // Scroll smoothly to a target element by id (used by server via
+      // session$sendCustomMessage('scroll_to_id', 'some_id')).
+      Shiny.addCustomMessageHandler('scroll_to_id', function(id) {
+        var el = document.getElementById(id);
+        if (el) el.scrollIntoView({behavior: 'smooth', block: 'start'});
+      });
+      // Programmatically populate the #uploadfile <input type=file> with a
+      // file fetched from a URL relative to www/. We construct a File +
+      // DataTransfer, assign to .files, and dispatch the change event so
+      // Shiny's fileInput binding picks it up exactly like a manual upload.
+      Shiny.addCustomMessageHandler('load_sample_csv', function(args) {
+        fetch(args.url)
+          .then(function(r) { return r.blob(); })
+          .then(function(blob) {
+            var file = new File([blob], args.filename, {type: 'text/csv'});
+            var dt = new DataTransfer();
+            dt.items.add(file);
+            var input = document.getElementById('uploadfile');
+            if (!input) return;
+            input.files = dt.files;
+            input.dispatchEvent(new Event('change', {bubbles: true}));
+          })
+          .catch(function(err) { console.error('Sample load failed:', err); });
+      });
     "))
   ),
   # Startup loading screen
@@ -869,8 +893,10 @@ ui <- fluidPage(
                                                  tags$p("Once uploaded, a preview of the first 10 rows will appear below.")
                                                ),
                                                uiOutput("instruction_text"),
-                                               h4(textOutput("preview_title")),
-                                               uiOutput("man_example"),
+                                               tags$div(id = "f0a-data-preview-anchor",
+                                                 h4(textOutput("preview_title")),
+                                                 uiOutput("man_example")
+                                               ),
                                                tags$script(HTML("
                                                  $(document).on('shiny:value', function(e) {
                                                    if (e.name === 'instruction_text') {

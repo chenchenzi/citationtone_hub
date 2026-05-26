@@ -52,29 +52,52 @@ theme_set(theme_bw(base_size = 16))
 
 server <- function(input, output, session) {
 
-  # Reactive dataset storage. Sources, in priority order:
-  #   1. An uploaded CSV (input$uploadfile)
-  #   2. The bundled sample data, loaded when "Try with sample data" was clicked
+  # Reactive dataset storage. Single source of truth: an uploaded CSV.
+  # The "Try with our sample data" button populates input$uploadfile via JS
+  # (see the load_sample_csv handler), so the sample path goes through the
+  # exact same code path as a manual upload.
   dataset <- reactive({
-    if (!is.null(input$uploadfile)) {
-      dat <- read.csv(input$uploadfile$datapath, stringsAsFactors = FALSE)
-    } else if (isTRUE(input$try_sample > 0)) {
-      dat <- read.csv("test/csvdata_sample.csv", stringsAsFactors = FALSE)
-    } else {
-      return(NULL)
-    }
-
+    if (is.null(input$uploadfile)) return(NULL)
+    dat <- read.csv(input$uploadfile$datapath, stringsAsFactors = FALSE)
     if (isTRUE(input$convert_to_factor)) {
       dat <- dat %>%
         dplyr::mutate(across(where(is.character), as.factor))
     }
-
     return(dat)
   })
 
-  # Set the dataset name to "csvdata_sample" when the sample is loaded.
+  # When the sample button is clicked, fire JS that fetches the bundled
+  # sample file and injects it into the #uploadfile <input>. This triggers
+  # Shiny's normal fileInput binding, which uploads + sets input$uploadfile
+  # just like a manual Browse... action.
+  sample_just_clicked <- reactiveVal(FALSE)
   observeEvent(input$try_sample, {
-    updateTextInput(session, "dataset_name", value = "csvdata_sample")
+    sample_just_clicked(TRUE)
+    session$sendCustomMessage("load_sample_csv", list(
+      url      = "dc21f0_test.csv",   # served from www/
+      filename = "dc21f0_test.csv"
+    ))
+  })
+
+  # When the upload arrives — only if it came from the sample-click flow —
+  # fire a confirmation toast and smooth-scroll to the Data Preview anchor.
+  observeEvent(input$uploadfile, {
+    req(input$uploadfile)
+    if (!isTRUE(sample_just_clicked())) return()
+    sample_just_clicked(FALSE)
+    ds <- dataset()
+    if (!is.null(ds)) {
+      n_rows <- nrow(ds)
+      n_tok  <- if ("token"   %in% names(ds)) length(unique(ds$token))   else NA
+      n_spk  <- if ("speaker" %in% names(ds)) length(unique(ds$speaker)) else NA
+      msg <- sprintf("Sample data loaded: %s rows", format(n_rows, big.mark = ","))
+      if (!is.na(n_tok)) msg <- paste0(msg, sprintf(", %d tokens", n_tok))
+      if (!is.na(n_spk)) msg <- paste0(msg, sprintf(", %d speakers", n_spk))
+      msg <- paste0(msg, ". ✅  Try the Visualise tab to plot the contours!")
+      showNotification(msg, type = "message", duration = 6,
+                       id = "f0a_sample_loaded")
+    }
+    session$sendCustomMessage("scroll_to_id", "f0a-data-preview-anchor")
   })
   
   # Shared storage for normalised dataset (written by Normalise tab, read by Model tab)

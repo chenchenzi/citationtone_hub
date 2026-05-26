@@ -46,7 +46,7 @@ normalised_ui <- function(input, output, session, dataset, normalised_data) {
         radioButtons("mean_calc_method", "Speaker Mean f0 Options",
                      choices = list("Simple average" = "simple",
                                     "Equally weighted by each tone" = "weighted"),
-                     selected = "simple"),
+                     selected = "weighted"),
         tags$hr(),
         radioButtons("normalisation_method", "F0 Normalisation Options",
                      choices = list("Semitone referenced on speaker mean" = "semitone",

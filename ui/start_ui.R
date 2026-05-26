@@ -9,41 +9,76 @@ output$ui_fileUpload <- renderUI({
     fileInput("uploadfile", "Choose a CSV File",
               multiple = FALSE,
               accept = c("text/csv", "text/comma-separated-values,text/plain", ".csv")),
-    # Pull the checkbox slightly closer to the file input above.
     tags$div(style = "margin-top: -8px;",
       checkboxInput("convert_to_factor",
                     "String variables as factors (recommended)", FALSE)
-    ),
-    # Generous gap before the sample-data action.
-    tags$div(style = "margin-top: 22px;",
-      actionButton("try_sample", "Try with our sample data", icon = icon("flask"))
-    ),
-    tags$div(style = "color: #888; font-size: 0.78rem; margin-top: 6px; font-style: italic;",
-      "The sample is just an example for you to know the data structure. ",
-      "Your CSV can have different or additional columns as long as it has columns for ",
-      "time, f0, tone category, speaker, and token."),
-    tags$div(style = "color: #888; font-size: 0.75rem; margin-top: 4px;",
-      "Source: a subset of the Changsha tone data from ",
-      tags$a(href = "https://doi.org/10.1515/phon-2025-0001",
-             target = "_blank", rel = "noopener noreferrer",
-             "Xu (2025)"),
-      "."
     )
   )
 
 })
 
 # Render instructional texts
+# IMPORTANT: do NOT depend on dataset() here — this renderUI builds the
+# "Try with our sample data" actionButton, and re-rendering it would
+# destroy + recreate the button, resetting input$try_sample back to 0
+# and immediately wiping out the data the user just loaded.
 output$instruction_text <- renderUI({
   tagList(
     h2("Welcome!"),
     p("Upload a CSV file to get started. Your file should have column headers and ideally contain
-      columns for time, f0, tone category, speaker ID, and token ID."),
-    if (is.null(dataset())) {
-      p("Once uploaded, a preview of the first 10 rows will appear below. ",
-        "Or click ", tags$em("Try with sample data"),
-        " in the sidebar to load an example.")
+      columns for time, f0, tone category, speaker ID, and token ID. ",
+      "Or click ", tags$em("Try with our sample data"),
+      " below to load an example."),
+    tags$hr(),
+    # --- What the data look like (with our sample as a concrete example) ---
+    h4("What the data look like"),
+    tags$p("Shinytone expects a CSV with at least the following columns ",
+           "(names can differ, but the content should be):"),
+    tags$ul(
+      tags$li(tags$strong("time"), ": time index within each token (e.g., in seconds)"),
+      tags$li(tags$strong("f0"),   ": fundamental frequency in Hz"),
+      tags$li(tags$strong("tone category"), ": tone label (e.g., T1, T2, ...)"),
+      tags$li(tags$strong("speaker"), ": speaker ID (for by-speaker normalisation)"),
+      tags$li(tags$strong("token"), ": unique recording / utterance ID")
+    ),
+    tags$p("Here's what our sample data looks like (first 5 rows):"),
+    {
+      sample_preview <- tryCatch(
+        utils::read.csv("test/dc21f0_test.csv",
+                        stringsAsFactors = FALSE,
+                        check.names = FALSE,
+                        nrows = 5),
+        error = function(e) NULL
+      )
+      if (is.null(sample_preview)) {
+        tags$div(style = "color: #888; font-style: italic;",
+                 "Sample preview unavailable.")
+      } else {
+        tags$div(style = "overflow-x: auto; margin-bottom: 8px;",
+          tags$table(class = "table table-sm table-bordered",
+            style = "font-size: 0.82rem; margin-bottom: 0;",
+            tags$thead(
+              tags$tr(lapply(names(sample_preview), function(c) tags$th(c)))
+            ),
+            tags$tbody(
+              lapply(seq_len(nrow(sample_preview)), function(i)
+                tags$tr(lapply(names(sample_preview),
+                               function(c) tags$td(as.character(sample_preview[i, c])))))
+            )
+          )
+        )
+      }
     },
+    tags$p(style = "color: #777; font-size: 0.82rem; font-style: italic;",
+      "Source: a subset of the Changsha tone data from ",
+      tags$a(href = "https://doi.org/10.1515/phon-2025-0001",
+             target = "_blank", rel = "noopener noreferrer",
+             "Xu (2025)"),
+      "."
+    ),
+    tags$div(style = "margin: 12px 0;",
+      actionButton("try_sample", "Try with our sample data", icon = icon("flask"))
+    ),
     tags$hr(),
     h4("What each tab does"),
     tags$ul(
@@ -99,14 +134,15 @@ output$preview_title <- renderText({
 
 # Display preview (first 10 rows), structure, or summary based on user selection
 output$man_example <- renderUI({
-  if (is.null(dataset())) {
+  ds <- dataset()
+  if (is.null(ds)) {
     return(tags$div(style = "color: #888; font-style: italic; margin: 8px 0;",
                     "No file uploaded yet."))
   }
 
   if (input$dman_preview == "preview") {
     tagList(
-      verbatimTextOutput("data_preview"),
+      DT::dataTableOutput("data_preview"),
       textOutput("row_count_info")  # Text for row count info
     )
   } else if (input$dman_preview == "str") {
@@ -117,9 +153,19 @@ output$man_example <- renderUI({
 })
 
 
-output$data_preview <- renderPrint({
+output$data_preview <- DT::renderDataTable({
   req(dataset())
-  head(dataset(), 10)
+  DT::datatable(
+    head(dataset(), 10),
+    rownames = FALSE,
+    options  = list(
+      dom         = "t",            # only the table (no search / pagination)
+      pageLength  = 10,
+      scrollX     = TRUE,           # horizontal scroll if many wide columns
+      ordering    = FALSE,
+      columnDefs  = list(list(className = "dt-center", targets = "_all"))
+    )
+  )
 })
 
 output$row_count_info <- renderText({
