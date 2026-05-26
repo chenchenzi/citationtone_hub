@@ -273,8 +273,57 @@ ui <- fluidPage(
                         )
                       ),
 
+                      # --- Sticky in-page navigation + sticky top navbar ---
+                      tags$style(HTML("
+                        /* Make the Shinytone top navbar sticky so tabs stay
+                           accessible while scrolling long pages. */
+                        .navbar {
+                          position: sticky !important;
+                          top: 0; z-index: 1030;
+                        }
+                        .about-toc {
+                          position: sticky;
+                          top: 56px;   /* sit right under the Shinytone navbar */
+                          z-index: 100;
+                          background: rgba(255, 255, 255, 0.95);
+                          backdrop-filter: blur(6px);
+                          -webkit-backdrop-filter: blur(6px);
+                          border-bottom: 1px solid #e0e8e3;
+                          padding: 10px 16px;
+                          text-align: center;
+                          font-size: 0.88rem;
+                          color: #6b7d75;
+                          margin-bottom: 4px;
+                        }
+                        .about-toc a {
+                          color: #2c5f4f; font-weight: 600;
+                          text-decoration: none;
+                          padding: 4px 10px; border-radius: 4px;
+                          transition: background 0.12s, color 0.12s;
+                        }
+                        .about-toc a:hover {
+                          background: #e8f5f0; color: #2c5f4f;
+                          text-decoration: none;
+                        }
+                        .about-toc .sep { color: #c8d4cf; padding: 0 2px; }
+                        /* Offset scroll target so headings don't slide under
+                           the Shinytone navbar + sticky TOC when jumped to. */
+                        #about-sec-features, #about-sec-workflows, #about-sec-faq {
+                          scroll-margin-top: 130px;
+                        }
+                        html { scroll-behavior: smooth; }
+                      ")),
+                      tags$div(class = "about-toc",
+                        tags$a(href = "#about-sec-features",  "What you can do"),
+                        tags$span(class = "sep", " · "),
+                        tags$a(href = "#about-sec-workflows", "Recommended Workflows"),
+                        tags$span(class = "sep", " · "),
+                        tags$a(href = "#about-sec-faq",        "FAQ")
+                      ),
+
                       # --- Section break + landing heading ---
-                      tags$div(style = "max-width: 900px; margin: 40px auto 8px auto; text-align: center; padding: 0 15px;",
+                      tags$div(id = "about-sec-features",
+                        style = "max-width: 900px; margin: 40px auto 8px auto; text-align: center; padding: 0 15px;",
                         # Short teal accent bar (visual divider)
                         tags$div(style = "width: 56px; height: 3px; background: #78c2ad; margin: 0 auto 24px auto; border-radius: 2px;"),
                         tags$h2(style = "color: #2c5f4f; margin: 0 0 8px 0; font-weight: 700;",
@@ -374,7 +423,8 @@ ui <- fluidPage(
                       ),
 
                       # --- Typical workflows (visual data-journey diagram) ---
-                      tags$div(style = "max-width: 1080px; margin: 56px auto 8px auto; text-align: center; padding: 0 15px;",
+                      tags$div(id = "about-sec-workflows",
+                        style = "max-width: 1080px; margin: 56px auto 8px auto; text-align: center; padding: 0 15px;",
                         tags$div(style = "width: 56px; height: 3px; background: #78c2ad; margin: 0 auto 24px auto; border-radius: 2px;"),
                         tags$h2(style = "color: #2c5f4f; margin: 0 0 8px 0; font-weight: 700;",
                                 "Recommended Workflows"),
@@ -688,7 +738,8 @@ ui <- fluidPage(
                       ),
 
                       # --- FAQ ---
-                      tags$div(style = "max-width: 900px; margin: 48px auto 0 auto; text-align: center; padding: 0 15px;",
+                      tags$div(id = "about-sec-faq",
+                        style = "max-width: 900px; margin: 48px auto 0 auto; text-align: center; padding: 0 15px;",
                         tags$div(style = "width: 56px; height: 3px; background: #78c2ad; margin: 0 auto 24px auto; border-radius: 2px;"),
                         tags$h2(style = "color: #2c5f4f; margin: 0 0 8px 0; font-weight: 700;",
                                 "Frequently Asked Questions")
