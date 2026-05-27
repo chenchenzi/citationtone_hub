@@ -237,333 +237,97 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
         input$gamm_speaker_var, input$gamm_tone_var,
         input$gamm_f0_var, input$gamm_item_var)
 
-    # Show progress notification
     progress_id <- showNotification(
-      tagList(icon("spinner", class = "fa-spin"), " Fitting GAMM model... This may take a while."),
+      tagList(icon("spinner", class = "fa-spin"),
+              " Fitting GAMM model... This may take a while."),
       duration = NULL, closeButton = FALSE, type = "message"
     )
     on.exit(removeNotification(progress_id), add = TRUE)
 
-    data        <- active_data()
-    token_var   <- input$gamm_token_var
-    time_var    <- input$gamm_time_var
-    speaker_var <- input$gamm_speaker_var
-    tone_var    <- input$gamm_tone_var
-    f0_var      <- input$gamm_f0_var
-    item_var    <- input$gamm_item_var
-    k_val       <- as.integer(input$gamm_k)
-    bs_type     <- input$gamm_bs
-    ri_speaker  <- input$gamm_ri_speaker
-    ri_item     <- input$gamm_ri_item
-    rs_type     <- input$gamm_rs_type
-    use_ar1     <- input$gamm_ar1
-    smooth_type <- input$gamm_smooth_type
-    dur_var     <- input$gamm_dur_var
-    use_dur     <- !is.null(dur_var) && dur_var != "none"
-
-    # Reset state
     gamm_convergence_warning(NULL)
     gamm_rho_val(NULL)
 
-    # --- Data preparation ---
-    # Normalise time to [0, 1] within each token
-    dat <- data %>%
-      group_by(.data[[token_var]]) %>%
-      mutate(
-        .time_norm = {
-          t_raw <- .data[[time_var]]
-          t_min <- min(t_raw, na.rm = TRUE)
-          t_max <- max(t_raw, na.rm = TRUE)
-          if (t_max == t_min) rep(0.5, n()) else (t_raw - t_min) / (t_max - t_min)
-        }
-      ) %>%
-      ungroup()
+    # Map the radio-button random-smooth strategy onto the package API.
+    rs_type    <- input$gamm_rs_type
+    rs_for_pkg <- if (rs_type %in% c("speaker", "speaker_tone",
+                                     "speaker_by_tone", "ref_diff"))
+                    rs_type
+                  else
+                    "none"
 
-    # Ensure factors and internal column names
-    dat$.f0 <- dat[[f0_var]]
-    dat$.tone <- as.factor(dat[[tone_var]])
-    dat$.speaker <- as.factor(dat[[speaker_var]])
-    dat$.item <- as.factor(dat[[item_var]])
-    dat$.token <- as.factor(dat[[token_var]])
+    dur_var <- input$gamm_dur_var
+    use_dur <- !is.null(dur_var) && dur_var != "none"
 
-    # Duration variable
-    if (use_dur) {
-      dat$.duration <- as.numeric(dat[[dur_var]])
-    }
-
-    # Order by token then time (needed for AR1)
-    dat <- dat %>% arrange(.token, .time_norm)
-
-    # Create start_event column for AR1
-    dat <- dat %>%
-      group_by(.token) %>%
-      mutate(.start_event = row_number() == 1) %>%
-      ungroup()
-
-    # Convert to data.frame (bam with discrete=TRUE prefers data.frame)
-    dat <- as.data.frame(dat)
-
-    # Ordered factor for difference smooths
-    # Must be set AFTER dplyr operations which can strip contrasts
-    # Use ordered() with explicit levels — as.ordered() can drop unused levels
-    if (smooth_type == "difference") {
-      dat$.tone_ord <- ordered(dat$.tone, levels = levels(dat$.tone))
-      contrasts(dat$.tone_ord) <- "contr.treatment"
-    }
-
-    # Interaction factor for speaker × tone random smooths (strategy #3)
-    if (rs_type == "speaker_tone") {
-      dat$.speaker_tone <- interaction(dat$.speaker, dat$.tone, drop = TRUE)
-    }
-
-    # --- Build formula dynamically ---
-    if (smooth_type == "separate") {
-      # Separate smooths: s(time, by = tone)
-      smooth_term <- paste0("s(.time_norm, by = .tone, k = ", k_val, ', bs = "', bs_type, '")')
-      fixed_part <- paste0(".f0 ~ .tone + ", smooth_term)
-    } else {
-      # Difference smooths: s(time) + s(time, by = tone_ord)
-      ref_smooth <- paste0("s(.time_norm, k = ", k_val, ', bs = "', bs_type, '")')
-      diff_smooth <- paste0("s(.time_norm, by = .tone_ord, k = ", k_val, ', bs = "', bs_type, '")')
-      fixed_part <- paste0(".f0 ~ .tone_ord + ", ref_smooth, " + ", diff_smooth)
-    }
-
-    # Duration smooth
-    dur_term <- ""
-    if (use_dur) {
-      dur_term <- " + s(.duration)"
-    }
-
-    # Random effects
-    random_parts <- c()
-    # Speaker random smooths (strategies from Sóskuthy 2021)
-    if (rs_type == "speaker") {
-      # Strategy 1: basic random smooth by speaker
-      random_parts <- c(random_parts,
-        paste0("s(.time_norm, .speaker, bs = \"fs\", m = 1, k = ", k_val, ")"))
-    } else if (rs_type == "speaker_tone") {
-      # Strategy 3: item × effect — separate smooth per speaker-tone combo
-      random_parts <- c(random_parts,
-        paste0("s(.time_norm, .speaker_tone, bs = \"fs\", m = 1, k = ", k_val, ")"))
-    } else if (rs_type == "speaker_by_tone") {
-      # Strategy 4: item-by-effect — random smooth by speaker, separately per tone
-      if (smooth_type == "separate") {
-        random_parts <- c(random_parts,
-          paste0("s(.time_norm, .speaker, by = .tone, bs = \"fs\", m = 1, k = ", k_val, ")"))
-      } else {
-        random_parts <- c(random_parts,
-          paste0("s(.time_norm, .speaker, by = .tone, bs = \"fs\", m = 1, k = ", k_val, ")"))
-      }
-    } else if (rs_type == "ref_diff") {
-      # Strategy 5: reference + difference random smooths
-      random_parts <- c(random_parts,
-        paste0("s(.time_norm, .speaker, bs = \"fs\", m = 1, k = ", k_val, ")"))
-      if (smooth_type == "difference") {
-        random_parts <- c(random_parts,
-          paste0("s(.time_norm, .speaker, by = .tone_ord, bs = \"fs\", m = 1, k = ", k_val, ")"))
-      } else {
-        random_parts <- c(random_parts,
-          paste0("s(.time_norm, .speaker, by = .tone, bs = \"fs\", m = 1, k = ", k_val, ")"))
-      }
-    } else if (ri_speaker) {
-      # No random smooth — just random intercept
-      random_parts <- c(random_parts, 's(.speaker, bs = "re")')
-    }
-    if (ri_item) {
-      random_parts <- c(random_parts, 's(.item, bs = "re")')
-    }
-
-    formula_str <- paste0(fixed_part, dur_term)
-    if (length(random_parts) > 0) {
-      formula_str <- paste0(formula_str, " + ", paste(random_parts, collapse = " + "))
-    }
-
-    # --- Build user-readable display formula ---
-    if (smooth_type == "separate") {
-      smooth_display <- paste0("s(", time_var, ", by = ", tone_var, ", k = ", k_val, ', bs = "', bs_type, '")')
-      display_formula <- paste0(f0_var, " ~ ", tone_var, " + ", smooth_display)
-    } else {
-      ref_display <- paste0("s(", time_var, ", k = ", k_val, ', bs = "', bs_type, '")')
-      diff_display <- paste0("s(", time_var, ", by = ", tone_var, ".ord, k = ", k_val, ', bs = "', bs_type, '")')
-      display_formula <- paste0(f0_var, " ~ ", tone_var, ".ord + ", ref_display, " + ", diff_display)
-    }
-    if (use_dur) {
-      display_formula <- paste0(display_formula, " + s(", dur_var, ")")
-    }
-    random_display <- c()
-    tone_display <- if (smooth_type == "difference") paste0(tone_var, ".ord") else tone_var
-    if (rs_type == "speaker") {
-      random_display <- c(random_display,
-        paste0("s(", time_var, ", ", speaker_var, ', bs = "fs", m = 1, k = ', k_val, ")"))
-    } else if (rs_type == "speaker_tone") {
-      random_display <- c(random_display,
-        paste0("s(", time_var, ", ", speaker_var, ".", tone_var, ', bs = "fs", m = 1, k = ', k_val, ")"))
-    } else if (rs_type == "speaker_by_tone") {
-      random_display <- c(random_display,
-        paste0("s(", time_var, ", ", speaker_var, ", by = ", tone_display, ', bs = "fs", m = 1, k = ', k_val, ")"))
-    } else if (rs_type == "ref_diff") {
-      random_display <- c(random_display,
-        paste0("s(", time_var, ", ", speaker_var, ', bs = "fs", m = 1, k = ', k_val, ")"))
-      random_display <- c(random_display,
-        paste0("s(", time_var, ", ", speaker_var, ", by = ", tone_display, ', bs = "fs", m = 1, k = ', k_val, ")"))
-    } else if (ri_speaker) {
-      random_display <- c(random_display, paste0('s(', speaker_var, ', bs = "re")'))
-    }
-    if (ri_item) {
-      random_display <- c(random_display, paste0('s(', item_var, ', bs = "re")'))
-    }
-    if (length(random_display) > 0) {
-      display_formula <- paste0(display_formula, " + ",
-                                paste(random_display, collapse = " + "))
-    }
-    gamm_formula_str(display_formula)
-
-    model_formula <- as.formula(formula_str)
-
-    # --- Fit model ---
-    warn_msg <- NULL
-    model <- tryCatch(
-      withCallingHandlers(
-        mgcv::bam(model_formula, data = dat, discrete = TRUE),
-        warning = function(w) {
-          warn_msg <<- conditionMessage(w)
-          invokeRestart("muffleWarning")
-        }
+    # All preparation, formula construction, fitting (and optional AR1
+    # refit) lives in the package function fit_gamm() (R/gamm.R).
+    fit <- tryCatch(
+      fit_gamm(
+        active_data(),
+        f0       = input$gamm_f0_var,
+        time     = input$gamm_time_var,
+        token    = input$gamm_token_var,
+        tone     = input$gamm_tone_var,
+        speaker  = input$gamm_speaker_var,
+        item     = input$gamm_item_var,
+        duration = if (use_dur) dur_var else NULL,
+        k                        = as.integer(input$gamm_k),
+        bs                       = input$gamm_bs,
+        smooth_type              = input$gamm_smooth_type,
+        random_intercept_speaker = isTRUE(input$gamm_ri_speaker),
+        random_intercept_item    = isTRUE(input$gamm_ri_item),
+        random_smooth            = rs_for_pkg,
+        use_ar1                  = isTRUE(input$gamm_ar1)
       ),
       error = function(e) {
         showNotification(paste("Model fitting error:", e$message),
-                        type = "error", duration = 10)
-        return(NULL)
+                         type = "error", duration = 10)
+        NULL
       }
     )
+    if (is.null(fit)) return()
 
-    if (is.null(model)) return()
+    model       <- fit$model
+    tone_var    <- input$gamm_tone_var
+    speaker_var <- input$gamm_speaker_var
+    item_var    <- input$gamm_item_var
+    time_var    <- input$gamm_time_var
 
-    # --- AR1 refit if requested ---
-    if (use_ar1) {
-      rho <- acf(resid(model), plot = FALSE)$acf[2]
-      gamm_rho_val(rho)
-
-      model <- tryCatch(
-        withCallingHandlers(
-          mgcv::bam(model_formula, data = dat,
-                    rho = rho, AR.start = dat$.start_event, discrete = TRUE),
-          warning = function(w) {
-            warn_msg <<- conditionMessage(w)
-            invokeRestart("muffleWarning")
-          }
-        ),
-        error = function(e) {
-          showNotification(paste("AR1 refit error:", e$message),
-                          type = "error", duration = 10)
-          return(NULL)
-        }
-      )
-      if (is.null(model)) return()
+    if (!is.null(fit$convergence_warning)) {
+      gamm_convergence_warning(fit$convergence_warning)
     }
+    if (!is.null(fit$rho)) gamm_rho_val(fit$rho)
 
-    if (!is.null(warn_msg)) {
-      gamm_convergence_warning(warn_msg)
-    }
-
-    # Store model
+    gamm_formula_str(fit$formula_str)
     gamm_model(model)
 
     # --- Extract summary tables ---
+    # Name-cleaning back to user's column names is UI-specific so it stays
+    # here rather than in the package function.
     model_sum <- summary(model)
-
-    # Parametric coefficients table
     p_table <- as.data.frame(model_sum$p.table)
     p_table <- tibble::rownames_to_column(p_table, var = "Term")
-    # Clean up term names
     p_table$Term <- gsub("^\\.tone_ord", paste0(tone_var, ".ord"), p_table$Term)
-    p_table$Term <- gsub("^\\.tone", paste0(tone_var, ""), p_table$Term)
+    p_table$Term <- gsub("^\\.tone",     tone_var,                 p_table$Term)
 
-    # Smooth terms table
     s_table <- as.data.frame(model_sum$s.table)
     s_table <- tibble::rownames_to_column(s_table, var = "Smooth")
-    # Clean up smooth names for display
-    s_table$Smooth <- gsub("\\.time_norm", time_var, s_table$Smooth)
-    s_table$Smooth <- gsub("\\.tone_ord", paste0(tone_var, ".ord"), s_table$Smooth)
-    s_table$Smooth <- gsub("\\.tone", tone_var, s_table$Smooth)
-    s_table$Smooth <- gsub("\\.speaker_tone", paste0(speaker_var, ".", tone_var), s_table$Smooth)
-    s_table$Smooth <- gsub("\\.speaker", speaker_var, s_table$Smooth)
-    s_table$Smooth <- gsub("\\.item", item_var, s_table$Smooth)
-    s_table$Smooth <- gsub("\\.duration", dur_var, s_table$Smooth)
+    s_table$Smooth <- gsub("\\.time_norm",    time_var,                              s_table$Smooth)
+    s_table$Smooth <- gsub("\\.tone_ord",     paste0(tone_var, ".ord"),              s_table$Smooth)
+    s_table$Smooth <- gsub("\\.tone",         tone_var,                              s_table$Smooth)
+    s_table$Smooth <- gsub("\\.speaker_tone", paste0(speaker_var, ".", tone_var),    s_table$Smooth)
+    s_table$Smooth <- gsub("\\.speaker",      speaker_var,                           s_table$Smooth)
+    s_table$Smooth <- gsub("\\.item",         item_var,                              s_table$Smooth)
+    if (use_dur) {
+      s_table$Smooth <- gsub("\\.duration", dur_var, s_table$Smooth)
+    }
 
     gamm_summary_data(list(p_table = p_table, s_table = s_table))
 
-    # --- Prepare plot data: predicted smooth curves by tone ---
-    # Use the original .tone factor for tone levels (works for both approaches)
-    tone_levels <- levels(dat$.tone)
-    time_seq <- seq(0, 1, length.out = 200)
-
-    # Reference levels for random effect columns
-    ref_speaker <- levels(dat$.speaker)[1]
-    ref_item <- levels(dat$.item)[1]
-
-    # Identify random effect terms to exclude from prediction
-    exclude_terms <- c()
-    if (rs_type == "speaker") {
-      exclude_terms <- c(exclude_terms, "s(.time_norm,.speaker)")
-    } else if (rs_type == "speaker_tone") {
-      exclude_terms <- c(exclude_terms, "s(.time_norm,.speaker_tone)")
-    } else if (rs_type == "speaker_by_tone") {
-      exclude_terms <- c(exclude_terms, "s(.time_norm,.speaker)")
-    } else if (rs_type == "ref_diff") {
-      exclude_terms <- c(exclude_terms, "s(.time_norm,.speaker)")
-    } else if (ri_speaker) {
-      exclude_terms <- c(exclude_terms, "s(.speaker)")
-    }
-    if (ri_item) exclude_terms <- c(exclude_terms, "s(.item)")
-    # Also exclude duration smooth from per-tone predictions (use mean duration)
-    if (use_dur) exclude_terms <- c(exclude_terms, "s(.duration)")
-
-    plot_rows <- list()
-    for (tone in tone_levels) {
-      nd <- data.frame(
-        .time_norm = time_seq,
-        .speaker = factor(rep(ref_speaker, length(time_seq)), levels = levels(dat$.speaker)),
-        .item = factor(rep(ref_item, length(time_seq)), levels = levels(dat$.item)),
-        stringsAsFactors = FALSE
-      )
-      if (smooth_type == "separate") {
-        nd$.tone <- factor(rep(tone, length(time_seq)), levels = tone_levels)
-      } else {
-        # Use ordered() with explicit levels — as.ordered() drops unused levels
-        nd$.tone_ord <- ordered(rep(tone, length(time_seq)), levels = tone_levels)
-        contrasts(nd$.tone_ord) <- "contr.treatment"
-        # Strategy #4 random smooth uses by = .tone (regular factor), so add it to newdata
-        if (rs_type == "speaker_by_tone") {
-          nd$.tone <- factor(rep(tone, length(time_seq)), levels = tone_levels)
-        }
-      }
-      # Interaction factor for speaker × tone (strategy #3)
-      if (rs_type == "speaker_tone") {
-        nd$.speaker_tone <- interaction(nd$.speaker,
-          factor(rep(tone, length(time_seq)), levels = tone_levels), drop = FALSE)
-        nd$.speaker_tone <- factor(nd$.speaker_tone, levels = levels(dat$.speaker_tone))
-      }
-      if (use_dur) {
-        nd$.duration <- rep(mean(dat$.duration, na.rm = TRUE), length(time_seq))
-      }
-      preds <- predict(model, newdata = nd, type = "response",
-                       exclude = exclude_terms, se.fit = TRUE)
-      plot_rows[[length(plot_rows) + 1]] <- data.frame(
-        time = time_seq,
-        f0_predicted = preds$fit,
-        se = preds$se.fit,
-        tone = tone,
-        stringsAsFactors = FALSE
-      )
-    }
-
-    gamm_plot_data(do.call(rbind, plot_rows))
-
-    # Export to shared prediction store for Summarise tab
-    if (!is.null(gamm_pred_data)) {
-      gamm_pred_data(do.call(rbind, plot_rows))
-    }
+    # Population-level per-tone predictions, computed by predict_gamm()
+    # which knows the smooth_type / random_smooth / duration setup.
+    plot_df <- predict_gamm(fit, n = 200)
+    gamm_plot_data(plot_df)
+    if (!is.null(gamm_pred_data)) gamm_pred_data(plot_df)
   })
 
   # --- Summary box ---

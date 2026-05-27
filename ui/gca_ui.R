@@ -163,8 +163,7 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
         input$gca_speaker_var, input$gca_tone_var,
         input$gca_f0_var)
 
-    # Progress notification — GCA can be slow on large datasets with random
-    # slopes; show a spinner until the observer returns.
+    # Progress notification — GCA can be slow on large datasets.
     progress_id <- showNotification(
       tagList(icon("spinner", class = "fa-spin"),
               " Fitting GCA model... This may take a while."),
@@ -172,204 +171,92 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
     )
     on.exit(removeNotification(progress_id), add = TRUE)
 
-    data        <- active_data()
-    token_var   <- input$gca_token_var
-    time_var    <- input$gca_time_var
-    speaker_var <- input$gca_speaker_var
-    tone_var    <- input$gca_tone_var
-    f0_var      <- input$gca_f0_var
-    degree      <- as.integer(input$gca_degree)
-    item_var    <- input$gca_item_var
-    ri_speaker  <- input$gca_ri_speaker
-    ri_item     <- input$gca_ri_item
-    rs_speaker  <- input$gca_rs_speaker
-    rs_item     <- input$gca_rs_item
-
-    # Reset convergence warning
+    # Reset convergence warning before refit.
     gca_convergence_warning(NULL)
 
-    # Prepare data: normalise time to [0, 1] within each token
-    dat <- data %>%
-      group_by(.data[[token_var]]) %>%
-      mutate(
-        .time_norm = {
-          t_raw <- .data[[time_var]]
-          t_min <- min(t_raw, na.rm = TRUE)
-          t_max <- max(t_raw, na.rm = TRUE)
-          if (t_max == t_min) rep(0.5, n()) else (t_raw - t_min) / (t_max - t_min)
-        }
-      ) %>%
-      ungroup()
-
-    # Generate orthogonal polynomial terms (save coefs to reuse at prediction time)
-    poly_matrix <- poly(dat$.time_norm, degree)
-    poly_coefs  <- attr(poly_matrix, "coefs")
-    ot_names <- paste0("ot", 1:degree)
-    for (i in 1:degree) {
-      dat[[ot_names[i]]] <- poly_matrix[, i]
-    }
-
-    # Rename columns for formula building
-    dat$.f0 <- dat[[f0_var]]
-    dat$.tone <- as.factor(dat[[tone_var]])
-    dat$.speaker <- as.factor(dat[[speaker_var]])
-    dat$.item <- as.factor(dat[[item_var]])
-
-    # Build formula
-    ot_terms <- paste(ot_names, collapse = " + ")
-    fixed_part <- paste0(".f0 ~ (", ot_terms, ") * .tone")
-
-    random_parts <- c()
-    # Speaker: slopes include intercept; intercept-only if no slopes
-    if (rs_speaker) {
-      random_parts <- c(random_parts, paste0("(1 + ", ot_terms, " | .speaker)"))
-    } else if (ri_speaker) {
-      random_parts <- c(random_parts, "(1 | .speaker)")
-    }
-    # Item: slopes include intercept; intercept-only if no slopes
-    if (rs_item) {
-      random_parts <- c(random_parts, paste0("(1 + ", ot_terms, " | .item)"))
-    } else if (ri_item) {
-      random_parts <- c(random_parts, "(1 | .item)")
-    }
-
-    if (length(random_parts) == 0) {
-      # If no random effects selected, use at least an item intercept
-      random_parts <- "(1 | .item)"
-    }
-
-    formula_str <- paste0(fixed_part, " + ", paste(random_parts, collapse = " + "))
-    # Store a user-readable version of the formula (with original variable names)
-    ot_terms_display <- paste(ot_names, collapse = " + ")
-    random_display <- c()
-    if (rs_speaker) {
-      random_display <- c(random_display, paste0("(1 + ", ot_terms_display, " | ", speaker_var, ")"))
-    } else if (ri_speaker) {
-      random_display <- c(random_display, paste0("(1 | ", speaker_var, ")"))
-    }
-    if (rs_item) {
-      random_display <- c(random_display, paste0("(1 + ", ot_terms_display, " | ", item_var, ")"))
-    } else if (ri_item) {
-      random_display <- c(random_display, paste0("(1 | ", item_var, ")"))
-    }
-    if (length(random_display) == 0) random_display <- paste0("(1 | ", item_var, ")")
-    display_formula <- paste0(f0_var, " ~ (", ot_terms_display, ") * ", tone_var,
-                              " + ", paste(random_display, collapse = " + "))
-    gca_formula_str(display_formula)
-
-    model_formula <- as.formula(formula_str)
-
-    # Fit model with convergence warning capture
-    warn_msg <- NULL
-    model <- tryCatch(
-      withCallingHandlers(
-        lme4::lmer(model_formula, data = dat, REML = TRUE),
-        warning = function(w) {
-          warn_msg <<- conditionMessage(w)
-          invokeRestart("muffleWarning")
-        }
+    # All model preparation, formula construction, and fitting lives in the
+    # package function fit_gca() (R/gca.R). The Shiny observer only owns
+    # the UI-coupled bits: notifications, the display formula, name-cleaning
+    # for the fixed-effects table, per-tone estimates, and pairwise tests.
+    fit <- tryCatch(
+      fit_gca(
+        active_data(),
+        f0      = input$gca_f0_var,
+        time    = input$gca_time_var,
+        token   = input$gca_token_var,
+        tone    = input$gca_tone_var,
+        speaker = input$gca_speaker_var,
+        item    = input$gca_item_var,
+        degree                    = as.integer(input$gca_degree),
+        random_intercept_speaker  = isTRUE(input$gca_ri_speaker),
+        random_intercept_item     = isTRUE(input$gca_ri_item),
+        random_slope_speaker      = isTRUE(input$gca_rs_speaker),
+        random_slope_item         = isTRUE(input$gca_rs_item)
       ),
       error = function(e) {
         showNotification(paste("Model fitting error:", e$message),
-                        type = "error", duration = 10)
-        return(NULL)
+                         type = "error", duration = 10)
+        NULL
       }
     )
+    if (is.null(fit)) return()
 
-    if (is.null(model)) return()
+    model    <- fit$model
+    degree   <- fit$degree
+    ot_names <- paste0("ot", seq_len(degree))
+    tone_var <- input$gca_tone_var
+    f0_var   <- input$gca_f0_var
 
-    if (!is.null(warn_msg)) {
-      gca_convergence_warning(warn_msg)
+    if (!is.null(fit$convergence_warning)) {
+      gca_convergence_warning(fit$convergence_warning)
     }
-
-    # Store model
     gca_model(model)
+    gca_formula_str(fit$formula_str)
 
-    # Extract fixed effects table
+    # Fixed-effects table with internal '.tone'/'.f0' renamed back to the
+    # user's chosen column names for display.
     fe_summary <- as.data.frame(summary(model)$coefficients)
     fe_summary <- tibble::rownames_to_column(fe_summary, var = "Term")
-
-    # Clean up term names: replace internal names with user's variable names
     fe_summary$Term <- gsub("^\\.tone", paste0(tone_var, ""), fe_summary$Term)
-    fe_summary$Term <- gsub("^\\.f0$", f0_var, fe_summary$Term)
-
+    fe_summary$Term <- gsub("^\\.f0$",  f0_var,               fe_summary$Term)
     gca_fixef_table(fe_summary)
 
-    # Get fixed effect coefficients
+    # Per-tone polynomial coefficients (intercept + ot terms for each tone).
     fe <- lme4::fixef(model)
-
-    # Compute per-tone estimates (intercept + ot terms for each tone level)
-    tone_levels <- levels(dat$.tone)
+    tone_levels <- levels(model@frame$.tone)
     tone_est <- data.frame(Tone = tone_levels, stringsAsFactors = FALSE)
     for (tone in tone_levels) {
-      # Intercept for this tone
-      intercept_val <- fe["(Intercept)"]
+      intercept_val  <- fe["(Intercept)"]
       tone_coef_name <- paste0(".tone", tone)
       if (tone_coef_name %in% names(fe)) {
         intercept_val <- intercept_val + fe[tone_coef_name]
       }
       tone_est[tone_est$Tone == tone, "Intercept"] <- intercept_val
-      # ot terms for this tone
-      for (k in 1:degree) {
+      for (k in seq_len(degree)) {
         ot_name <- paste0("ot", k)
-        ot_val <- fe[ot_name]
-        int_name <- paste0("ot", k, ":.tone", tone)
-        int_name2 <- paste0(".tone", tone, ":ot", k)
-        if (int_name %in% names(fe)) {
-          ot_val <- ot_val + fe[int_name]
-        } else if (int_name2 %in% names(fe)) {
-          ot_val <- ot_val + fe[int_name2]
-        }
+        ot_val  <- fe[ot_name]
+        n1 <- paste0("ot", k, ":.tone", tone)
+        n2 <- paste0(".tone", tone, ":ot", k)
+        if      (n1 %in% names(fe)) ot_val <- ot_val + fe[n1]
+        else if (n2 %in% names(fe)) ot_val <- ot_val + fe[n2]
         tone_est[tone_est$Tone == tone, ot_name] <- ot_val
       }
     }
     gca_tone_estimates(tone_est)
 
-    # Prepare plot data: predicted values from fixed effects by tone.
-    # Build a (time x tone) grid, recompute the orthogonal polynomial basis
-    # using the SAME coefs as the fitted model, then predict via lme4 with
-    # re.form = NA (population-average curve, ignores random effects).
-    time_seq <- seq(0, 1, length.out = 100)
-    tone_levels <- levels(dat$.tone)
-    newdata <- expand.grid(.time_norm = time_seq, .tone = tone_levels,
-                           stringsAsFactors = FALSE)
-    newdata$.tone <- factor(newdata$.tone, levels = tone_levels)
-
-    poly_pred <- poly(newdata$.time_norm, degree, coefs = poly_coefs)
-    for (k in 1:degree) {
-      newdata[[paste0("ot", k)]] <- poly_pred[, k]
-    }
-    # lme4 needs the grouping-factor columns even with re.form = NA;
-    # values are ignored once random effects are dropped.
-    newdata$.speaker <- dat$.speaker[1]
-    newdata$.item    <- dat$.item[1]
-
-    newdata$f0_predicted <- predict(model, newdata = newdata, re.form = NA,
-                                    allow.new.levels = TRUE)
-
-    plot_df <- data.frame(
-      time = newdata$.time_norm,
-      f0_predicted = newdata$f0_predicted,
-      tone = as.character(newdata$.tone),
-      stringsAsFactors = FALSE
-    )
-
+    # Population-level predictions for the plot, computed via the package
+    # helper that knows about the cached poly() coefs.
+    plot_df <- predict_gca(fit, n = 100)
     gca_plot_data(plot_df)
+    if (!is.null(gca_pred_data)) gca_pred_data(plot_df)
 
-    # Export to shared prediction store for Summarise tab
-    if (!is.null(gca_pred_data)) {
-      gca_pred_data(plot_df)
-    }
-
-    # Pairwise tone comparisons (intercept-level + per polynomial slope)
+    # Pairwise tone comparisons (intercept-level + per polynomial slope).
     pw_tables <- list()
-    # Intercept-level: marginal means of tone with poly terms held at 0
     pw_tables$Intercept <- tryCatch({
       at_list <- setNames(as.list(rep(0, degree)), ot_names)
       emm <- emmeans::emmeans(model, ~ .tone, at = at_list)
       as.data.frame(pairs(emm, adjust = "tukey"))
     }, error = function(e) NULL)
-    # Per polynomial slope: emtrends
     for (k in seq_len(degree)) {
       otn <- paste0("ot", k)
       pw_tables[[otn]] <- tryCatch({
