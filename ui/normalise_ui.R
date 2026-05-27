@@ -75,45 +75,23 @@ normalised_ui <- function(input, output, session, dataset, normalised_data) {
     req(dataset())
     req(input$f0_var, input$speaker_var, input$tone_var)
 
-    data <- dataset()
-
-    # Calculate the speaker mean
-    if (input$mean_calc_method == "simple") {
-      speaker_means <- data %>%
-        group_by(.data[[input$speaker_var]]) %>%
-        summarise(speaker_mean = mean(.data[[input$f0_var]], na.rm = TRUE), .groups = "drop")
-    } else if (input$mean_calc_method == "weighted") {
-      speaker_means <- data %>%
-        group_by(.data[[input$speaker_var]], .data[[input$tone_var]]) %>%
-        summarise(tone_mean = mean(.data[[input$f0_var]], na.rm = TRUE), .groups = "drop") %>%
-        group_by(.data[[input$speaker_var]]) %>%
-        summarise(speaker_mean = mean(tone_mean, na.rm = TRUE), .groups = "drop")
-    }
-
-    # Append the speaker mean
-    data <- data %>%
-      left_join(speaker_means, by = input$speaker_var)
-
-    # Add normalised f0 — column name reflects the chosen method:
-    #   semitone → f0_st        (semitones above/below speaker mean)
-    #   z-score  → f0_zscore    (by-speaker z-score)
-    norm_col <- if (input$normalisation_method == "zscore") "f0_zscore" else "f0_st"
-
-    if (input$normalisation_method == "zscore") {
-      data <- data %>%
-        group_by(.data[[input$speaker_var]]) %>%
-        mutate(!!norm_col := (.data[[input$f0_var]] - speaker_mean) /
-                              sd(.data[[input$f0_var]], na.rm = TRUE)) %>%
-        ungroup()
-    } else if (input$normalisation_method == "semitone") {
-      data <- data %>%
-        mutate(!!norm_col := 12 * log2(.data[[input$f0_var]] / speaker_mean))
-    }
+    # All the dplyr work lives in the package function normalise_f0()
+    # (R/normalise.R), so the same logic is also usable from scripts /
+    # RMarkdown and has unit tests in tests/testthat/test-normalise.R.
+    data <- normalise_f0(
+      dataset(),
+      f0          = input$f0_var,
+      speaker     = input$speaker_var,
+      tone        = input$tone_var,
+      method      = input$normalisation_method,
+      mean_method = input$mean_calc_method
+    )
 
     # Store the full dataset with normalised columns (for other tabs)
     normalised_data(data)
 
-    # Store the display subset (for DT table and download)
+    # Store the display subset (for the DT table and download handler)
+    norm_col <- if (input$normalisation_method == "zscore") "f0_zscore" else "f0_st"
     display <- data %>%
       select(all_of(input$f0_var), all_of(input$speaker_var),
              all_of(input$tone_var), speaker_mean, all_of(norm_col))

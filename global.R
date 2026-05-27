@@ -30,3 +30,15 @@ var_patterns <- list(
   item     = c("^item$", "^word", "^syllable", "^syl"),
   duration = c("^duration$", "^dur")
 )
+
+# ---------------------------------------------------------------------------
+# Load the package's analytical functions directly from R/. Source files
+# rather than `library(shinytone)` so the deployed shinyapps.io copy works
+# without needing the package installed there. devtools::load_all() during
+# local development will also define these in the package namespace; that
+# version coexists harmlessly with the globalenv copy defined here.
+# ---------------------------------------------------------------------------
+for (.f in list.files("R", pattern = "\\.R$", full.names = TRUE)) {
+  source(.f, local = FALSE)
+}
+rm(.f)
