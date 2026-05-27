@@ -118,96 +118,23 @@ model_ui <- function(input, output, session, dataset, normalised_data) {
   model_result <- reactiveVal(NULL)
 
   # --- Core computation ---
+  # All Legendre fitting lives in fit_polynomial() (R/polynomial.R), which
+  # is unit-tested in tests/testthat/test-polynomial.R.
   observeEvent(input$model_button, {
     req(active_data())
     req(input$model_token_var, input$model_time_var,
         input$model_speaker_var, input$model_tone_var,
         input$model_f0_var)
 
-    data        <- active_data()
-    token_var   <- input$model_token_var
-    time_var    <- input$model_time_var
-    speaker_var <- input$model_speaker_var
-    tone_var    <- input$model_tone_var
-    f0_var      <- input$model_f0_var
-    degree      <- as.integer(input$model_degree)
-
-    # Use the selected f0 column directly
-    data <- data %>% mutate(.f0_fit = .data[[f0_var]])
-
-    # Legendre basis matrix on [-1, 1]
-    legendre_basis <- function(t, degree) {
-      n <- length(t)
-      B <- matrix(NA_real_, nrow = n, ncol = degree + 1)
-      B[, 1] <- 1                                    # P0
-      if (degree >= 1) B[, 2] <- t                   # P1
-      if (degree >= 2) B[, 3] <- (3 * t^2 - 1) / 2  # P2
-      if (degree >= 3) B[, 4] <- (5 * t^3 - 3 * t) / 2  # P3
-      colnames(B) <- paste0("c", 0:degree)
-      B
-    }
-
-    # Fit one token: normalise time, build basis, OLS
-    fit_one_token <- function(token_data, degree, time_var) {
-      t_raw <- token_data[[time_var]]
-      t_min <- min(t_raw, na.rm = TRUE)
-      t_max <- max(t_raw, na.rm = TRUE)
-
-      coef_names <- paste0("c", 0:degree)
-
-      # Degenerate: single time point or all same time
-      if (is.na(t_min) || is.na(t_max) || t_max == t_min) {
-        result <- setNames(rep(NA_real_, degree + 1), coef_names)
-        result["c0"] <- mean(token_data$.f0_fit, na.rm = TRUE)
-        return(as.data.frame(as.list(result)))
-      }
-
-      # Normalise time to [-1, 1]
-      t_norm <- 2 * (t_raw - t_min) / (t_max - t_min) - 1
-      y <- token_data$.f0_fit
-      valid <- !is.na(t_norm) & !is.na(y)
-
-      # Not enough valid points to fit
-      if (sum(valid) < degree + 1) {
-        result <- setNames(rep(NA_real_, degree + 1), coef_names)
-        return(as.data.frame(as.list(result)))
-      }
-
-      B <- legendre_basis(t_norm[valid], degree)
-      fit <- lm.fit(B, y[valid])
-      as.data.frame(as.list(setNames(fit$coefficients, coef_names)))
-    }
-
-    # Per-token metadata (speaker, tone — first value per token)
-    token_meta <- data %>%
-      arrange(.data[[token_var]], .data[[time_var]]) %>%
-      group_by(.data[[token_var]]) %>%
-      summarise(
-        !!speaker_var := first(.data[[speaker_var]]),
-        !!tone_var    := first(.data[[tone_var]]),
-        .groups = "drop"
-      )
-
-    # Fit per token
-    coef_rows <- data %>%
-      arrange(.data[[token_var]], .data[[time_var]]) %>%
-      group_by(.data[[token_var]]) %>%
-      group_map(~ fit_one_token(.x, degree, time_var))
-
-    # Token IDs in same order as group_map
-    token_ids <- data %>%
-      arrange(.data[[token_var]], .data[[time_var]]) %>%
-      group_by(.data[[token_var]]) %>%
-      group_keys() %>%
-      pull(.data[[token_var]])
-
-    # Combine into dataframe
-    coef_df <- do.call(rbind, coef_rows)
-    coef_df[[token_var]] <- token_ids
-
-    result <- coef_df %>%
-      left_join(token_meta, by = token_var) %>%
-      select(all_of(c(token_var, speaker_var, tone_var, paste0("c", 0:degree))))
+    result <- fit_polynomial(
+      active_data(),
+      f0      = input$model_f0_var,
+      token   = input$model_token_var,
+      time    = input$model_time_var,
+      speaker = input$model_speaker_var,
+      tone    = input$model_tone_var,
+      degree  = as.integer(input$model_degree)
+    )
 
     model_result(result)
   })
