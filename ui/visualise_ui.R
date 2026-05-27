@@ -170,12 +170,19 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
       ))
     }
 
-    # Build the R code string dynamically
+    # Build the R code string dynamically.
+    # Use the actual uploaded filename if known so the snippet visually
+    # matches the dataset the plot was drawn from; users may still need
+    # to adjust the path to where the file lives on their machine.
+    ds_name <- if (!is.null(input$dataset_name) && nzchar(input$dataset_name))
+                 paste0(input$dataset_name, ".csv")
+               else "your_data.csv"
+
     code_lines <- c(
       "library(tidyverse)",
       "",
-      '# Read your data',
-      paste0('dat <- read.csv("your_data.csv")'),
+      "# Read your data (adjust path to where the file is on your machine)",
+      paste0('dat <- read.csv("', ds_name, '")'),
       ""
     )
 

@@ -446,10 +446,16 @@ model_ui <- function(input, output, session, dataset, normalised_data) {
     coef_names <- paste0("c", 0:degree)
     coef_str   <- paste0('"', coef_names, '"', collapse = ", ")
 
+    # Use the actual uploaded filename if known so the snippet visually
+    # matches the dataset; users may need to adjust the path on disk.
+    ds_name <- if (!is.null(input$dataset_name) && nzchar(input$dataset_name))
+                 paste0(input$dataset_name, ".csv")
+               else "your_data.csv"
+
     code_text <- paste0(
       'library(dplyr)\n\n',
-      '# Read data\n',
-      'dat <- read.csv("your_data.csv", stringsAsFactors = FALSE)\n\n',
+      '# Read your data (adjust path to where the file is on your machine)\n',
+      'dat <- read.csv("', ds_name, '", stringsAsFactors = FALSE)\n\n',
       '# Legendre polynomial basis on [-1, 1]\n',
       'legendre_basis <- function(t, degree) {\n',
       '  B <- matrix(NA_real_, nrow = length(t), ncol = degree + 1)\n',
