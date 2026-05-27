@@ -4,31 +4,23 @@
 
 summarise_ui <- function(input, output, session, dataset, normalised_data, gca_pred_data, gamm_pred_data) {
 
-  # --- Helper: classify contour shape from Chao string ---
-  classify_contour <- function(chao_str) {
-    digits <- as.integer(strsplit(as.character(chao_str), "")[[1]])
-    n <- length(digits)
-    if (n < 2) return("level")
+  # classify_contour() and compute_mean_contour() are now package-level
+  # functions (R/chao.R), available in the global namespace via global.R.
+  # The HTML-highlighted scaled-value formatter below stays here because
+  # it's UI-specific.
 
-    first <- digits[1]
-    last <- digits[n]
-
-    if (all(digits == digits[1])) {
-      level_names <- c("1" = "low level", "2" = "mid-low level", "3" = "mid level",
-                       "4" = "mid-high level", "5" = "high level")
-      return(unname(level_names[as.character(digits[1])]))
-    }
-
-    # Check for dipping/peaking (n >= 3)
-    if (n >= 3) {
-      interior <- digits[2:(n - 1)]
-      if (min(interior) < first && min(interior) < last) return("dipping")
-      if (max(interior) > first && max(interior) > last) return("peaking")
-    }
-
-    if (last > first) return("rising")
-    if (last < first) return("falling")
-    return("level")
+  # --- UI helper: highlight scaled values within `tol` of a reference set ---
+  format_scaled_values_html <- function(vals, refs, tol = 0.1) {
+    pieces <- vapply(vals, function(v) {
+      val_str <- sprintf("%.2f", v)
+      if (any(abs(v - refs) < tol, na.rm = TRUE)) {
+        paste0('<span style="color: #d9534f; font-weight: bold;" title="within ±',
+               tol, ' of reference">', val_str, "</span>")
+      } else {
+        val_str
+      }
+    }, character(1))
+    paste(pieces, collapse = " → ")
   }
 
   # --- Guide text ---
@@ -204,33 +196,7 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
   sum_norm_contours <- reactiveVal(NULL)
   sum_params <- reactiveVal(NULL)
 
-  # --- Helper: compute per-tone mean contour from a dataset ---
-  compute_mean_contour <- function(data, token_var, f0_var, time_var, tone_var) {
-    # Normalise time to [0, 1] per token
-    dat <- data %>%
-      group_by(.data[[token_var]]) %>%
-      mutate(
-        .time_norm = {
-          t_raw <- .data[[time_var]]
-          t_min <- min(t_raw, na.rm = TRUE)
-          t_max <- max(t_raw, na.rm = TRUE)
-          if (t_max == t_min) rep(0.5, n()) else (t_raw - t_min) / (t_max - t_min)
-        }
-      ) %>%
-      ungroup()
-
-    # Bin time and compute per-tone mean f0
-    n_bins <- 50
-    dat$.time_bin <- round(dat$.time_norm * (n_bins - 1)) / (n_bins - 1)
-    dat$.f0 <- as.numeric(dat[[f0_var]])
-    dat$.tone <- as.character(dat[[tone_var]])
-
-    dat %>%
-      group_by(tone = .tone, time = .time_bin) %>%
-      summarise(f0_predicted = mean(.f0, na.rm = TRUE), .groups = "drop") %>%
-      arrange(tone, time) %>%
-      as.data.frame()
-  }
+  # compute_mean_contour() is now in R/chao.R (package-level).
 
   # --- Core conversion ---
   observeEvent(input$sum_button, {
@@ -242,26 +208,39 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
       return()
     }
 
-    # --- Step 1: Get contour data ---
+    # --- Step 1: Get contour data + raw column names for robust FOR -------
+    raw_data_for_robust <- NULL
+    raw_token <- raw_f0 <- raw_tone <- NULL
+
     if (src == "gca") {
       contour_data <- gca_pred_data()
     } else if (src == "gamm") {
       contour_data <- gamm_pred_data()
     } else if (src == "raw_hz") {
-      data <- dataset()
-      req(data)
-      req(input$sum_raw_token_var, input$sum_raw_f0_var, input$sum_raw_time_var, input$sum_raw_tone_var)
+      raw_data_for_robust <- dataset()
+      req(raw_data_for_robust)
+      req(input$sum_raw_token_var, input$sum_raw_f0_var,
+          input$sum_raw_time_var,  input$sum_raw_tone_var)
+      raw_token <- input$sum_raw_token_var
+      raw_f0    <- input$sum_raw_f0_var
+      raw_tone  <- input$sum_raw_tone_var
       contour_data <- compute_mean_contour(
-        data, input$sum_raw_token_var, input$sum_raw_f0_var,
-        input$sum_raw_time_var, input$sum_raw_tone_var
+        raw_data_for_robust,
+        token = raw_token, f0 = raw_f0,
+        time  = input$sum_raw_time_var, tone = raw_tone
       )
     } else if (src == "normalised") {
-      data <- normalised_data()
-      req(data)
-      req(input$sum_norm_token_var, input$sum_norm_f0_var, input$sum_norm_time_var, input$sum_norm_tone_var)
+      raw_data_for_robust <- normalised_data()
+      req(raw_data_for_robust)
+      req(input$sum_norm_token_var, input$sum_norm_f0_var,
+          input$sum_norm_time_var,  input$sum_norm_tone_var)
+      raw_token <- input$sum_norm_token_var
+      raw_f0    <- input$sum_norm_f0_var
+      raw_tone  <- input$sum_norm_tone_var
       contour_data <- compute_mean_contour(
-        data, input$sum_norm_token_var, input$sum_norm_f0_var,
-        input$sum_norm_time_var, input$sum_norm_tone_var
+        raw_data_for_robust,
+        token = raw_token, f0 = raw_f0,
+        time  = input$sum_norm_time_var, tone = raw_tone
       )
     } else {
       contour_data <- NULL
@@ -273,255 +252,115 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
       return()
     }
 
-    # --- Step 2: Rescale to Chao scale (both methods) ---
-    f0_min <- min(contour_data$f0_predicted, na.rm = TRUE)
-    f0_max <- max(contour_data$f0_predicted, na.rm = TRUE)
+    # --- Step 2: Delegate all analytics to the package function -----------
+    # contour_to_chao() handles continuous Chao scaling, turning-point
+    # detection, the three numeral methods, and (when raw_data is given)
+    # the robust FOR. Stats are returned as attributes.
+    chao <- contour_to_chao(
+      contour_data,
+      tone_col  = "tone", time_col = "time", f0_col = "f0_predicted",
+      threshold = 0.5,
+      raw_data  = raw_data_for_robust,
+      raw_token = raw_token, raw_f0 = raw_f0, raw_tone = raw_tone
+    )
+    f0_min <- attr(chao, "f0_min")
+    f0_max <- attr(chao, "f0_max")
+    rstats <- attr(chao, "robust_stats")
+    has_1b <- !is.null(rstats)
 
+    # --- Step 3: Build the contour the plot tab consumes ------------------
     if (f0_max == f0_min) {
-      contour_data$chao_ref <- 3       # [1,5] midpoint
-      contour_data$chao_int <- 2.5     # (0,5] midpoint
+      contour_data$chao_ref <- 3
+      contour_data$chao_int <- 2.5
     } else {
-      contour_data$chao_ref <- (contour_data$f0_predicted - f0_min) / (f0_max - f0_min) * 4 + 1  # [1,5]
-      contour_data$chao_int <- (contour_data$f0_predicted - f0_min) / (f0_max - f0_min) * 5      # (0,5]
+      contour_data$chao_ref <- (contour_data$f0_predicted - f0_min) /
+                                 (f0_max - f0_min) * 4 + 1
+      contour_data$chao_int <- (contour_data$f0_predicted - f0_min) /
+                                 (f0_max - f0_min) * 5
     }
-
-    # Use [1,5] reference-line scale for plotting (more standard)
     contour_data$chao_continuous <- contour_data$chao_ref
-
-    # --- Robust FOR: range from highest/lowest tone extremes (only for raw data) ---
-    has_1b <- src %in% c("raw_hz", "normalised")
     if (has_1b) {
-      # Get raw token-level data for computing per-tone peak/valley μ and σ
-      if (src == "raw_hz") {
-        raw_1b_data <- dataset()
-        f0_var_1b   <- input$sum_raw_f0_var
-        tone_var_1b <- input$sum_raw_tone_var
-        token_var_1b <- input$sum_raw_token_var
-      } else {
-        raw_1b_data <- normalised_data()
-        f0_var_1b   <- input$sum_norm_f0_var
-        tone_var_1b <- input$sum_norm_tone_var
-        token_var_1b <- input$sum_norm_token_var
-      }
-
-      # Filter valid f0
-      raw_1b <- raw_1b_data %>%
-        mutate(.f0 = as.numeric(.data[[f0_var_1b]])) %>%
-        filter(!is.na(.f0) & .f0 > 0)
-
-      # Compute per-tone mean f0 to identify the highest and lowest tones
-      tone_means <- raw_1b %>%
-        group_by(.data[[tone_var_1b]]) %>%
-        summarise(.tone_mean = mean(.f0, na.rm = TRUE), .groups = "drop")
-
-      highest_tone <- tone_means[[tone_var_1b]][which.max(tone_means$.tone_mean)]
-      lowest_tone  <- tone_means[[tone_var_1b]][which.min(tone_means$.tone_mean)]
-
-      # Per-token f0 peaks from the highest-pitched tone → μ_max, σ_max
-      token_peaks <- raw_1b %>%
-        filter(.data[[tone_var_1b]] == highest_tone) %>%
-        group_by(.data[[token_var_1b]]) %>%
-        summarise(.f0_peak = max(.f0, na.rm = TRUE), .groups = "drop")
-      mu_max_1b    <- mean(token_peaks$.f0_peak, na.rm = TRUE)
-      sigma_max_1b <- sd(token_peaks$.f0_peak, na.rm = TRUE)
-
-      # Per-token f0 valleys from the lowest-pitched tone → μ_min, σ_min
-      token_valleys <- raw_1b %>%
-        filter(.data[[tone_var_1b]] == lowest_tone) %>%
-        group_by(.data[[token_var_1b]]) %>%
-        summarise(.f0_valley = min(.f0, na.rm = TRUE), .groups = "drop")
-      mu_min_1b    <- mean(token_valleys$.f0_valley, na.rm = TRUE)
-      sigma_min_1b <- sd(token_valleys$.f0_valley, na.rm = TRUE)
-
-      upper_1b <- mu_max_1b + sigma_max_1b
-      lower_1b <- max(mu_min_1b - sigma_min_1b, 1)  # floor at 1 Hz to avoid log(0)
-
-      # Apply tone-specific FOR formula to the per-tone mean contour
-      log_range_1b <- log(upper_1b) - log(lower_1b)
-      if (log_range_1b > 0) {
-        contour_data$chao_1b <- pmax(0, pmin(5,
-          (log(contour_data$f0_predicted) - log(lower_1b)) / log_range_1b * 5
-        ))  # clamp to [0, 5] per Zhu (1999)
-      } else {
-        contour_data$chao_1b <- 2.5  # fallback
-        has_1b <- FALSE
-      }
+      lr <- log(rstats$upper) - log(rstats$lower)
+      contour_data$chao_1b <- pmax(0, pmin(5,
+        (log(contour_data$f0_predicted) - log(rstats$lower)) / lr * 5))
     } else {
       contour_data$chao_1b <- NA_real_
-      mu_max_1b <- sigma_max_1b <- mu_min_1b <- sigma_min_1b <- upper_1b <- lower_1b <- NA_real_
     }
-
-    # Store normalised contours for plotting
     sum_norm_contours(contour_data)
 
-    # --- Step 3: Auto-detect digit count + sample + convert (both methods) ---
-    tone_levels <- unique(contour_data$tone)
-    threshold <- 0.5  # Chao units threshold for turning point detection (on [1,5] scale)
-    boundary_tol <- if (!is.null(input$sum_boundary_tol) && input$sum_boundary_tol >= 0) input$sum_boundary_tol else 0.1
+    # --- Step 4: Reshape chao result into the wide UI-display format ------
+    boundary_tol <- if (!is.null(input$sum_boundary_tol) &&
+                       input$sum_boundary_tol >= 0) input$sum_boundary_tol else 0.1
 
-    results <- list()
-    for (tone_val in tone_levels) {
-      td <- contour_data[contour_data$tone == tone_val, ]
-      td <- td[order(td$time), ]
+    rows <- lapply(seq_len(nrow(chao)), function(i) {
+      r            <- chao[i, ]
+      sample_times <- r$sample_times[[1]]
+      ref_vals     <- r$ref_continuous[[1]]
+      int_vals     <- r$int_continuous[[1]]
+      rob_vals     <- r$rob_continuous[[1]]
+      n_digits     <- r$n_digits
 
-      # Skip tones with too few data points
-      td <- td[!is.na(td$chao_ref) & !is.na(td$time), ]
-      if (nrow(td) < 2) next
-
-      # Interpolation functions for both scales
-      interp_ref <- approxfun(td$time, td$chao_ref, rule = 2)
-      interp_int <- approxfun(td$time, td$chao_int, rule = 2)
-
-      # Get onset and offset values on [1,5] scale (for turning point detection)
-      onset_ref <- interp_ref(0)
-      offset_ref <- interp_ref(1)
-
-      # Detect turning point on [1,5] scale
-      fine_time <- seq(0, 1, length.out = 200)
-      fine_ref <- interp_ref(fine_time)
-
-      interior_min_idx <- which.min(fine_ref[20:180]) + 19
-      interior_max_idx <- which.max(fine_ref[20:180]) + 19
-      interior_min <- fine_ref[interior_min_idx]
-      interior_max <- fine_ref[interior_max_idx]
-
-      has_dip <- (onset_ref - interior_min > threshold) && (offset_ref - interior_min > threshold)
-      has_peak <- (interior_max - onset_ref > threshold) && (interior_max - offset_ref > threshold)
-
-      if (has_dip) {
-        tp_time <- fine_time[interior_min_idx]
-        sample_times <- c(0, tp_time, 1)
-      } else if (has_peak) {
-        tp_time <- fine_time[interior_max_idx]
-        sample_times <- c(0, tp_time, 1)
-      } else {
-        sample_times <- c(0, 1)
-      }
-
-      n_digits <- length(sample_times)
-
-      # Sample both scales at the same time points
-      ref_vals <- interp_ref(sample_times)  # [1,5]
-      int_vals <- interp_int(sample_times)  # [0,5]
-
-      # Reference-line method: round on [1,5] scale
-      chao_refline <- pmax(1L, pmin(5L, round(ref_vals)))
-      str_refline <- paste0(chao_refline, collapse = "")
-
-      # Interval method: ceiling on (0,5] scale
-      # (0,1]→1, (1,2]→2, (2,3]→3, (3,4]→4, (4,5]→5
-      chao_interval <- pmax(1L, pmin(5L, ceiling(int_vals)))
-      str_interval <- paste0(chao_interval, collapse = "")
-
-      # Method 1b: μ±σ range (only when raw data)
-      # Values are clamped to [0, 5] following Zhu (1999) convention
-      if (has_1b) {
-        interp_1b <- approxfun(td$time, td$chao_1b, rule = 2)
-        vals_1b <- pmax(0, pmin(5, interp_1b(sample_times)))  # clamp to [0, 5]
-        chao_1b_digits <- pmax(1L, pmin(5L, ceiling(vals_1b)))
-        str_1b <- paste0(chao_1b_digits, collapse = "")
-      } else {
-        vals_1b <- rep(NA_real_, n_digits)
-        chao_1b_digits <- rep(NA_integer_, n_digits)
-        str_1b <- NA_character_
-      }
-
-      # Scaled value display on [1,5] with boundary highlighting (near reference lines 1-5)
-      ref_scaled_strs <- sapply(ref_vals, function(v) {
-        near_boundary <- any(abs(v - 1:5) < boundary_tol)
-        val_str <- sprintf("%.2f", v)
-        if (near_boundary) {
-          paste0('<span style="color: #d9534f; font-weight: bold;" title="within \u00b10.1 of reference line">', val_str, '</span>')
-        } else {
-          val_str
-        }
-      })
-      ref_scaled_display <- paste(ref_scaled_strs, collapse = " \u2192 ")
-
-      # Scaled value display on (0,5] with boundary highlighting (near interval boundaries 1-4)
-      int_scaled_strs <- sapply(int_vals, function(v) {
-        near_boundary <- any(abs(v - 1:4) < boundary_tol)
-        val_str <- sprintf("%.2f", v)
-        if (near_boundary) {
-          paste0('<span style="color: #d9534f; font-weight: bold;" title="within \u00b10.1 of interval boundary">', val_str, '</span>')
-        } else {
-          val_str
-        }
-      })
-      int_scaled_display <- paste(int_scaled_strs, collapse = " \u2192 ")
-
-      # Scaled value display for 1b (near interval boundaries 1-4)
-      if (has_1b) {
-        b_scaled_strs <- sapply(vals_1b, function(v) {
-          near_boundary <- any(abs(v - 1:4) < boundary_tol)
-          val_str <- sprintf("%.2f", v)
-          if (near_boundary) {
-            paste0('<span style="color: #d9534f; font-weight: bold;" title="within \u00b10.1 of interval boundary">', val_str, '</span>')
-          } else { val_str }
-        })
-        b_scaled_display <- paste(b_scaled_strs, collapse = " \u2192 ")
-      } else {
-        b_scaled_display <- NA_character_
-      }
-
-      # Contour shape (using reference-line result)
-      shape <- classify_contour(str_refline)
+      ref_digits <- as.integer(strsplit(r$refline,  "")[[1]])
+      int_digits <- as.integer(strsplit(r$interval, "")[[1]])
+      rob_digits <- if (!is.na(r$robust))
+                      as.integer(strsplit(r$robust, "")[[1]])
+                    else
+                      rep(NA_integer_, n_digits)
 
       row <- data.frame(
-        tone = tone_val,
-        n_digits = n_digits,
-        ref_scaled_values = ref_scaled_display,
-        refline = str_refline,
-        int_scaled_values = int_scaled_display,
-        interval = str_interval,
-        b_scaled_values = b_scaled_display,
-        numeral_1b = str_1b,
-        contour_shape = shape,
-        stringsAsFactors = FALSE
+        tone              = r$tone,
+        n_digits          = n_digits,
+        ref_scaled_values = format_scaled_values_html(ref_vals, 1:5, boundary_tol),
+        refline           = r$refline,
+        int_scaled_values = format_scaled_values_html(int_vals, 1:4, boundary_tol),
+        interval          = r$interval,
+        b_scaled_values   = if (has_1b)
+                              format_scaled_values_html(rob_vals, 1:4, boundary_tol)
+                            else NA_character_,
+        numeral_1b        = r$robust,
+        contour_shape     = r$shape,
+        stringsAsFactors  = FALSE
       )
 
-      # Store raw sample values/times for plotting (always 3 slots for consistent rbind)
+      # Wide per-sample columns (always 3 slots; NA for unused ones).
       max_digits <- 3
-      for (i in 1:max_digits) {
-        if (i <= n_digits) {
-          row[[paste0("t", i)]] <- sample_times[i]
-          row[[paste0("v", i)]] <- ref_vals[i]          # [1,5] continuous
-          row[[paste0("r", i)]] <- chao_refline[i]      # [1,5] rounded digit
-          row[[paste0("iv", i)]] <- int_vals[i]          # (0,5] continuous
-          row[[paste0("ic", i)]] <- chao_interval[i]     # (0,5] ceiling digit
-          row[[paste0("bv", i)]] <- vals_1b[i]            # 1b continuous
-          row[[paste0("bc", i)]] <- chao_1b_digits[i]     # 1b ceiling digit
+      for (j in seq_len(max_digits)) {
+        if (j <= n_digits) {
+          row[[paste0("t",  j)]] <- sample_times[j]
+          row[[paste0("v",  j)]] <- ref_vals[j]
+          row[[paste0("r",  j)]] <- ref_digits[j]
+          row[[paste0("iv", j)]] <- int_vals[j]
+          row[[paste0("ic", j)]] <- int_digits[j]
+          row[[paste0("bv", j)]] <- rob_vals[j]
+          row[[paste0("bc", j)]] <- rob_digits[j]
         } else {
-          row[[paste0("t", i)]] <- NA_real_
-          row[[paste0("v", i)]] <- NA_real_
-          row[[paste0("r", i)]] <- NA_real_
-          row[[paste0("iv", i)]] <- NA_real_
-          row[[paste0("ic", i)]] <- NA_real_
-          row[[paste0("bv", i)]] <- NA_real_
-          row[[paste0("bc", i)]] <- NA_real_
+          row[[paste0("t",  j)]] <- NA_real_
+          row[[paste0("v",  j)]] <- NA_real_
+          row[[paste0("r",  j)]] <- NA_real_
+          row[[paste0("iv", j)]] <- NA_real_
+          row[[paste0("ic", j)]] <- NA_real_
+          row[[paste0("bv", j)]] <- NA_real_
+          row[[paste0("bc", j)]] <- NA_real_
         }
       }
+      row
+    })
 
-      results[[length(results) + 1]] <- row
-    }
+    sum_result(do.call(rbind, rows))
 
-    result_df <- do.call(rbind, results)
-    sum_result(result_df)
-
-    # Store parameters for display
     sum_params(list(
-      source = src,
-      f0_min = f0_min,
-      f0_max = f0_max,
-      has_1b = has_1b,
-      highest_tone = if (has_1b) highest_tone else NA,
-      lowest_tone = if (has_1b) lowest_tone else NA,
-      mu_max_1b = if (has_1b) mu_max_1b else NA,
-      sigma_max_1b = if (has_1b) sigma_max_1b else NA,
-      mu_min_1b = if (has_1b) mu_min_1b else NA,
-      sigma_min_1b = if (has_1b) sigma_min_1b else NA,
-      upper_1b = if (has_1b) upper_1b else NA,
-      lower_1b = if (has_1b) lower_1b else NA
+      source       = src,
+      f0_min       = f0_min,
+      f0_max       = f0_max,
+      has_1b       = has_1b,
+      highest_tone = if (has_1b) rstats$highest_tone else NA,
+      lowest_tone  = if (has_1b) rstats$lowest_tone  else NA,
+      mu_max_1b    = if (has_1b) rstats$mu_max       else NA,
+      sigma_max_1b = if (has_1b) rstats$sigma_max    else NA,
+      mu_min_1b    = if (has_1b) rstats$mu_min       else NA,
+      sigma_min_1b = if (has_1b) rstats$sigma_min    else NA,
+      upper_1b     = if (has_1b) rstats$upper        else NA,
+      lower_1b     = if (has_1b) rstats$lower        else NA
     ))
   })
 
