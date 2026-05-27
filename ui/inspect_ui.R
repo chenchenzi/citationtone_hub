@@ -94,206 +94,30 @@ inspect_ui <- function(input, output, session, dataset) {
   # Store inspection result as reactiveVal
   inspect_result <- reactiveVal(NULL)
 
-  # Run inspection when button is clicked
+  # Run inspection when button is clicked.
+  # The detection logic lives in the package function inspect_f0()
+  # (R/inspect.R), which is unit-tested in tests/testthat/test-inspect.R.
   observeEvent(input$inspect_button, {
     req(dataset())
     req(input$inspect_f0_var, input$inspect_token_var, input$inspect_time_var,
         input$inspect_speaker_var, input$inspect_tone_var)
 
-    data <- dataset()
-    f0_var <- input$inspect_f0_var
-    token_var <- input$inspect_token_var
-    time_var <- input$inspect_time_var
-    speaker_var <- input$inspect_speaker_var
-    tone_var <- input$inspect_tone_var
-    z_thresh    <- input$inspect_z_thresh
-    rise_thresh <- input$inspect_rise_thresh
-    fall_thresh <- input$inspect_fall_thresh
-    carry_mult  <- as.numeric(input$inspect_carryover_mult)
+    carry_mult <- as.numeric(input$inspect_carryover_mult)
     if (is.na(carry_mult) || carry_mult < 0) carry_mult <- 1.5
-    time_unit   <- input$inspect_time_unit
 
-    # Treat f0 == 0 as NA (pitch trackers output 0 for unvoiced)
-    data <- data %>%
-      mutate(!!f0_var := ifelse(.data[[f0_var]] == 0, NA_real_, .data[[f0_var]]))
-
-    # --- Step 1: Token-level outlier detection ---
-    token_stats <- data %>%
-      filter(!is.na(.data[[f0_var]])) %>%
-      group_by(.data[[token_var]]) %>%
-      summarise(
-        f0_token_max = max(.data[[f0_var]], na.rm = TRUE),
-        f0_token_min = min(.data[[f0_var]], na.rm = TRUE),
-        f0_token_mean = mean(.data[[f0_var]], na.rm = TRUE),
-        f0_token_sd = sd(.data[[f0_var]], na.rm = TRUE),
-        .groups = "drop"
-      )
-
-    # Get speaker for each token (first occurrence)
-    token_speaker <- data %>%
-      distinct(.data[[token_var]], .keep_all = TRUE) %>%
-      select(all_of(c(token_var, speaker_var)))
-
-    token_stats <- token_stats %>%
-      left_join(token_speaker, by = token_var) %>%
-      group_by(.data[[speaker_var]]) %>%
-      mutate(
-        z_max = (f0_token_max - mean(f0_token_max, na.rm = TRUE)) / sd(f0_token_max, na.rm = TRUE),
-        z_min = (f0_token_min - mean(f0_token_min, na.rm = TRUE)) / sd(f0_token_min, na.rm = TRUE)
-      ) %>%
-      ungroup() %>%
-      mutate(
-        flag_too_high = !is.na(z_max) & abs(z_max) > z_thresh,
-        flag_too_low = !is.na(z_min) & abs(z_min) > z_thresh
-      )
-
-    # --- Step 2: Sample-to-sample jump detection (Steffman & Cole 2022) ---
-    result <- data %>%
-      arrange(.data[[token_var]], .data[[time_var]]) %>%
-      group_by(.data[[token_var]]) %>%
-      mutate(
-        f0_st = 12 * log2(.data[[f0_var]]),
-        lead_f0_st = lead(f0_st, order_by = .data[[time_var]]),
-        lead_f0_hz = lead(.data[[f0_var]], order_by = .data[[time_var]]),
-        diff_st = lead_f0_st - f0_st,
-        diff_time = lead(.data[[time_var]], order_by = .data[[time_var]]) - .data[[time_var]],
-        hz_ratio = lead_f0_hz / .data[[f0_var]]
-      ) %>%
-      ungroup()
-
-    # Time adjustment factor (normalise to 10ms reference)
-    result <- result %>%
-      mutate(
-        time_factor = case_when(
-          time_unit == "ms" ~ ifelse(is.na(diff_time) | diff_time == 0, 1, diff_time / 10),
-          time_unit == "s" ~ ifelse(is.na(diff_time) | diff_time == 0, 1, (diff_time * 1000) / 10),
-          time_unit == "norm" ~ 1  # treat each step as one 10ms-equivalent unit
-        )
-      )
-
-    # Flag jumps: the error is on the NEXT sample (where the jump lands)
-    # So we shift: if current sample has a big diff to the next, the NEXT sample is the error.
-    #
-    # Note on time normalisation: rise/fall thresholds are expressed as ST per
-    # 10 ms (Sundberg 1973). To compare the observed rate against that, we need
-    #   rate_per_10ms = diff_st / (diff_time_in_ms / 10) = diff_st / time_factor
-    # so we DIVIDE diff_st by time_factor (earlier versions of this code
-    # multiplied, which made the test ~30% stricter than intended for sample
-    # steps > 10 ms).
-    result <- result %>%
-      group_by(.data[[token_var]]) %>%
-      mutate(
-        # Octave jump detection (on lead sample)
-        oct_jump = !is.na(hz_ratio) & (hz_ratio < 0.49 | hz_ratio > 1.99),
-        # Threshold jump detection (on lead sample)
-        jump_rise = !is.na(diff_st) & diff_st > 0 & (abs(diff_st) / time_factor) > rise_thresh,
-        jump_fall = !is.na(diff_st) & diff_st < 0 & (abs(diff_st) / time_factor) > fall_thresh,
-        # Shift flags to the sample where the jump lands
-        flagged_jump = lag(oct_jump | jump_rise | jump_fall, default = FALSE),
-        jump_note_raw = case_when(
-          lag(oct_jump, default = FALSE) & lag(jump_rise, default = FALSE) ~ "octave jump; jump (rise)",
-          lag(oct_jump, default = FALSE) & lag(jump_fall, default = FALSE) ~ "octave jump; jump (fall)",
-          lag(oct_jump, default = FALSE) ~ "octave jump",
-          lag(jump_rise, default = FALSE) ~ "jump (rise)",
-          lag(jump_fall, default = FALSE) ~ "jump (fall)",
-          TRUE ~ ""
-        )
-      ) %>%
-      ungroup()
-
-    # Carryover detection — direction-specific band (Steffman & Cole 2022).
-    # A sample is a carryover if it follows a flagged-jump (or another
-    # carryover) AND its semitone distance from the original error f0 stays
-    # within mult * rise_thresh (if the next sample is HIGHER, i.e. rising
-    # trend) or mult * fall_thresh (if the next sample is LOWER). The chain
-    # breaks once a sample falls outside this band. Setting mult = 0 disables
-    # carryover entirely.
-    detect_carryover <- function(flagged_jump, f0_st, rise_thresh, fall_thresh, mult) {
-      n <- length(flagged_jump)
-      carryover <- rep(FALSE, n)
-      carryover_note <- rep("", n)
-      if (n < 2 || mult <= 0) {
-        return(list(carryover = carryover, carryover_note = carryover_note))
-      }
-      error_f0 <- NA_real_
-      for (i in 2:n) {
-        if (flagged_jump[i] && !is.na(f0_st[i])) {
-          error_f0 <- f0_st[i]
-        } else if (!is.na(error_f0) && !is.na(f0_st[i]) &&
-                   (flagged_jump[i - 1] || carryover[i - 1])) {
-          band <- if (i < n && !is.na(f0_st[i + 1])) {
-            if (f0_st[i + 1] > f0_st[i]) rise_thresh * mult
-            else fall_thresh * mult
-          } else {
-            max(rise_thresh, fall_thresh) * mult
-          }
-          if (abs(f0_st[i] - error_f0) <= band) {
-            carryover[i] <- TRUE
-            carryover_note[i] <- "carryover"
-          } else {
-            error_f0 <- NA_real_   # chain broken
-          }
-        }
-      }
-      list(carryover = carryover, carryover_note = carryover_note)
-    }
-
-    result <- result %>%
-      group_by(.data[[token_var]]) %>%
-      mutate({
-        co <- detect_carryover(flagged_jump, f0_st, rise_thresh, fall_thresh, carry_mult)
-        data.frame(carryover = co$carryover, carryover_note = co$carryover_note)
-      }) %>%
-      ungroup()
-
-    # Update flagged_jump to include carryover
-    result <- result %>%
-      mutate(
-        flagged_jump = flagged_jump | carryover,
-        jump_note_raw = ifelse(nchar(carryover_note) > 0 & nchar(jump_note_raw) > 0,
-                               paste0(jump_note_raw, "; ", carryover_note),
-                               ifelse(nchar(carryover_note) > 0, carryover_note, jump_note_raw))
-      )
-
-    # --- Merge token-level flags ---
-    result <- result %>%
-      left_join(
-        token_stats %>% select(all_of(token_var), f0_token_max, f0_token_min,
-                               f0_token_mean, f0_token_sd,
-                               z_max, z_min, flag_too_high, flag_too_low),
-        by = token_var
-      )
-
-    # Has any jump in this token?
-    result <- result %>%
-      group_by(.data[[token_var]]) %>%
-      mutate(has_jump_in_token = any(flagged_jump, na.rm = TRUE)) %>%
-      ungroup()
-
-    # Build final flag columns
-    result <- result %>%
-      mutate(
-        flag_notes = {
-          notes <- rep("", n())
-          notes <- ifelse(flag_too_high, "max too high", notes)
-          notes <- ifelse(flag_too_low,
-                          ifelse(nchar(notes) > 0, paste0(notes, "; min too low"), "min too low"),
-                          notes)
-          notes <- ifelse(nchar(jump_note_raw) > 0,
-                          ifelse(nchar(notes) > 0, paste0(notes, "; ", jump_note_raw), jump_note_raw),
-                          notes)
-          notes
-        },
-        flagged_token = flag_too_high | flag_too_low | has_jump_in_token
-      )
-
-    # Select output columns
-    result <- result %>%
-      select(
-        all_of(c(token_var, time_var, f0_var, speaker_var, tone_var)),
-        f0_token_max, f0_token_min, f0_token_mean, f0_token_sd,
-        flagged_token, flagged_jump, flag_notes
-      )
+    result <- inspect_f0(
+      dataset(),
+      f0             = input$inspect_f0_var,
+      token          = input$inspect_token_var,
+      time           = input$inspect_time_var,
+      speaker        = input$inspect_speaker_var,
+      tone           = input$inspect_tone_var,
+      z_threshold    = input$inspect_z_thresh,
+      rise_threshold = input$inspect_rise_thresh,
+      fall_threshold = input$inspect_fall_thresh,
+      carryover_mult = carry_mult,
+      time_unit      = input$inspect_time_unit
+    )
 
     inspect_result(result)
   })
