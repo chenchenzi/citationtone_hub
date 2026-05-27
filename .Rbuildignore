@@ -5,17 +5,11 @@
 ^\.DS_Store$
 ^LICENSE\.md$
 ^app\.R$
-^ui\.R$
-^server\.R$
-^global\.R$
-^ui$
-^www$
 ^ui_old\.R$
 ^test$
 ^logo$
 ^privacy$
 ^screenshots$
-^open-sans$
 ^rsconnect$
 ^data-raw$
 ^pkgdown$

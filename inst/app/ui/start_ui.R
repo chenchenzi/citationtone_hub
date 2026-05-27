@@ -43,8 +43,10 @@ output$instruction_text <- renderUI({
     ),
     tags$p("Here's what our sample data looks like (first 5 rows):"),
     {
+      # Read the bundled sample CSV that lives in www/ alongside the JS
+      # handler that fetches it for "Try with our sample data".
       sample_preview <- tryCatch(
-        utils::read.csv("test/dc21f0_test.csv",
+        utils::read.csv("www/dc21f0_test.csv",
                         stringsAsFactors = FALSE,
                         check.names = FALSE,
                         nrows = 5),
