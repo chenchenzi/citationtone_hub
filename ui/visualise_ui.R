@@ -58,7 +58,7 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
         selectInput("tone_var", "Select Tone category variable:",
                     choices = setNames(vars, var_types),
                     selected = guess_var(vars, var_patterns$tone, 3), multiple = FALSE),
-        checkboxInput("convert_tone_to_factor", "Convert Tone category as factors", FALSE),
+        checkboxInput("convert_tone_to_factor", "Convert Tone category as factors", TRUE),
         selectInput("speaker_var", "Select Speaker variable:",
                     choices = setNames(vars, var_types),
                     selected = guess_var(vars, var_patterns$speaker, 4), multiple = FALSE),
@@ -86,8 +86,12 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
 
     plot_data <- vis_dataset()
 
-    if (input$convert_tone_to_factor) {
-      plot_data[[input$tone_var]] <- as.factor(plot_data[[input$tone_var]])
+    # Always coerce the tone column to factor if it's numeric — scale_color_brewer
+    # requires a discrete scale and integer tone codes (e.g. 1..5) would fail
+    # otherwise. The checkbox lets the user keep an already-factor column as-is.
+    tone_col <- plot_data[[input$tone_var]]
+    if (is.numeric(tone_col) || isTRUE(input$convert_tone_to_factor)) {
+      plot_data[[input$tone_var]] <- as.factor(tone_col)
     }
 
     p <- ggplot(plot_data,
