@@ -1,0 +1,24 @@
+# When users run citation("shinytone") they will see this entry.
+# A second bibentry() for the accompanying tutorial paper will be added
+# once that paper is available.
+
+citHeader("To cite shinytone in publications, please use:")
+
+bibentry(
+  bibtype  = "Manual",
+  title    = "{shinytone}: A Citation Tone Research Hub",
+  author   = c(
+    person("Chenzi", "Xu"),
+    person("Cong",   "Zhang")
+  ),
+  year     = format(Sys.Date(), "%Y"),
+  note     = sprintf("R package version %s", meta$Version),
+  url      = "https://github.com/chenchenzi/citationtone_hub",
+
+  textVersion = paste0(
+    "Xu, C., & Zhang, C. (", format(Sys.Date(), "%Y"),
+    "). shinytone: A Citation Tone Research Hub. R package version ",
+    meta$Version,
+    ". https://github.com/chenchenzi/citationtone_hub"
+  )
+)

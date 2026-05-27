@@ -1,0 +1,48 @@
+Package: shinytone
+Title: A Citation Tone Research Hub
+Version: 0.1.0
+Authors@R: c(
+    person("Chenzi", "Xu",
+           email = "chenzi.xu@ntu.edu.sg",
+           role = c("aut", "cre"),
+           comment = c(ORCID = "")),
+    person("Cong", "Zhang",
+           role = "aut"))
+Description: An interactive Shiny application and accompanying R functions for
+    citation tone research across tone languages. Integrates the full workflow
+    of pitch extraction, by-speaker f0 normalisation, growth-curve and
+    generalised additive mixed modelling, outlier inspection, and Chao tone
+    numeral summarisation. Designed for phoneticians, typologists,
+    fieldworkers, and students working on lexical tone production.
+License: MIT + file LICENSE
+URL: https://github.com/chenchenzi/citationtone_hub,
+    https://chenzixu.shinyapps.io/shinytone/
+BugReports: https://github.com/chenchenzi/citationtone_hub/issues
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+Depends:
+    R (>= 4.1.0)
+Imports:
+    shiny,
+    bslib,
+    dplyr,
+    tidyr,
+    ggplot2,
+    DT,
+    RColorBrewer,
+    lme4,
+    emmeans,
+    mgcv,
+    thematic,
+    gridExtra,
+    plotly,
+    tuneR,
+    rPraat,
+    praatpicture
+Suggests:
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown
+Config/testthat/edition: 3
+VignetteBuilder: knitr
+Config/roxygen2/version: 8.0.0
