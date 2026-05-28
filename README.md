@@ -7,7 +7,7 @@ Developed by [Chenzi Xu](https://chenzixu.rbind.io/). Co-authored with
 [Cong Zhang](https://congzhang-linguist.github.io).
 
 <!-- badges: start -->
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![pkgdown](https://github.com/chenchenzi/citationtone_hub/actions/workflows/pkgdown.yaml/badge.svg)](https://github.com/chenchenzi/citationtone_hub/actions/workflows/pkgdown.yaml)
 [![Live app](https://img.shields.io/badge/app-shinyapps.io-78c2ad?logo=R)](https://chenzixu.shinyapps.io/shinytone/)
 <!-- badges: end -->
@@ -167,9 +167,9 @@ The bundled sample dataset is a subset of:
 
 ## License
 
-MIT for code. See [LICENSE.md](LICENSE.md) for details. Long-form
-tutorials and vignettes are CC BY-NC 4.0; see individual files for
-notes.
+[GPL (>= 3)](https://www.gnu.org/licenses/gpl-3.0.html) for code; see
+[LICENSE.md](LICENSE.md) for the full text. Long-form tutorials and
+vignettes are CC BY-NC 4.0; see individual files for notes.
 
 ## Authors
 

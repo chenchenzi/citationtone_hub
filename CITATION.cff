@@ -18,7 +18,7 @@ authors:
     affiliation: ""
 repository-code: "https://github.com/chenchenzi/citationtone_hub"
 url: "https://chenchenzi.github.io/citationtone_hub/"
-license: MIT
+license: GPL-3.0-or-later
 version: 0.1.0
 date-released: 2026-05-28
 keywords:
