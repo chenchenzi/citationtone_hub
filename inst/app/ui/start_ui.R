@@ -78,7 +78,7 @@ output$instruction_text <- renderUI({
              "Xu (2025)"),
       ", ",
       tags$em("Plastic Mandarin tones: regional identity in prosody"),
-      "."
+      ", Phonetica 82(5), 331–362."
     ),
     tags$div(style = "margin: 12px 0;",
       actionButton("try_sample", "Try with our sample data", icon = icon("flask"))

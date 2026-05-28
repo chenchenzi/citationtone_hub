@@ -12,7 +12,7 @@
 # any external file.
 #
 # Source: Xu, C. (2025). Plastic Mandarin tones: regional identity in
-#   prosody. _Phonetica_.  DOI: 10.1515/phon-2025-0001
+#   prosody. _Phonetica_, 82(5), 331-362. DOI: 10.1515/phon-2025-0001
 # ----------------------------------------------------------------------------
 
 # Read the bundled CSV — the same file the Shiny app uses for its

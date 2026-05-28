@@ -209,4 +209,10 @@ The `shape` column summarises the contour ("rising", "falling",
 * Sundberg, J. (1973). The acoustics of the singing voice.
   *Scientific American*, 229(3), 82–91.
 * Xu, C. (2025). Plastic Mandarin tones: regional identity in prosody.
-  *Phonetica*.
+  *Phonetica*, 82(5), 331–362.
+  <https://doi.org/10.1515/phon-2025-0001>
+
+* Xu, C., & Zhang, C. (2024). A cross-linguistic review of citation
+  tone production studies: Methodology and recommendations. *The
+  Journal of the Acoustical Society of America*, 156(4), 2538–2565.
+  <https://doi.org/10.1121/10.0032356>
