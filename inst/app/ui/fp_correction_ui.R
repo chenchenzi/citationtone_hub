@@ -137,8 +137,17 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   # Defensive against malformed event payloads (plotly sends "NA" as JSON
   # for empty events, which Shiny can't parse cleanly).
   selected_indices <- reactive({
+    # suppressWarnings() silences plotly's startup-time "event not
+    # registered" warning. The event handlers ARE registered via
+    # plotly::event_register() in the renderPlotly block, but the plot
+    # is built lazily, so this reactive may evaluate before the plot
+    # has had a chance to register. Once the user navigates to the
+    # F0 Correction tab and the plot renders, registration takes hold
+    # and the event_data calls return real selections.
     sel <- tryCatch(
-      plotly::event_data("plotly_selected", source = "fp_corr_plot"),
+      suppressWarnings(
+        plotly::event_data("plotly_selected", source = "fp_corr_plot")
+      ),
       error = function(e) NULL
     )
     if (!is.null(sel) && is.data.frame(sel) && nrow(sel) > 0 &&
@@ -148,7 +157,9 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       if (length(cd) > 0) return(unique(cd))
     }
     click <- tryCatch(
-      plotly::event_data("plotly_click", source = "fp_corr_plot"),
+      suppressWarnings(
+        plotly::event_data("plotly_click", source = "fp_corr_plot")
+      ),
       error = function(e) NULL
     )
     if (!is.null(click) && is.data.frame(click) && nrow(click) > 0 &&
@@ -1452,8 +1463,13 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   # customdata for candidate markers is "cand_<frame_idx>_<freq>"; the regular
   # f0 trace's customdata is a plain integer, so the prefix check cleanly
   # distinguishes them.
-  observeEvent(plotly::event_data("plotly_click", source = "fp_corr_plot"), {
-    click <- plotly::event_data("plotly_click", source = "fp_corr_plot")
+  observeEvent(
+    suppressWarnings(plotly::event_data("plotly_click",
+                                        source = "fp_corr_plot")),
+  {
+    click <- suppressWarnings(
+      plotly::event_data("plotly_click", source = "fp_corr_plot")
+    )
     if (is.null(click) || is.null(click$customdata)) return()
     cd <- as.character(click$customdata)
     if (!startsWith(cd, "cand_")) return()
