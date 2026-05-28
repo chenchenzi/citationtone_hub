@@ -68,12 +68,10 @@ reference:
     contents:
       - shinytone-package
 
-# articles: section intentionally omitted until vignettes exist.
-# When you add vignettes/<name>.Rmd, re-enable:
-#   articles:
-#     - title: Tutorials
-#       contents:
-#         - <vignette-name>
+articles:
+  - title: Tutorials
+    contents:
+      - shinytone
 
 news:
   releases:
