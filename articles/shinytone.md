@@ -1,20 +1,5 @@
 # Getting started with shinytone
 
-``` r
-
-library(shinytone)
-library(dplyr)
-#> 
-#> Attaching package: 'dplyr'
-#> The following objects are masked from 'package:stats':
-#> 
-#>     filter, lag
-#> The following objects are masked from 'package:base':
-#> 
-#>     intersect, setdiff, setequal, union
-library(ggplot2)
-```
-
 ## What is shinytone?
 
 **shinytone** is a research hub for *citation tone analysis* in tone
@@ -33,6 +18,17 @@ bundled sample dataset. If you prefer a graphical workflow, run
 [`shinytone::run_app()`](https://chenchenzi.github.io/citationtone_hub/reference/run_app.md)
 after installing, or visit the hosted app at
 <https://chenzixu.shinyapps.io/shinytone/>.
+
+## Setup
+
+The examples below assume these three packages are loaded:
+
+``` r
+
+library(shinytone)
+library(dplyr)
+library(ggplot2)
+```
 
 ## The bundled `sample_f0` dataset
 
