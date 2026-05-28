@@ -1075,6 +1075,10 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                                  fixedrange = TRUE)
     }
     p <- do.call(plotly::layout, c(list(p), layout_args))
+    # Register the click event so plotly::event_data("plotly_click", ...)
+    # receives clicks without the per-session "event not registered" warning.
+    p <- plotly::event_register(p, "plotly_click")
+    p <- plotly::event_register(p, "plotly_selected")
     plotly::config(p, displaylogo = FALSE, scrollZoom = TRUE)
   })
 

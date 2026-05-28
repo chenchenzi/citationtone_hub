@@ -1,0 +1,67 @@
+# GitHub uses this file to populate the "Cite this repository" sidebar
+# entry on the repo home. Format spec: https://citation-file-format.github.io/
+
+cff-version: 1.2.0
+title: "shinytone: A Citation Tone Research Hub"
+message: >
+  If you use shinytone in published work, please cite both the software
+  and the accompanying methodology paper listed under `references`.
+type: software
+authors:
+  - family-names: Xu
+    given-names: Chenzi
+    orcid: ""
+    affiliation: ""
+  - family-names: Zhang
+    given-names: Cong
+    orcid: ""
+    affiliation: ""
+repository-code: "https://github.com/chenchenzi/citationtone_hub"
+url: "https://chenchenzi.github.io/citationtone_hub/"
+license: MIT
+version: 0.1.0
+date-released: 2026-05-28
+keywords:
+  - citation tone
+  - tonal phonetics
+  - f0 normalisation
+  - growth curve analysis
+  - generalised additive mixed models
+  - Chao tone numerals
+  - R package
+  - Shiny
+
+# When users click "Cite this repository", GitHub shows the entry above
+# (the software). `preferred-citation` overrides that for *publication*
+# purposes — point readers at the methodology paper.
+preferred-citation:
+  type: article
+  title: "A cross-linguistic review of citation tone production studies: Methodology and recommendations"
+  authors:
+    - family-names: Xu
+      given-names: Chenzi
+    - family-names: Zhang
+      given-names: Cong
+  journal: "The Journal of the Acoustical Society of America"
+  year: 2024
+  volume: 156
+  issue: 4
+  start: 2538
+  end: 2565
+  doi: "10.1121/10.0032356"
+
+references:
+  - type: article
+    title: "Plastic Mandarin tones: regional identity in prosody"
+    authors:
+      - family-names: Xu
+        given-names: Chenzi
+    journal: "Phonetica"
+    year: 2025
+    volume: 82
+    issue: 5
+    start: 331
+    end: 362
+    doi: "10.1515/phon-2025-0001"
+    notes: >
+      Source of the bundled sample_f0 dataset.

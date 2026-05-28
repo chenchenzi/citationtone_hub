@@ -4,6 +4,7 @@
 ^\.claude$
 ^\.DS_Store$
 ^LICENSE\.md$
+^CITATION\.cff$
 ^app\.R$
 ^ui_old\.R$
 ^test$
