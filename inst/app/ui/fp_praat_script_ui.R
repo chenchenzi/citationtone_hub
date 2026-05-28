@@ -55,7 +55,7 @@ form Extract f0 with Praat
   positive F0_max 600
 
   comment === Time step (s) -- 0 means Praat default (~0.0025 s) ===
-  positive Time_step 0.005
+  positive Time_step 0.010
 
   comment === Pitch-extraction method ===
   optionmenu Method: 1

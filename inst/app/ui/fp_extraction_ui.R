@@ -22,7 +22,7 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         tags$hr(),
         numericInput("fp_f0_min",   "Min f0 (Hz)",   value = 75,  min = 30,  max = 300),
         numericInput("fp_f0_max",   "Max f0 (Hz)",   value = 600, min = 200, max = 1000),
-        numericInput("fp_window_ms","Frame step (ms)", value = 5,  min = 1,   max = 50)
+        numericInput("fp_window_ms","Frame step (ms)", value = 10, min = 1,   max = 50)
       ),
       conditionalPanel("input.fp_extract_mode == 'csv'",
         tags$hr(),
