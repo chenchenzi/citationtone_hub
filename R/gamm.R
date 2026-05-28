@@ -13,49 +13,122 @@
 
 #' Fit a Generalised Additive Mixed Model (GAMM) to f0 contours
 #'
-#' Convenience wrapper around [mgcv::bam()] for the citation-tone GAMM use
-#' case. Prepares the data, builds a smooth-based formula with optional
-#' difference smooths and speaker random smooths, fits the model, and can
-#' refit with an AR1 correlation if requested.
+#' @description
+#' Fits a Generalised Additive Mixed Model with smooth (non-polynomial)
+#' tone-by-time interactions. GAMMs are an increasingly common
+#' alternative to GCA for dynamic speech analysis because they capture
+#' arbitrary smooth contour shapes without requiring the analyst to
+#' choose a polynomial degree (Wood 2017; Sóskuthy 2021;
+#' Xu & Zhang 2024).
 #'
-#' For non-standard model structures, use [mgcv::bam()] / [mgcv::gam()]
-#' directly.
+#' This is a convenience wrapper around [mgcv::bam()] that prepares the
+#' data, builds a smooth-based formula with optional difference smooths
+#' and speaker random smooths, fits the model, and optionally refits
+#' with an AR1 correlation. For non-standard model structures, call
+#' [mgcv::bam()] or [mgcv::gam()] directly.
 #'
-#' @param data Long-format data frame, one row per f0 sample.
+#' @details
+#' ## What the function does internally
+#'
+#' 1. Normalise time to `[0, 1]` per token.
+#' 2. Coerce `tone`, `speaker`, `item`, and (for difference smooths) an
+#'    ordered `tone_ord` to factors with treatment contrasts.
+#' 3. Build the formula based on `smooth_type` and `random_smooth`.
+#' 4. Fit with [mgcv::bam()] using `discrete = TRUE` for speed on large
+#'    datasets, capturing warnings.
+#' 5. If `use_ar1 = TRUE`, estimate `rho` from the lag-1 autocorrelation
+#'    of the residuals and refit with that `rho` plus per-token
+#'    `AR.start` to correct for within-token correlation.
+#'
+#' ## Choosing `smooth_type`
+#'
+#' * `"separate"` (default) fits one smooth per tone with `s(time,
+#'   by = tone)`. Each tone curve is estimated independently.
+#' * `"difference"` fits a reference smooth plus difference smooths via
+#'   an ordered factor. Lets you test whether each non-reference tone
+#'   significantly differs from the reference at any point along the
+#'   time axis.
+#'
+#' ## Random smooth strategies
+#'
+#' Following Sóskuthy (2021), several patterns are supported via
+#' `random_smooth`:
+#'
+#' * `"speaker"`: single by-speaker factor smooth `s(time, speaker,
+#'   bs = "fs", m = 1)`. Fastest, basic random-curve modelling.
+#' * `"speaker_tone"`: interaction factor smooth `s(time, speaker.tone,
+#'   bs = "fs", m = 1)` letting each speaker-tone combination have its
+#'   own random curve.
+#' * `"speaker_by_tone"`: by-speaker factor smooths separately per tone.
+#' * `"ref_diff"`: reference by-speaker smooth plus tone-difference
+#'   random smooths, matched to `smooth_type = "difference"`.
+#' * `"none"`: only the random-effect intercepts (if any) are included.
+#'
+#' Refer to Sóskuthy (2021) for guidance on choosing between these.
+#'
+#' @param data A long-format data frame with one row per f0 sample.
 #' @param f0,time,token,tone,speaker,item Column names.
-#' @param duration Optional column name with a per-sample duration covariate.
-#'   Use `NULL` to omit the duration smooth.
+#' @param duration Optional column name with a per-sample duration
+#'   covariate. Use `NULL` to omit the duration smooth.
 #' @param k Basis dimension for the time smooth. Default `10`.
-#' @param bs Spline basis type passed to [mgcv::s()]. Default `"tp"`.
+#' @param bs Spline basis type passed to [mgcv::s()]. Default `"tp"`
+#'   (thin-plate regression spline).
 #' @param smooth_type Either `"separate"` (one smooth per tone via
-#'   `s(time, by = tone)`) or `"difference"` (reference smooth +
+#'   `s(time, by = tone)`) or `"difference"` (reference smooth plus
 #'   difference smooths via an ordered factor).
-#' @param random_intercept_speaker,random_intercept_item Logical, include
-#'   the corresponding `s(..., bs = "re")` random intercept.
+#' @param random_intercept_speaker,random_intercept_item Logical;
+#'   include the corresponding `s(..., bs = "re")` random intercept.
 #' @param random_smooth One of `"none"`, `"speaker"`, `"speaker_tone"`,
-#'   `"speaker_by_tone"`, or `"ref_diff"`. See *Random smooth strategies*
-#'   in details.
+#'   `"speaker_by_tone"`, or `"ref_diff"`. See Details.
 #' @param use_ar1 Logical. If `TRUE`, fit once, estimate `rho` from the
 #'   residuals' lag-1 autocorrelation, then refit with that `rho`.
 #'
-#' @details
-#' Random smooth strategies (after Sóskuthy 2021):
-#' * `"speaker"` — single by-speaker factor smooth
-#' * `"speaker_tone"` — interaction factor smooth over speaker × tone
-#' * `"speaker_by_tone"` — by-speaker factor smooth, separately per tone
-#' * `"ref_diff"` — reference by-speaker smooth plus tone-difference
-#'   smooths (matches `smooth_type = "difference"`)
-#'
 #' @return An S3 object of class `"shinytone_gamm"`, a list with:
-#' * `model` — the fitted [mgcv::bam()] object
-#' * `formula_str` — user-readable formula string
-#' * `rho` — `NULL` or the AR1 rho value
-#' * `convergence_warning` — `NULL` or the captured warning message
-#' * `smooth_type`, `random_smooth` — passed through (needed by
-#'   [predict_gamm()])
-#' * `col_names` — original column names, for back-mapping
+#' * `model`: the fitted [mgcv::bam()] object.
+#' * `formula_str`: user-readable formula string.
+#' * `rho`: `NULL` or the AR1 rho value.
+#' * `convergence_warning`: `NULL` or the captured warning message.
+#' * `smooth_type`, `random_smooth`: passed through (needed by
+#'   [predict_gamm()]).
+#' * `col_names`: original column names, for back-mapping.
 #'
-#' @seealso [predict_gamm()] for per-tone prediction on a time grid.
+#' @seealso
+#' * [predict_gamm()] for per-tone prediction on a time grid.
+#' * [fit_gca()] for the polynomial-based mixed-effects alternative.
+#'
+#' @references
+#' Sóskuthy, M. (2021). Evaluating generalised additive mixed modelling
+#' strategies for dynamic speech analysis. \emph{Journal of Phonetics},
+#' 84, 101017. \doi{10.1016/j.wocn.2020.101017}
+#'
+#' Wood, S. N. (2017). \emph{Generalized Additive Models: An Introduction
+#' with R} (2nd ed.). Chapman and Hall/CRC.
+#'
+#' Xu, C., & Zhang, C. (2024). A cross-linguistic review of citation
+#' tone production studies: Methodology and recommendations.
+#' \emph{The Journal of the Acoustical Society of America}, 156(4),
+#' 2538–2565. \doi{10.1121/10.0032356}
+#'
+#' @examples
+#' \dontrun{
+#' data(sample_f0)
+#' normed <- normalise_f0(sample_f0,
+#'                        f0      = "f0_Hz",
+#'                        speaker = "speaker",
+#'                        tone    = "tone")
+#' gamm <- fit_gamm(normed,
+#'                  f0          = "f0_st",
+#'                  time        = "time",
+#'                  token       = "token",
+#'                  tone        = "tone",
+#'                  speaker     = "speaker",
+#'                  item        = "char",
+#'                  k           = 10,
+#'                  smooth_type = "separate",
+#'                  random_smooth = "speaker",
+#'                  use_ar1     = TRUE)
+#' predict_gamm(gamm, n = 200)
+#' }
 #' @export
 #' @importFrom dplyr group_by mutate ungroup arrange n
 #' @importFrom rlang .data
@@ -259,14 +332,50 @@ build_gamm_display_formula <- function(smooth_type, random_smooth,
 
 #' Predict population-level f0 smooth curves from a GAMM fit
 #'
-#' Builds a per-tone time grid, sets random-effect columns to reference
-#' levels, and predicts with the random-effect smooths excluded so that
-#' the result is the population-average curve per tone.
+#' @description
+#' Generates per-tone population-average smooth curves from a fitted
+#' [fit_gamm()] model. Useful for plotting predicted contours with
+#' confidence bands, comparing tones at a glance, or feeding into
+#' downstream Chao numeral summarisation via [contour_to_chao()].
 #'
-#' @param gamm_obj An object of class `"shinytone_gamm"` from [fit_gamm()].
+#' @details
+#' Internally:
+#'
+#' 1. Build a per-tone time grid with `n` evenly-spaced points across
+#'    `[0, 1]`.
+#' 2. Set random-effect columns (speaker, item, and any random-smooth
+#'    grouping factors) to the first level of their respective factors;
+#'    these reference values are placeholders that don't affect the
+#'    prediction once the corresponding terms are excluded.
+#' 3. Identify the random-effect terms that need to be excluded so the
+#'    prediction reflects only the population-average fixed smooths.
+#' 4. Call [stats::predict()] on the mgcv model with `exclude =
+#'    <random terms>` and `se.fit = TRUE` to also return standard
+#'    errors.
+#'
+#' Predictions are on the scale of the f0 column used to fit the model
+#' (typically semitones if you passed `f0 = "f0_st"` from
+#' [normalise_f0()]).
+#'
+#' @param gamm_obj An object of class `"shinytone_gamm"` from
+#'   [fit_gamm()].
 #' @param n Number of time points across `[0, 1]`. Default `200`.
 #'
-#' @return A data frame with columns `time`, `f0_predicted`, `se`, `tone`.
+#' @return A data frame with columns `time`, `f0_predicted`, `se`,
+#'   `tone`.
+#'
+#' @seealso [fit_gamm()] for the model fit. [contour_to_chao()] for
+#'   converting the predicted contours to Chao numerals.
+#'
+#' @references
+#' Sóskuthy, M. (2021). Evaluating generalised additive mixed modelling
+#' strategies for dynamic speech analysis. \emph{Journal of Phonetics},
+#' 84, 101017. \doi{10.1016/j.wocn.2020.101017}
+#'
+#' Xu, C., & Zhang, C. (2024). A cross-linguistic review of citation
+#' tone production studies: Methodology and recommendations.
+#' \emph{The Journal of the Acoustical Society of America}, 156(4),
+#' 2538–2565. \doi{10.1121/10.0032356}
 #'
 #' @export
 predict_gamm <- function(gamm_obj, n = 200) {

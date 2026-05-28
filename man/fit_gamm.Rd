@@ -23,27 +23,27 @@ fit_gamm(
 )
 }
 \arguments{
-\item{data}{Long-format data frame, one row per f0 sample.}
+\item{data}{A long-format data frame with one row per f0 sample.}
 
 \item{f0, time, token, tone, speaker, item}{Column names.}
 
-\item{duration}{Optional column name with a per-sample duration covariate.
-Use \code{NULL} to omit the duration smooth.}
+\item{duration}{Optional column name with a per-sample duration
+covariate. Use \code{NULL} to omit the duration smooth.}
 
 \item{k}{Basis dimension for the time smooth. Default \code{10}.}
 
-\item{bs}{Spline basis type passed to \code{\link[mgcv:s]{mgcv::s()}}. Default \code{"tp"}.}
+\item{bs}{Spline basis type passed to \code{\link[mgcv:s]{mgcv::s()}}. Default \code{"tp"}
+(thin-plate regression spline).}
 
 \item{smooth_type}{Either \code{"separate"} (one smooth per tone via
-\code{s(time, by = tone)}) or \code{"difference"} (reference smooth +
+\code{s(time, by = tone)}) or \code{"difference"} (reference smooth plus
 difference smooths via an ordered factor).}
 
-\item{random_intercept_speaker, random_intercept_item}{Logical, include
-the corresponding \code{s(..., bs = "re")} random intercept.}
+\item{random_intercept_speaker, random_intercept_item}{Logical;
+include the corresponding \code{s(..., bs = "re")} random intercept.}
 
 \item{random_smooth}{One of \code{"none"}, \code{"speaker"}, \code{"speaker_tone"},
-\code{"speaker_by_tone"}, or \code{"ref_diff"}. See \emph{Random smooth strategies}
-in details.}
+\code{"speaker_by_tone"}, or \code{"ref_diff"}. See Details.}
 
 \item{use_ar1}{Logical. If \code{TRUE}, fit once, estimate \code{rho} from the
 residuals' lag-1 autocorrelation, then refit with that \code{rho}.}
@@ -51,34 +51,108 @@ residuals' lag-1 autocorrelation, then refit with that \code{rho}.}
 \value{
 An S3 object of class \code{"shinytone_gamm"}, a list with:
 \itemize{
-\item \code{model} — the fitted \code{\link[mgcv:bam]{mgcv::bam()}} object
-\item \code{formula_str} — user-readable formula string
-\item \code{rho} — \code{NULL} or the AR1 rho value
-\item \code{convergence_warning} — \code{NULL} or the captured warning message
-\item \code{smooth_type}, \code{random_smooth} — passed through (needed by
-\code{\link[=predict_gamm]{predict_gamm()}})
-\item \code{col_names} — original column names, for back-mapping
+\item \code{model}: the fitted \code{\link[mgcv:bam]{mgcv::bam()}} object.
+\item \code{formula_str}: user-readable formula string.
+\item \code{rho}: \code{NULL} or the AR1 rho value.
+\item \code{convergence_warning}: \code{NULL} or the captured warning message.
+\item \code{smooth_type}, \code{random_smooth}: passed through (needed by
+\code{\link[=predict_gamm]{predict_gamm()}}).
+\item \code{col_names}: original column names, for back-mapping.
 }
 }
 \description{
-Convenience wrapper around \code{\link[mgcv:bam]{mgcv::bam()}} for the citation-tone GAMM use
-case. Prepares the data, builds a smooth-based formula with optional
-difference smooths and speaker random smooths, fits the model, and can
-refit with an AR1 correlation if requested.
+Fits a Generalised Additive Mixed Model with smooth (non-polynomial)
+tone-by-time interactions. GAMMs are an increasingly common
+alternative to GCA for dynamic speech analysis because they capture
+arbitrary smooth contour shapes without requiring the analyst to
+choose a polynomial degree (Wood 2017; Sóskuthy 2021;
+Xu & Zhang 2024).
+
+This is a convenience wrapper around \code{\link[mgcv:bam]{mgcv::bam()}} that prepares the
+data, builds a smooth-based formula with optional difference smooths
+and speaker random smooths, fits the model, and optionally refits
+with an AR1 correlation. For non-standard model structures, call
+\code{\link[mgcv:bam]{mgcv::bam()}} or \code{\link[mgcv:gam]{mgcv::gam()}} directly.
 }
 \details{
-For non-standard model structures, use \code{\link[mgcv:bam]{mgcv::bam()}} / \code{\link[mgcv:gam]{mgcv::gam()}}
-directly.
-
-Random smooth strategies (after Sóskuthy 2021):
-\itemize{
-\item \code{"speaker"} — single by-speaker factor smooth
-\item \code{"speaker_tone"} — interaction factor smooth over speaker × tone
-\item \code{"speaker_by_tone"} — by-speaker factor smooth, separately per tone
-\item \code{"ref_diff"} — reference by-speaker smooth plus tone-difference
-smooths (matches \code{smooth_type = "difference"})
+\subsection{What the function does internally}{
+\enumerate{
+\item Normalise time to \verb{[0, 1]} per token.
+\item Coerce \code{tone}, \code{speaker}, \code{item}, and (for difference smooths) an
+ordered \code{tone_ord} to factors with treatment contrasts.
+\item Build the formula based on \code{smooth_type} and \code{random_smooth}.
+\item Fit with \code{\link[mgcv:bam]{mgcv::bam()}} using \code{discrete = TRUE} for speed on large
+datasets, capturing warnings.
+\item If \code{use_ar1 = TRUE}, estimate \code{rho} from the lag-1 autocorrelation
+of the residuals and refit with that \code{rho} plus per-token
+\code{AR.start} to correct for within-token correlation.
 }
+}
+
+\subsection{Choosing \code{smooth_type}}{
+\itemize{
+\item \code{"separate"} (default) fits one smooth per tone with \code{s(time, by = tone)}. Each tone curve is estimated independently.
+\item \code{"difference"} fits a reference smooth plus difference smooths via
+an ordered factor. Lets you test whether each non-reference tone
+significantly differs from the reference at any point along the
+time axis.
+}
+}
+
+\subsection{Random smooth strategies}{
+
+Following Sóskuthy (2021), several patterns are supported via
+\code{random_smooth}:
+\itemize{
+\item \code{"speaker"}: single by-speaker factor smooth \code{s(time, speaker, bs = "fs", m = 1)}. Fastest, basic random-curve modelling.
+\item \code{"speaker_tone"}: interaction factor smooth \code{s(time, speaker.tone, bs = "fs", m = 1)} letting each speaker-tone combination have its
+own random curve.
+\item \code{"speaker_by_tone"}: by-speaker factor smooths separately per tone.
+\item \code{"ref_diff"}: reference by-speaker smooth plus tone-difference
+random smooths, matched to \code{smooth_type = "difference"}.
+\item \code{"none"}: only the random-effect intercepts (if any) are included.
+}
+
+Refer to Sóskuthy (2021) for guidance on choosing between these.
+}
+}
+\examples{
+\dontrun{
+data(sample_f0)
+normed <- normalise_f0(sample_f0,
+                       f0      = "f0_Hz",
+                       speaker = "speaker",
+                       tone    = "tone")
+gamm <- fit_gamm(normed,
+                 f0          = "f0_st",
+                 time        = "time",
+                 token       = "token",
+                 tone        = "tone",
+                 speaker     = "speaker",
+                 item        = "char",
+                 k           = 10,
+                 smooth_type = "separate",
+                 random_smooth = "speaker",
+                 use_ar1     = TRUE)
+predict_gamm(gamm, n = 200)
+}
+}
+\references{
+Sóskuthy, M. (2021). Evaluating generalised additive mixed modelling
+strategies for dynamic speech analysis. \emph{Journal of Phonetics},
+84, 101017. \doi{10.1016/j.wocn.2020.101017}
+
+Wood, S. N. (2017). \emph{Generalized Additive Models: An Introduction
+with R} (2nd ed.). Chapman and Hall/CRC.
+
+Xu, C., & Zhang, C. (2024). A cross-linguistic review of citation
+tone production studies: Methodology and recommendations.
+\emph{The Journal of the Acoustical Society of America}, 156(4),
+2538–2565. \doi{10.1121/10.0032356}
 }
 \seealso{
-\code{\link[=predict_gamm]{predict_gamm()}} for per-tone prediction on a time grid.
+\itemize{
+\item \code{\link[=predict_gamm]{predict_gamm()}} for per-tone prediction on a time grid.
+\item \code{\link[=fit_gca]{fit_gca()}} for the polynomial-based mixed-effects alternative.
+}
 }

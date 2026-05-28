@@ -13,37 +13,80 @@ flag_outliers(
 )
 }
 \arguments{
-\item{data}{A long-format data frame, one row per f0 sample.}
+\item{data}{A long-format data frame with one row per f0 sample.}
 
-\item{f0}{Column name of f0 (Hz). Default \code{"f0"}.}
+\item{f0}{Column name of f0 in Hz. Default \code{"f0"}.}
 
 \item{token}{Column name of token ID. Default \code{"token"}.}
 
 \item{speaker}{Column name of speaker ID. Default \code{"speaker"}.}
 
 \item{z_threshold}{Absolute z-score above which a token is flagged.
-Default \code{3}, covering 99.7\% of a normal distribution.}
+Default \code{3}, covering about 99.7\% of a normal distribution.}
 }
 \value{
-A \emph{token-level} data frame (one row per token) with columns:
+A token-level data frame (one row per token) with columns:
 \code{f0_token_max}, \code{f0_token_min}, \code{f0_token_mean}, \code{f0_token_sd},
 \code{z_max}, \code{z_min}, \code{flag_too_high}, \code{flag_too_low}, plus the original
 \code{token} and \code{speaker} columns.
 }
 \description{
-For each token (a unique value of the \code{token} column), compute the maximum
-and minimum f0. Within each speaker, z-score those per-token extremes. A
-token is flagged whenever the absolute z-score of either its max or its
-min exceeds \code{z_threshold}.
+Identifies tokens whose maximum or minimum f0 lies far from the centre
+of a speaker's per-token f0 distribution. Suitable as a first pass at
+detecting tracking errors, mis-segmentations, or genuinely unusual
+productions before fitting contour models. Token-level outlier removal
+is a recommended cleaning step prior to citation-tone analysis
+(Xu & Zhang 2024).
+}
+\details{
+\subsection{What the function does internally}{
+\enumerate{
+\item Drop samples where \code{f0} is \code{NA} or \code{0} (pitch trackers commonly
+output 0 for unvoiced frames).
+\item Compute the per-token maximum, minimum, mean, and SD of \code{f0}.
+\item Within each speaker, z-score the per-token maxima against each
+other and the per-token minima against each other (so a speaker
+with consistently high f0 isn't flagged as an outlier of the corpus).
+\item Flag a token if \verb{|z_max| > z_threshold} (the per-token max is too
+high or too low for this speaker) or \verb{|z_min| > z_threshold}.
+}
+}
+
+\subsection{Choosing \code{z_threshold}}{
+
+The default of \code{3} corresponds to the standard convention that ±3 SDs
+covers 99.7\% of a normal distribution, so under that assumption only
+about 0.3\% of tokens are flagged. Lower thresholds (e.g., \code{2} or \code{2.5})
+are more aggressive, useful when manual review of every flagged token
+is feasible. Higher thresholds (\code{4}+) are more conservative.
+
+Token z-scoring per speaker assumes each speaker contributes enough
+tokens for the SD to be meaningfully estimated; results for speakers
+with only a handful of tokens should be treated as advisory.
+}
 }
 \examples{
-df <- data.frame(
-  token   = rep(c("t1", "t2", "t3"), each = 4),
-  speaker = rep("S01", 12),
-  f0      = c(150, 160, 155, 158,
-              152, 159, 154, 157,
-              400, 410, 405, 408)   # t3 is clearly a tracking error
-)
-flag_outliers(df, z_threshold = 1.5)
+data(sample_f0)
+out <- flag_outliers(sample_f0,
+                     f0      = "f0_Hz",
+                     token   = "token",
+                     speaker = "speaker",
+                     z_threshold = 3)
+table(out$flag_too_high, useNA = "ifany")
+table(out$flag_too_low,  useNA = "ifany")
 
+}
+\references{
+Xu, C., & Zhang, C. (2024). A cross-linguistic review of citation
+tone production studies: Methodology and recommendations.
+\emph{The Journal of the Acoustical Society of America}, 156(4),
+2538–2565. \doi{10.1121/10.0032356}
+}
+\seealso{
+\itemize{
+\item \code{\link[=flag_pitch_jumps]{flag_pitch_jumps()}} for complementary sample-level artefact
+detection (octave jumps, rate-of-change violations).
+\item \code{\link[=inspect_f0]{inspect_f0()}} for the convenience wrapper that runs both and joins
+the results.
+}
 }

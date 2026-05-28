@@ -15,10 +15,11 @@ fit_polynomial(
 )
 }
 \arguments{
-\item{data}{Long-format data frame with one row per f0 sample.}
+\item{data}{A long-format data frame with one row per f0 sample.}
 
-\item{f0}{Column name of f0 values. Default \code{"f0"}. Normalised f0
-(\code{"f0_st"}, \code{"f0_zscore"}) is recommended for cross-speaker comparison.}
+\item{f0}{Column name of f0 values. Default \code{"f0"}. Using normalised
+f0 (e.g. \code{"f0_st"} from \code{\link[=normalise_f0]{normalise_f0()}}) is recommended for
+cross-speaker comparison.}
 
 \item{token}{Column name of token ID. Default \code{"token"}.}
 
@@ -33,39 +34,82 @@ output. Default \code{"tone"}.}
 \item{degree}{Polynomial degree. One of \code{1}, \code{2}, or \code{3}. Default \code{2}.}
 }
 \value{
-A token-level data frame with one row per token, containing:
-\code{token}, \code{speaker}, \code{tone}, and the coefficients \code{c0}, \code{c1}, ...,
-\verb{c\{degree\}}.
+A token-level data frame with one row per token, containing
+the \code{token}, \code{speaker}, \code{tone}, and coefficient columns \code{c0},
+\code{c1}, ..., \verb{c\{degree\}}.
 }
 \description{
-For each token (a unique value of the \code{token} column), normalise the
-time axis to \verb{[-1, 1]}, construct a Legendre polynomial basis of the
-requested degree, and fit ordinary least squares. Returns one row per
-token with the fitted coefficients \code{c0}, \code{c1}, ..., \verb{c\{degree\}}.
+For each token, normalises the time axis to \verb{[-1, 1]}, constructs a
+Legendre polynomial basis of the requested degree, and fits ordinary
+least squares. Returns one row per token with the fitted
+coefficients \code{c0}, \code{c1}, ..., \verb{c\{degree\}}. Useful as a compact,
+interpretable summary of contour shape, or as features for downstream
+classifiers and regression models (Mirman 2014; Xu & Zhang 2024).
 }
 \details{
-Legendre polynomials are orthogonal on \verb{[-1, 1]}, so the fitted
+\subsection{What the function does internally}{
+
+For each token:
+\enumerate{
+\item Compute the per-token range of \code{time} and rescale it linearly to
+the interval \verb{[-1, 1]}, which is where Legendre polynomials are
+orthogonal.
+\item Build the Legendre basis up to the requested \code{degree}.
+\item Solve the ordinary least-squares problem with \code{\link[stats:lm.fit]{stats::lm.fit()}} to
+recover the coefficients.
+}
+}
+
+\subsection{Interpreting the coefficients}{
+
+Because Legendre polynomials are orthogonal on \verb{[-1, 1]}, the fitted
 coefficients have a tidy shape interpretation:
 \itemize{
-\item \code{c0} — token-level mean f0
-\item \code{c1} — linear slope across the contour
-\item \code{c2} — quadratic curvature (rise-fall vs fall-rise)
-\item \code{c3} — cubic shape (sigmoid vs reverse-sigmoid)
+\item \code{c0}: token-level mean f0.
+\item \code{c1}: linear slope across the contour. Positive means rising.
+\item \code{c2}: quadratic curvature. Positive means U-shaped (dipping),
+negative means inverted-U (peaking).
+\item \code{c3}: cubic shape. Differentiates sigmoid from reverse-sigmoid
+contours.
+}
 }
 
-Tokens with fewer than \code{degree + 1} valid samples receive \code{NA} for all
-coefficients. Tokens with a single unique time point keep \code{c0} as the
-mean f0 and set the higher-order coefficients to \code{NA}.
+\subsection{Edge cases}{
+
+Tokens with fewer than \code{degree + 1} valid samples receive \code{NA} for
+all coefficients. Tokens with a single unique time point keep \code{c0}
+as the mean f0 and set the higher-order coefficients to \code{NA}.
+}
 }
 \examples{
-df <- data.frame(
-  token   = rep(c("t1", "t2"), each = 5),
-  time    = rep(seq(0, 1, length.out = 5), 2),
-  f0      = c(150, 160, 170, 165, 155,
-              140, 145, 150, 145, 140),
-  speaker = rep("S01", 10),
-  tone    = rep(c("T1", "T2"), each = 5)
-)
-fit_polynomial(df, degree = 2)
+data(sample_f0)
+normed <- normalise_f0(sample_f0,
+                       f0      = "f0_Hz",
+                       speaker = "speaker",
+                       tone    = "tone")
+coefs <- fit_polynomial(normed,
+                        f0      = "f0_st",
+                        token   = "token",
+                        time    = "time",
+                        speaker = "speaker",
+                        tone    = "tone",
+                        degree  = 2)
+head(coefs)
 
+}
+\references{
+Mirman, D. (2014). \emph{Growth Curve Analysis and Visualization Using
+R}. Chapman and Hall/CRC.
+
+Xu, C., & Zhang, C. (2024). A cross-linguistic review of citation
+tone production studies: Methodology and recommendations.
+\emph{The Journal of the Acoustical Society of America}, 156(4),
+2538–2565. \doi{10.1121/10.0032356}
+}
+\seealso{
+\itemize{
+\item \code{\link[=normalise_f0]{normalise_f0()}} for the upstream normalisation step.
+\item \code{\link[=fit_gca]{fit_gca()}} for a population-level mixed-effects extension of
+polynomial contour modelling.
+}
 }

@@ -16,7 +16,38 @@ predict_gca(gca_obj, n = 100)
 A data frame with columns \code{time}, \code{f0_predicted}, \code{tone}.
 }
 \description{
-Builds a (time, tone) prediction grid using the polynomial basis cached
-inside the \code{\link[=fit_gca]{fit_gca()}} result, then predicts via lme4 with \code{re.form = NA}
-so the curves reflect the population-average fixed effects.
+Generates population-average per-tone f0 curves from a fitted
+\code{\link[=fit_gca]{fit_gca()}} model. Useful for plotting predicted contours, comparing
+tones at a glance, or feeding into downstream Chao numeral
+summarisation via \code{\link[=contour_to_chao]{contour_to_chao()}}.
+}
+\details{
+Internally:
+\enumerate{
+\item Build a \verb{(time, tone)} grid with \code{n} evenly-spaced points across
+\verb{[0, 1]} for every tone level the model knows about.
+\item Re-compute the orthogonal polynomial basis on that grid using the
+cached coefficients from \code{\link[=fit_gca]{fit_gca()}} (this ensures the basis
+matches what the model was fit with, not a fresh one).
+\item Call \code{\link[stats:predict]{stats::predict()}} on the lme4 model with \code{re.form = NA}, so
+only fixed effects contribute (random effects are integrated out
+to the population mean).
+}
+
+Note that the returned predictions are on the scale of the f0 column
+used to fit the model (typically semitones, if you passed
+\code{f0 = "f0_st"} from \code{\link[=normalise_f0]{normalise_f0()}}).
+}
+\references{
+Mirman, D. (2014). \emph{Growth Curve Analysis and Visualization Using
+R}. Chapman and Hall/CRC.
+
+Xu, C., & Zhang, C. (2024). A cross-linguistic review of citation
+tone production studies: Methodology and recommendations.
+\emph{The Journal of the Acoustical Society of America}, 156(4),
+2538–2565. \doi{10.1121/10.0032356}
+}
+\seealso{
+\code{\link[=fit_gca]{fit_gca()}} for the model fit. \code{\link[=contour_to_chao]{contour_to_chao()}} for
+converting the predicted contours to Chao numerals.
 }

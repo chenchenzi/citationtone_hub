@@ -7,15 +7,51 @@
 predict_gamm(gamm_obj, n = 200)
 }
 \arguments{
-\item{gamm_obj}{An object of class \code{"shinytone_gamm"} from \code{\link[=fit_gamm]{fit_gamm()}}.}
+\item{gamm_obj}{An object of class \code{"shinytone_gamm"} from
+\code{\link[=fit_gamm]{fit_gamm()}}.}
 
 \item{n}{Number of time points across \verb{[0, 1]}. Default \code{200}.}
 }
 \value{
-A data frame with columns \code{time}, \code{f0_predicted}, \code{se}, \code{tone}.
+A data frame with columns \code{time}, \code{f0_predicted}, \code{se},
+\code{tone}.
 }
 \description{
-Builds a per-tone time grid, sets random-effect columns to reference
-levels, and predicts with the random-effect smooths excluded so that
-the result is the population-average curve per tone.
+Generates per-tone population-average smooth curves from a fitted
+\code{\link[=fit_gamm]{fit_gamm()}} model. Useful for plotting predicted contours with
+confidence bands, comparing tones at a glance, or feeding into
+downstream Chao numeral summarisation via \code{\link[=contour_to_chao]{contour_to_chao()}}.
+}
+\details{
+Internally:
+\enumerate{
+\item Build a per-tone time grid with \code{n} evenly-spaced points across
+\verb{[0, 1]}.
+\item Set random-effect columns (speaker, item, and any random-smooth
+grouping factors) to the first level of their respective factors;
+these reference values are placeholders that don't affect the
+prediction once the corresponding terms are excluded.
+\item Identify the random-effect terms that need to be excluded so the
+prediction reflects only the population-average fixed smooths.
+\item Call \code{\link[stats:predict]{stats::predict()}} on the mgcv model with \verb{exclude = <random terms>} and \code{se.fit = TRUE} to also return standard
+errors.
+}
+
+Predictions are on the scale of the f0 column used to fit the model
+(typically semitones if you passed \code{f0 = "f0_st"} from
+\code{\link[=normalise_f0]{normalise_f0()}}).
+}
+\references{
+Sóskuthy, M. (2021). Evaluating generalised additive mixed modelling
+strategies for dynamic speech analysis. \emph{Journal of Phonetics},
+84, 101017. \doi{10.1016/j.wocn.2020.101017}
+
+Xu, C., & Zhang, C. (2024). A cross-linguistic review of citation
+tone production studies: Methodology and recommendations.
+\emph{The Journal of the Acoustical Society of America}, 156(4),
+2538–2565. \doi{10.1121/10.0032356}
+}
+\seealso{
+\code{\link[=fit_gamm]{fit_gamm()}} for the model fit. \code{\link[=contour_to_chao]{contour_to_chao()}} for
+converting the predicted contours to Chao numerals.
 }

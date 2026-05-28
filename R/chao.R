@@ -10,17 +10,53 @@
 
 #' Compute the per-tone mean f0 contour from long-format data
 #'
-#' Normalise time to `[0, 1]` per token, bin into 50 equally-spaced time
-#' points, then average f0 across all tokens of each tone. Returns the
-#' long-format mean contour expected by [contour_to_chao()].
+#' @description
+#' Aggregates a long-format f0 dataset into a per-tone mean contour
+#' suitable for plotting, comparison, or Chao numeral summarisation
+#' via [contour_to_chao()]. The function is used internally by the
+#' Summarise tab of the Shiny app when the user chooses the raw or
+#' normalised dataset as the input.
 #'
-#' @param data Long-format data frame, one row per f0 sample.
+#' @details
+#' Internally:
+#'
+#' 1. Within each token, normalise the time axis to `[0, 1]` so tokens
+#'    of different durations can be averaged across the same grid.
+#' 2. Round each sample's normalised time onto one of `n_bins`
+#'    equally-spaced bins.
+#' 3. For each (tone, time-bin) cell, compute the mean of `f0` across
+#'    all tokens of that tone with samples in the bin.
+#' 4. Return the long-format mean contour with columns `tone`, `time`,
+#'    `f0_predicted` (the column name `f0_predicted` matches the
+#'    convention used by [predict_gca()] and [predict_gamm()] so the
+#'    same downstream tools can consume either model predictions or
+#'    raw mean contours).
+#'
+#' @param data A long-format data frame with one row per f0 sample.
 #' @param token,f0,time,tone Column names.
 #' @param n_bins Number of evenly-spaced time bins across `[0, 1]`.
-#'   Default `50`.
+#'   Default `50`. Larger values give a smoother contour at the cost
+#'   of noisier per-bin estimates if some bins are sparsely populated.
 #'
 #' @return A data frame with columns `tone`, `time`, `f0_predicted`,
 #'   one row per (tone, time-bin).
+#'
+#' @seealso [contour_to_chao()] for converting mean contours to Chao
+#'   numerals. [predict_gca()] and [predict_gamm()] for model-based
+#'   alternatives that produce the same column structure.
+#'
+#' @references
+#' Xu, C., & Zhang, C. (2024). A cross-linguistic review of citation
+#' tone production studies: Methodology and recommendations.
+#' \emph{The Journal of the Acoustical Society of America}, 156(4),
+#' 2538–2565. \doi{10.1121/10.0032356}
+#'
+#' @examples
+#' data(sample_f0)
+#' mc <- compute_mean_contour(sample_f0,
+#'                            token = "token", f0 = "f0_Hz",
+#'                            time  = "time",  tone = "tone")
+#' head(mc)
 #'
 #' @export
 #' @importFrom dplyr group_by mutate ungroup summarise arrange n
@@ -66,14 +102,43 @@ compute_mean_contour <- function(data,
 
 #' Classify a Chao tone numeral string as a shape
 #'
-#' Returns a short shape name ("level", "rising", "falling", "dipping",
-#' "peaking", or a finer "low level" / "mid level" / "high level" for
-#' single-digit / repeated-digit strings).
+#' @description
+#' Returns a short human-readable shape name (e.g., `"level"`,
+#' `"rising"`, `"falling"`, `"dipping"`, `"peaking"`, or one of the
+#' finer-grained `"low level"` / `"mid level"` / `"high level"` labels
+#' for repeated-digit strings). Used by [contour_to_chao()] to add a
+#' `shape` column to its output, but also exposed as a standalone
+#' utility for classifying numerals from external sources.
 #'
-#' @param chao_str A character string of Chao digits (1-5), e.g. `"55"`,
+#' @details
+#' Classification rules:
+#'
+#' * All digits identical: one of `"low level"`, `"mid-low level"`,
+#'   `"mid level"`, `"mid-high level"`, `"high level"` according to
+#'   the digit value.
+#' * Three or more digits with an interior minimum below both
+#'   endpoints: `"dipping"`.
+#' * Three or more digits with an interior maximum above both
+#'   endpoints: `"peaking"`.
+#' * Otherwise, `"rising"` if the last digit is higher than the first,
+#'   `"falling"` if lower, `"level"` if equal.
+#'
+#' @param chao_str A character string of Chao digits, e.g. `"55"`,
 #'   `"214"`, `"35"`.
 #'
 #' @return A character string naming the shape.
+#'
+#' @seealso [contour_to_chao()] which calls this internally to populate
+#'   the `shape` column.
+#'
+#' @references
+#' Chao, Y. R. (1930). A system of tone-letters. \emph{Le Maître
+#' Phonétique}, 30, 24–27.
+#'
+#' Xu, C., & Zhang, C. (2024). A cross-linguistic review of citation
+#' tone production studies: Methodology and recommendations.
+#' \emph{The Journal of the Acoustical Society of America}, 156(4),
+#' 2538–2565. \doi{10.1121/10.0032356}
 #'
 #' @examples
 #' classify_contour("55")    # "high level"
@@ -111,44 +176,109 @@ classify_contour <- function(chao_str) {
 
 #' Convert per-tone contours to Chao tone numerals
 #'
-#' For each tone in `contour_data`, sample the contour at its turning
-#' points (or at the endpoints if no turning point is detected), then map
-#' each sample to a Chao digit (1-5) using up to three methods:
+#' @description
+#' Summarises per-tone contours as Chao tone numerals (Chao 1930): 5-level
+#' digit strings like `"55"`, `"35"`, or `"214"` that describe each
+#' contour by its endpoints and any interior turning point. Three
+#' conversion methods are computed in one pass so the analyst can
+#' compare them or pick whichever is most appropriate for the corpus
+#' (Xu & Zhang 2024).
 #'
-#' * **Reference-line FOR `[1, 5]`** — `f0' = (f0 - f0_min) / (f0_max - f0_min) * 4 + 1`,
-#'   rounded.
-#' * **Interval-based FOR `(0, 5]`** — `f0' = (f0 - f0_min) / (f0_max - f0_min) * 5`,
-#'   ceiling.
-#' * **Robust FOR `(0, 5]`** (optional) — same formula but with the range
-#'   defined by `mu ± sigma` of per-token f0 peaks from the highest-pitched
-#'   tone (max) and per-token f0 valleys from the lowest-pitched tone
-#'   (min). Computed only if `raw_data` is supplied.
+#' @details
+#' ## The three conversion methods
 #'
-#' The turning-point detection uses a Chao-units `threshold` (default
-#' `0.5`) on the `[1, 5]` reference scale: a tone gets 3 digits if either
-#' a dip or peak exceeds the threshold relative to its endpoints,
-#' otherwise 2 digits.
+#' All three use Fraction of Range (FOR) normalisation, which maps f0
+#' onto a bounded scale representing the speaker's (or corpus's) pitch
+#' range. They differ in how the range is defined and how scaled values
+#' are mapped to Chao digits.
+#'
+#' * **Reference-line FOR on `[1, 5]`**:
+#'   `f0' = (f0 - f0_min) / (f0_max - f0_min) * 4 + 1`, then rounded.
+#'   Five reference lines at integer values; each sampled point snaps
+#'   to the nearest integer.
+#' * **Interval-based FOR on `(0, 5]`**:
+#'   `f0' = (f0 - f0_min) / (f0_max - f0_min) * 5`, then ceilinged.
+#'   Five equal-width intervals; each sampled point is assigned to its
+#'   interval via `ceiling()`.
+#' * **Robust FOR on `(0, 5]`** (only if `raw_data` is supplied):
+#'   same interval formula, but the range is defined by μ ± σ of
+#'   per-token f0 peaks from the highest-pitched tone (max) and
+#'   per-token f0 valleys from the lowest-pitched tone (min), following
+#'   Zhu (1999) and the recommendation of Xu & Zhang (2024). More
+#'   robust to outliers than using the corpus-wide min and max.
+#'
+#' ## Turning-point detection
+#'
+#' For each tone, the function samples the contour either at its two
+#' endpoints (yielding a 2-digit numeral) or at the two endpoints plus
+#' one interior turning point (yielding a 3-digit numeral). The 3-digit
+#' case applies when either:
+#'
+#' * The interior minimum is more than `threshold` Chao units below
+#'   both endpoints (a *dip*), or
+#' * The interior maximum is more than `threshold` Chao units above
+#'   both endpoints (a *peak*).
+#'
+#' The default `threshold = 0.5` (half a Chao unit on the `[1, 5]`
+#' scale) is a conservative choice. Lower thresholds produce more
+#' 3-digit numerals, useful for tonally rich languages.
 #'
 #' @param contour_data Per-tone contour data, typically from
-#'   [compute_mean_contour()], [predict_gca()], or [predict_gamm()]. Must
-#'   contain `tone`, `time`, and `f0_predicted` columns (or rename via the
-#'   `tone_col`, `time_col`, `f0_col` arguments).
+#'   [compute_mean_contour()], [predict_gca()], or [predict_gamm()].
+#'   Must contain `tone`, `time`, and `f0_predicted` columns (or rename
+#'   via the `tone_col`, `time_col`, `f0_col` arguments).
 #' @param tone_col,time_col,f0_col Column names within `contour_data`.
 #' @param threshold Chao-units threshold for turning-point detection.
-#'   Default `0.5`.
+#'   Default `0.5`. See Details.
 #' @param raw_data Optional long-format raw data, used to compute the
 #'   robust FOR. If `NULL`, the `robust` column is left as `NA`.
 #' @param raw_token,raw_f0,raw_tone Column names in `raw_data`.
 #'
 #' @return A data frame with one row per tone, containing:
-#' * `tone` — tone label
-#' * `n_digits` — number of digits in the numeral (2 or 3)
-#' * `refline` — reference-line method numeral, e.g. `"55"`
-#' * `interval` — interval-based numeral, e.g. `"45"`
-#' * `robust` — robust FOR numeral (or `NA` if `raw_data` not given)
-#' * `shape` — shape name from [classify_contour()] applied to `refline`
-#' * `sample_times`, `ref_continuous`, `int_continuous`, `rob_continuous`
-#'   — list columns of the per-sample numeric values
+#' * `tone`: tone label.
+#' * `n_digits`: number of digits in the numeral (`2` or `3`).
+#' * `refline`: reference-line method numeral, e.g. `"55"`.
+#' * `interval`: interval-based numeral, e.g. `"45"`.
+#' * `robust`: robust FOR numeral (or `NA` if `raw_data` is not given).
+#' * `shape`: shape name from [classify_contour()] applied to `refline`.
+#' * `sample_times`, `ref_continuous`, `int_continuous`,
+#'   `rob_continuous`: list columns of the per-sample numeric values
+#'   underlying the digit strings, useful for plotting or further
+#'   analysis.
+#'
+#' Two attributes are attached to the returned data frame: `f0_min` and
+#' `f0_max` of the input contour, plus a `robust_stats` list containing
+#' the means and standard deviations used for the robust method (or
+#' `NULL` if `raw_data` was not supplied).
+#'
+#' @seealso
+#' * [compute_mean_contour()] for one common upstream step.
+#' * [classify_contour()] for the shape classification helper.
+#' * [predict_gca()] and [predict_gamm()] for model-based contour
+#'   sources.
+#'
+#' @references
+#' Chao, Y. R. (1930). A system of tone-letters. \emph{Le Maître
+#' Phonétique}, 30, 24–27.
+#'
+#' Zhu, X. (1999). \emph{Shanghai Tonetics}. LINCOM Europa.
+#'
+#' Xu, C., & Zhang, C. (2024). A cross-linguistic review of citation
+#' tone production studies: Methodology and recommendations.
+#' \emph{The Journal of the Acoustical Society of America}, 156(4),
+#' 2538–2565. \doi{10.1121/10.0032356}
+#'
+#' @examples
+#' data(sample_f0)
+#' mc <- compute_mean_contour(sample_f0,
+#'                            token = "token", f0 = "f0_Hz",
+#'                            time  = "time",  tone = "tone")
+#' chao <- contour_to_chao(mc,
+#'                         raw_data  = sample_f0,
+#'                         raw_token = "token",
+#'                         raw_f0    = "f0_Hz",
+#'                         raw_tone  = "tone")
+#' chao[, c("tone", "refline", "interval", "robust", "shape")]
 #'
 #' @export
 #' @importFrom dplyr filter group_by summarise

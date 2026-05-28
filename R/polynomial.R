@@ -4,25 +4,48 @@
 
 #' Fit Legendre polynomials to f0 contours, token by token
 #'
-#' For each token (a unique value of the `token` column), normalise the
-#' time axis to `[-1, 1]`, construct a Legendre polynomial basis of the
-#' requested degree, and fit ordinary least squares. Returns one row per
-#' token with the fitted coefficients `c0`, `c1`, ..., `c{degree}`.
+#' @description
+#' For each token, normalises the time axis to `[-1, 1]`, constructs a
+#' Legendre polynomial basis of the requested degree, and fits ordinary
+#' least squares. Returns one row per token with the fitted
+#' coefficients `c0`, `c1`, ..., `c{degree}`. Useful as a compact,
+#' interpretable summary of contour shape, or as features for downstream
+#' classifiers and regression models (Mirman 2014; Xu & Zhang 2024).
 #'
-#' Legendre polynomials are orthogonal on `[-1, 1]`, so the fitted
+#' @details
+#' ## What the function does internally
+#'
+#' For each token:
+#'
+#' 1. Compute the per-token range of `time` and rescale it linearly to
+#'    the interval `[-1, 1]`, which is where Legendre polynomials are
+#'    orthogonal.
+#' 2. Build the Legendre basis up to the requested `degree`.
+#' 3. Solve the ordinary least-squares problem with [stats::lm.fit()] to
+#'    recover the coefficients.
+#'
+#' ## Interpreting the coefficients
+#'
+#' Because Legendre polynomials are orthogonal on `[-1, 1]`, the fitted
 #' coefficients have a tidy shape interpretation:
-#' * `c0` — token-level mean f0
-#' * `c1` — linear slope across the contour
-#' * `c2` — quadratic curvature (rise-fall vs fall-rise)
-#' * `c3` — cubic shape (sigmoid vs reverse-sigmoid)
 #'
-#' Tokens with fewer than `degree + 1` valid samples receive `NA` for all
-#' coefficients. Tokens with a single unique time point keep `c0` as the
-#' mean f0 and set the higher-order coefficients to `NA`.
+#' * `c0`: token-level mean f0.
+#' * `c1`: linear slope across the contour. Positive means rising.
+#' * `c2`: quadratic curvature. Positive means U-shaped (dipping),
+#'   negative means inverted-U (peaking).
+#' * `c3`: cubic shape. Differentiates sigmoid from reverse-sigmoid
+#'   contours.
 #'
-#' @param data Long-format data frame with one row per f0 sample.
-#' @param f0 Column name of f0 values. Default `"f0"`. Normalised f0
-#'   (`"f0_st"`, `"f0_zscore"`) is recommended for cross-speaker comparison.
+#' ## Edge cases
+#'
+#' Tokens with fewer than `degree + 1` valid samples receive `NA` for
+#' all coefficients. Tokens with a single unique time point keep `c0`
+#' as the mean f0 and set the higher-order coefficients to `NA`.
+#'
+#' @param data A long-format data frame with one row per f0 sample.
+#' @param f0 Column name of f0 values. Default `"f0"`. Using normalised
+#'   f0 (e.g. `"f0_st"` from [normalise_f0()]) is recommended for
+#'   cross-speaker comparison.
 #' @param token Column name of token ID. Default `"token"`.
 #' @param time Column name of time within each token. Default `"time"`.
 #' @param speaker Column name of speaker ID, carried through to the
@@ -31,20 +54,38 @@
 #'   output. Default `"tone"`.
 #' @param degree Polynomial degree. One of `1`, `2`, or `3`. Default `2`.
 #'
-#' @return A token-level data frame with one row per token, containing:
-#'   `token`, `speaker`, `tone`, and the coefficients `c0`, `c1`, ...,
-#'   `c{degree}`.
+#' @return A token-level data frame with one row per token, containing
+#'   the `token`, `speaker`, `tone`, and coefficient columns `c0`,
+#'   `c1`, ..., `c{degree}`.
+#'
+#' @seealso
+#' * [normalise_f0()] for the upstream normalisation step.
+#' * [fit_gca()] for a population-level mixed-effects extension of
+#'   polynomial contour modelling.
+#'
+#' @references
+#' Mirman, D. (2014). \emph{Growth Curve Analysis and Visualization Using
+#' R}. Chapman and Hall/CRC.
+#'
+#' Xu, C., & Zhang, C. (2024). A cross-linguistic review of citation
+#' tone production studies: Methodology and recommendations.
+#' \emph{The Journal of the Acoustical Society of America}, 156(4),
+#' 2538–2565. \doi{10.1121/10.0032356}
 #'
 #' @examples
-#' df <- data.frame(
-#'   token   = rep(c("t1", "t2"), each = 5),
-#'   time    = rep(seq(0, 1, length.out = 5), 2),
-#'   f0      = c(150, 160, 170, 165, 155,
-#'               140, 145, 150, 145, 140),
-#'   speaker = rep("S01", 10),
-#'   tone    = rep(c("T1", "T2"), each = 5)
-#' )
-#' fit_polynomial(df, degree = 2)
+#' data(sample_f0)
+#' normed <- normalise_f0(sample_f0,
+#'                        f0      = "f0_Hz",
+#'                        speaker = "speaker",
+#'                        tone    = "tone")
+#' coefs <- fit_polynomial(normed,
+#'                         f0      = "f0_st",
+#'                         token   = "token",
+#'                         time    = "time",
+#'                         speaker = "speaker",
+#'                         tone    = "tone",
+#'                         degree  = 2)
+#' head(coefs)
 #'
 #' @export
 #' @importFrom dplyr arrange group_by group_modify summarise across all_of first left_join select ungroup mutate

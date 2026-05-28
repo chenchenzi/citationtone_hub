@@ -7,16 +7,33 @@
 classify_contour(chao_str)
 }
 \arguments{
-\item{chao_str}{A character string of Chao digits (1-5), e.g. \code{"55"},
+\item{chao_str}{A character string of Chao digits, e.g. \code{"55"},
 \code{"214"}, \code{"35"}.}
 }
 \value{
 A character string naming the shape.
 }
 \description{
-Returns a short shape name ("level", "rising", "falling", "dipping",
-"peaking", or a finer "low level" / "mid level" / "high level" for
-single-digit / repeated-digit strings).
+Returns a short human-readable shape name (e.g., \code{"level"},
+\code{"rising"}, \code{"falling"}, \code{"dipping"}, \code{"peaking"}, or one of the
+finer-grained \code{"low level"} / \code{"mid level"} / \code{"high level"} labels
+for repeated-digit strings). Used by \code{\link[=contour_to_chao]{contour_to_chao()}} to add a
+\code{shape} column to its output, but also exposed as a standalone
+utility for classifying numerals from external sources.
+}
+\details{
+Classification rules:
+\itemize{
+\item All digits identical: one of \code{"low level"}, \code{"mid-low level"},
+\code{"mid level"}, \code{"mid-high level"}, \code{"high level"} according to
+the digit value.
+\item Three or more digits with an interior minimum below both
+endpoints: \code{"dipping"}.
+\item Three or more digits with an interior maximum above both
+endpoints: \code{"peaking"}.
+\item Otherwise, \code{"rising"} if the last digit is higher than the first,
+\code{"falling"} if lower, \code{"level"} if equal.
+}
 }
 \examples{
 classify_contour("55")    # "high level"
@@ -24,4 +41,17 @@ classify_contour("214")   # "dipping"
 classify_contour("35")    # "rising"
 classify_contour("51")    # "falling"
 
+}
+\references{
+Chao, Y. R. (1930). A system of tone-letters. \emph{Le Maître
+Phonétique}, 30, 24–27.
+
+Xu, C., & Zhang, C. (2024). A cross-linguistic review of citation
+tone production studies: Methodology and recommendations.
+\emph{The Journal of the Acoustical Society of America}, 156(4),
+2538–2565. \doi{10.1121/10.0032356}
+}
+\seealso{
+\code{\link[=contour_to_chao]{contour_to_chao()}} which calls this internally to populate
+the \code{shape} column.
 }

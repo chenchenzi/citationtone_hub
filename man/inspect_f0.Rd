@@ -20,9 +20,9 @@ inspect_f0(
 )
 }
 \arguments{
-\item{data}{A long-format data frame, one row per f0 sample.}
+\item{data}{A long-format data frame with one row per f0 sample.}
 
-\item{f0}{Column name of f0 (Hz). Default \code{"f0"}.}
+\item{f0}{Column name of f0 in Hz. Default \code{"f0"}.}
 
 \item{token}{Column name of token ID. Default \code{"token"}.}
 
@@ -33,39 +33,95 @@ inspect_f0(
 \item{tone}{Column name of tone category. Default \code{"tone"}.}
 
 \item{z_threshold}{Absolute z-score above which a token is flagged.
-Default \code{3}, covering 99.7\% of a normal distribution.}
+Default \code{3}, covering about 99.7\% of a normal distribution.}
 
-\item{rise_threshold}{Maximum plausible rise in ST per 10 ms. Default
-\code{1.263} (Sundberg 1973).}
+\item{rise_threshold}{Maximum plausible rise in ST per 10 ms.
+Default \code{1.263} (Sundberg 1973).}
 
-\item{fall_threshold}{Maximum plausible fall in ST per 10 ms. Default
-\code{1.714} (Sundberg 1973).}
+\item{fall_threshold}{Maximum plausible fall in ST per 10 ms.
+Default \code{1.714} (Sundberg 1973).}
 
-\item{octave_bounds}{Hz-ratio bounds outside which a step is flagged as
-an octave jump. Default \code{c(0.49, 1.99)} (halving / doubling).}
+\item{octave_bounds}{Hz-ratio bounds outside which a step is flagged
+as an octave jump. Default \code{c(0.49, 1.99)} (halving or doubling).}
 
 \item{carryover_mult}{Carryover band as a multiple of the rise/fall
 threshold (in semitones). \code{0} disables carryover. Default \code{1.5}.}
 
 \item{time_unit}{One of \code{"s"}, \code{"ms"}, \code{"norm"}. Default \code{"s"}. The
-"norm" option treats each step as one 10 ms-equivalent unit.}
+\code{"norm"} option treats each step as one 10 ms-equivalent unit.}
 }
 \value{
-A long-format data frame containing the original \code{token}, \code{time},
-\code{f0}, \code{speaker}, \code{tone} columns plus:
+A long-format data frame containing the original \code{token},
+\code{time}, \code{f0}, \code{speaker}, \code{tone} columns plus:
 \itemize{
-\item \code{f0_token_max}, \code{f0_token_min}, \code{f0_token_mean}, \code{f0_token_sd} —
-per-token summaries
-\item \code{flagged_jump} — logical, sample-level jump flag
-\item \code{flagged_token} — logical, TRUE if the token has any extreme value
-or any sample-level jump
-\item \code{flag_notes} — human-readable concatenation of the reasons a sample
-was flagged
+\item \code{f0_token_max}, \code{f0_token_min}, \code{f0_token_mean}, \code{f0_token_sd}:
+per-token summary statistics.
+\item \code{flagged_jump}: logical, sample-level jump flag.
+\item \code{flagged_token}: logical, \code{TRUE} if the token has any extreme value
+or any sample-level jump.
+\item \code{flag_notes}: human-readable concatenation of the reasons a sample
+was flagged.
 }
 }
 \description{
-Wrapper that runs \code{\link[=flag_outliers]{flag_outliers()}} (by-speaker z-score outlier detection
-on per-token max / min) and \code{\link[=flag_pitch_jumps]{flag_pitch_jumps()}} (sample-to-sample jumps,
-octave jumps, carryover), then combines their results into a single
-long-format data frame with one row per f0 sample.
+One-call convenience wrapper that runs both \code{\link[=flag_outliers]{flag_outliers()}} and
+\code{\link[=flag_pitch_jumps]{flag_pitch_jumps()}} on the same dataset, joins their results back
+into one long-format data frame, and produces a single
+\code{flag_notes} column with human-readable reasons for each flag. This
+is the function that backs the Inspect tab of the Shiny app.
+}
+\details{
+\subsection{What the function does internally}{
+\enumerate{
+\item Call \code{\link[=flag_outliers]{flag_outliers()}} to get token-level outlier flags
+(\code{flag_too_high}, \code{flag_too_low}) plus per-token summary
+statistics.
+\item Call \code{\link[=flag_pitch_jumps]{flag_pitch_jumps()}} to get sample-level pitch-tracking
+artefact flags (\code{flagged_jump}, \code{jump_note}).
+\item Left-join the token-level flags onto the long-format jump output,
+so every sample carries both kinds of information.
+\item Set \code{flagged_token} to \code{TRUE} for any token that has a max/min
+z-outlier or contains at least one sample-level jump.
+\item Concatenate the human-readable reasons into a single
+\code{flag_notes} column for display.
+}
+
+Use the individual functions (\code{\link[=flag_outliers]{flag_outliers()}}, \code{\link[=flag_pitch_jumps]{flag_pitch_jumps()}})
+if you want only one kind of check or want to combine the outputs
+yourself in a non-standard way.
+}
+}
+\examples{
+data(sample_f0)
+result <- inspect_f0(sample_f0,
+                     f0      = "f0_Hz",
+                     token   = "token",
+                     time    = "time",
+                     speaker = "speaker",
+                     tone    = "tone")
+
+# How many tokens were flagged at default thresholds?
+table(unique(result[, c("token", "flagged_token")])$flagged_token)
+
+# Inspect the first few flagged samples
+head(result[result$flagged_jump, c("token", "time", "f0_Hz", "flag_notes")])
+
+}
+\references{
+Steffman, J., & Cole, J. (2022). Pitch tracking artefacts and the
+detection of voicing errors in spontaneous speech.
+
+Sundberg, J. (1973). The acoustics of the singing voice.
+\emph{Scientific American}, 229(3), 82–91.
+
+Xu, C., & Zhang, C. (2024). A cross-linguistic review of citation
+tone production studies: Methodology and recommendations.
+\emph{The Journal of the Acoustical Society of America}, 156(4),
+2538–2565. \doi{10.1121/10.0032356}
+}
+\seealso{
+\itemize{
+\item \code{\link[=flag_outliers]{flag_outliers()}} and \code{\link[=flag_pitch_jumps]{flag_pitch_jumps()}}, the two components.
+\item \code{\link[=normalise_f0]{normalise_f0()}} for the upstream normalisation step.
+}
 }

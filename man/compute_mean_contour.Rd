@@ -14,19 +14,57 @@ compute_mean_contour(
 )
 }
 \arguments{
-\item{data}{Long-format data frame, one row per f0 sample.}
+\item{data}{A long-format data frame with one row per f0 sample.}
 
 \item{token, f0, time, tone}{Column names.}
 
 \item{n_bins}{Number of evenly-spaced time bins across \verb{[0, 1]}.
-Default \code{50}.}
+Default \code{50}. Larger values give a smoother contour at the cost
+of noisier per-bin estimates if some bins are sparsely populated.}
 }
 \value{
 A data frame with columns \code{tone}, \code{time}, \code{f0_predicted},
 one row per (tone, time-bin).
 }
 \description{
-Normalise time to \verb{[0, 1]} per token, bin into 50 equally-spaced time
-points, then average f0 across all tokens of each tone. Returns the
-long-format mean contour expected by \code{\link[=contour_to_chao]{contour_to_chao()}}.
+Aggregates a long-format f0 dataset into a per-tone mean contour
+suitable for plotting, comparison, or Chao numeral summarisation
+via \code{\link[=contour_to_chao]{contour_to_chao()}}. The function is used internally by the
+Summarise tab of the Shiny app when the user chooses the raw or
+normalised dataset as the input.
+}
+\details{
+Internally:
+\enumerate{
+\item Within each token, normalise the time axis to \verb{[0, 1]} so tokens
+of different durations can be averaged across the same grid.
+\item Round each sample's normalised time onto one of \code{n_bins}
+equally-spaced bins.
+\item For each (tone, time-bin) cell, compute the mean of \code{f0} across
+all tokens of that tone with samples in the bin.
+\item Return the long-format mean contour with columns \code{tone}, \code{time},
+\code{f0_predicted} (the column name \code{f0_predicted} matches the
+convention used by \code{\link[=predict_gca]{predict_gca()}} and \code{\link[=predict_gamm]{predict_gamm()}} so the
+same downstream tools can consume either model predictions or
+raw mean contours).
+}
+}
+\examples{
+data(sample_f0)
+mc <- compute_mean_contour(sample_f0,
+                           token = "token", f0 = "f0_Hz",
+                           time  = "time",  tone = "tone")
+head(mc)
+
+}
+\references{
+Xu, C., & Zhang, C. (2024). A cross-linguistic review of citation
+tone production studies: Methodology and recommendations.
+\emph{The Journal of the Acoustical Society of America}, 156(4),
+2538–2565. \doi{10.1121/10.0032356}
+}
+\seealso{
+\code{\link[=contour_to_chao]{contour_to_chao()}} for converting mean contours to Chao
+numerals. \code{\link[=predict_gca]{predict_gca()}} and \code{\link[=predict_gamm]{predict_gamm()}} for model-based
+alternatives that produce the same column structure.
 }

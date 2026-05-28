@@ -14,54 +14,131 @@ normalise_f0(
 )
 }
 \arguments{
-\item{data}{A data frame containing at least the f0, speaker, and tone
-columns.}
+\item{data}{A long-format data frame with one row per f0 sample. Must
+contain at least the f0, speaker, and (for \code{"weighted"} means) tone
+columns named below.}
 
-\item{f0}{Name of the column with raw f0 values (Hz). Default \code{"f0"}.}
+\item{f0}{Name of the column with raw f0 values, in Hz. Default \code{"f0"}.}
 
 \item{speaker}{Name of the speaker ID column. Default \code{"speaker"}.}
 
-\item{tone}{Name of the tone category column. Default \code{"tone"}. Used only
-when \code{mean_method = "weighted"}.}
+\item{tone}{Name of the tone category column. Default \code{"tone"}. Only
+read when \code{mean_method = "weighted"}.}
 
 \item{method}{Normalisation formula. One of:
 \itemize{
 \item \code{"semitone"} (default): \code{ST = 12 * log2(f0 / speaker_mean)}.
-\item \code{"zscore"}: \code{Z = (f0 - speaker_mean) / sd(f0_speaker)}.
+Result is 0 at the speaker mean and ±12 at one octave above or
+below.
+\item \code{"zscore"}: \code{Z = (f0 - speaker_mean) / sd(speaker_f0)}. Result has
+mean approximately 0 and SD approximately 1 within each speaker.
 }}
 
-\item{mean_method}{How the per-speaker mean is computed. One of
-\code{"weighted"} (default) or \code{"simple"}. See Details.}
+\item{mean_method}{How the per-speaker mean used by \code{method} is
+computed: \code{"weighted"} (default; mean of per-tone means) or
+\code{"simple"} (arithmetic mean across all observations).}
 }
 \value{
 The input data frame with two added columns:
 \itemize{
-\item \code{speaker_mean} — the per-speaker mean used for normalisation
-\item \code{f0_st} (if \code{method = "semitone"}) or \code{f0_zscore} (if \code{method = "zscore"})
+\item \code{speaker_mean}: the per-speaker mean used for normalisation.
+\item \code{f0_st} (if \code{method = "semitone"}) or \code{f0_zscore} (if
+\code{method = "zscore"}).
 }
 }
 \description{
-Add a normalised f0 column to \code{data}, computed per speaker. Two methods
-are available: semitones referenced on a per-speaker mean (perceptually
-uniform), or per-speaker z-scores (statistical centring and scaling).
+Adds a within-speaker normalised f0 column to a long-format f0 data
+frame. Speaker normalisation puts contours from male and female
+speakers on a comparable scale, and is a near-universal pre-processing
+step before cross-speaker tone modelling, plotting, or contour
+summarisation (Rose 1987; Zhu 1999).
+
+Two formulae are available. Semitones above or below the speaker's
+mean give a perceptually uniform scale. By-speaker z-scores combine
+centring with unit-variance scaling. Both formulae rely on a
+per-speaker mean of f0, which can itself be computed in two ways:
+a simple arithmetic mean of all observations, or a mean of per-tone
+means so that every tone contributes equally to the speaker's centre.
 }
 \details{
-Per-speaker means can be computed in two ways:
+\subsection{What the function does internally}{
+\enumerate{
+\item Compute a per-speaker mean of \code{f0} using \code{mean_method} (see below).
+\item Join that mean back to \code{data} as a new column called \code{speaker_mean}.
+\item Apply the selected normalisation formula sample by sample and
+return the augmented data frame.
+}
+}
+
+\subsection{Choosing \code{method}}{
 \itemize{
-\item \code{"weighted"} (default): mean of per-tone means. Each tone contributes
-equally to the centre of the speaker's tonal space, regardless of how
-many tokens it has. Preferred for unbalanced designs.
-\item \code{"simple"}: arithmetic mean of all f0 observations for that speaker.
+\item \code{"semitone"} is the standard for citation-tone work. The scale is
+perceptually uniform (one semitone is roughly one just-noticeable
+pitch step), centred on the speaker's own range, and preserves the
+logarithmic structure of musical pitch perception.
+\item \code{"zscore"} is useful when both centring and scaling are desired,
+i.e., when you want to remove each speaker's baseline \emph{and} equalise
+their f0 variability. Useful for cross-speaker statistical models
+where the raw variance differs strongly across speakers.
+}
+}
+
+\subsection{Choosing \code{mean_method}}{
+\itemize{
+\item \code{"weighted"} (default) first computes a mean f0 per (speaker, tone)
+cell, then averages those per-tone means. Each tone contributes
+equally to the speaker's centre regardless of how many tokens it
+has. This is the right default for unbalanced designs in which
+token counts differ across tones, common in fieldwork and
+naturalistic corpora.
+\item \code{"simple"} takes the arithmetic mean of every f0 observation for a
+speaker. Faster, and equivalent to weighted when the design is
+balanced.
+}
+}
+
+\subsection{NA handling}{
+
+All summary statistics use \code{na.rm = TRUE}. Sample-level \code{NA} f0
+values propagate as \code{NA} in the normalised column.
 }
 }
 \examples{
-df <- data.frame(
-  speaker = rep(c("S01", "S02"), each = 6),
-  tone    = rep(c("T1", "T2", "T3"), times = 4),
-  f0      = c(150, 180, 130, 160, 190, 140,
-              200, 240, 170, 210, 250, 175)
-)
-head(normalise_f0(df, method = "semitone"))
-head(normalise_f0(df, method = "zscore"))
+data(sample_f0)
 
+out <- normalise_f0(sample_f0,
+                    f0      = "f0_Hz",
+                    speaker = "speaker",
+                    tone    = "tone",
+                    method  = "semitone")
+head(out[, c("speaker", "tone", "f0_Hz", "speaker_mean", "f0_st")])
+
+# Same data, z-score instead of semitones:
+out_z <- normalise_f0(sample_f0,
+                      f0      = "f0_Hz",
+                      speaker = "speaker",
+                      tone    = "tone",
+                      method  = "zscore")
+head(out_z[, c("speaker", "f0_Hz", "speaker_mean", "f0_zscore")])
+
+}
+\references{
+Rose, P. (1987). Considerations in the normalisation of the
+fundamental frequency of linguistic tone. \emph{Speech Communication},
+6(4), 343–352. \doi{10.1016/0167-6393(87)90008-1}
+
+Zhu, X. (1999). \emph{Shanghai Tonetics}. LINCOM Europa.
+
+Xu, C., & Zhang, C. (2024). A cross-linguistic review of citation
+tone production studies: Methodology and recommendations.
+\emph{The Journal of the Acoustical Society of America}, 156(4),
+2538–2565. \doi{10.1121/10.0032356}
+}
+\seealso{
+\itemize{
+\item \code{\link[=fit_polynomial]{fit_polynomial()}}, \code{\link[=fit_gca]{fit_gca()}}, \code{\link[=fit_gamm]{fit_gamm()}} for downstream contour
+modelling that typically operates on the normalised column.
+\item \code{\link[=contour_to_chao]{contour_to_chao()}} for converting mean contours to Chao tone
+numerals, often called on \code{normalise_f0()} output.
+}
 }

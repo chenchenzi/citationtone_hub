@@ -20,42 +20,130 @@ fit_gca(
 )
 }
 \arguments{
-\item{data}{Long-format data frame, one row per f0 sample.}
+\item{data}{A long-format data frame with one row per f0 sample.}
 
-\item{f0, time, token, tone, speaker, item}{Column names for f0, time within
-token, token ID, tone category, speaker ID, and item / word.}
+\item{f0, time, token, tone, speaker, item}{Column names for f0, time
+within token, token ID, tone category, speaker ID, and item or
+word.}
 
-\item{degree}{Polynomial degree (1, 2, or 3). Default \code{2}.}
+\item{degree}{Polynomial degree, one of \code{1}, \code{2}, or \code{3}. Default
+\code{2}.}
 
-\item{random_intercept_speaker, random_intercept_item}{Logical, include
-a by-speaker / by-item random intercept. Default \code{TRUE}.}
+\item{random_intercept_speaker, random_intercept_item}{Logical;
+include a by-speaker or by-item random intercept. Default \code{TRUE}.}
 
-\item{random_slope_speaker, random_slope_item}{Logical, include by-speaker
-/ by-item random slopes on the orthogonal-polynomial terms (\code{ot1} ..
-\code{otK}). Default \code{TRUE} for speaker, \code{FALSE} for item.}
+\item{random_slope_speaker, random_slope_item}{Logical; include
+by-speaker or by-item random slopes on the orthogonal-polynomial
+terms (\code{ot1} ... \code{otK}). Default \code{TRUE} for speaker, \code{FALSE} for
+item.}
 }
 \value{
-An S3 object of class \code{"shinytone_gca"}, which is a list with:
+An S3 object of class \code{"shinytone_gca"}, a list with:
 \itemize{
-\item \code{model} — the fitted \link[lme4:lmerMod-class]{lme4::lmerMod} object
-\item \code{formula_str} — user-readable formula string (with original column names)
-\item \code{poly_coefs} — coefs from \code{\link[stats:poly]{stats::poly()}} needed by \code{\link[=predict_gca]{predict_gca()}}
-\item \code{degree} — polynomial degree
-\item \code{col_names} — original column names (for back-mapping in summary tables)
-\item \code{convergence_warning} — \code{NULL} or the captured warning message
+\item \code{model}: the fitted \link[lme4:lmerMod-class]{lme4::lmerMod} object.
+\item \code{formula_str}: user-readable formula string (with original column
+names).
+\item \code{poly_coefs}: coefs from \code{\link[stats:poly]{stats::poly()}} needed by \code{\link[=predict_gca]{predict_gca()}}.
+\item \code{degree}: polynomial degree.
+\item \code{col_names}: original column names (for back-mapping in summary
+tables).
+\item \code{convergence_warning}: \code{NULL} or the captured warning message.
 }
 }
 \description{
-Convenience wrapper around \code{\link[lme4:lmer]{lme4::lmer()}} for the citation-tone GCA use
-case. Prepares the data (per-token time normalisation, orthogonal
-polynomial basis of the requested degree), builds a conventional
-formula \verb{(ot1 + ... + otK) * tone + (random effects)}, and fits the
-model with warning capture.
+Fits a Growth Curve Analysis model to f0 contours: a linear mixed-effects
+regression of f0 on orthogonal polynomial terms of time, interacted with
+tone, with conventional by-speaker and by-item random effects. GCA is a
+standard analysis framework for time-varying dynamic speech data
+(Mirman 2014; Xu & Zhang 2024) and is the recommended approach when
+you want statistical inference about per-tone shape parameters such as
+intercept, slope, and curvature.
+
+This is a convenience wrapper around \code{\link[lme4:lmer]{lme4::lmer()}} that prepares the
+data the way the citation-tone use case typically wants. For
+non-standard model structures (custom contrasts, additional fixed
+effects, alternative random-effects structures), call \code{\link[lme4:lmer]{lme4::lmer()}}
+directly.
 }
 \details{
-For non-standard model structures (custom contrasts, additional fixed
-effects, alternative RE structures), use \code{\link[lme4:lmer]{lme4::lmer()}} directly.
+\subsection{What the function does internally}{
+\enumerate{
+\item Within each token, normalise the time axis to \verb{[0, 1]}.
+\item Build orthogonal polynomial terms \code{ot1}, \code{ot2}, ..., \code{otK} on the
+normalised time using \code{\link[stats:poly]{stats::poly()}}, caching the basis
+coefficients so that \code{\link[=predict_gca]{predict_gca()}} can reuse them.
+\item Construct an \code{lmer} formula of the form
+\verb{f0 ~ (ot1 + ... + otK) * tone + (random effects)} using the
+options below to decide which random effects to include.
+\item Fit the model with REML, capturing any convergence warning so the
+caller can decide whether to act on it.
+\item Return everything bundled as an S3 object of class
+\code{"shinytone_gca"}, so downstream helpers (\code{\link[=predict_gca]{predict_gca()}},
+\code{summary()}, etc.) have what they need.
+}
+}
+
+\subsection{Choosing the polynomial degree}{
+\itemize{
+\item \code{degree = 1}: linear (intercept + slope). Sufficient for purely
+rising or falling contours.
+\item \code{degree = 2} (default): linear + quadratic. Captures
+rising/falling/dipping/peaking shapes. The usual choice.
+\item \code{degree = 3}: adds a cubic term for sigmoid or S-shaped contours.
+Useful for languages with more elaborate contour shapes.
+}
+
+Higher degrees increase model complexity and the risk of
+over-fitting; they also slow the fit and can degrade convergence.
+}
+
+\subsection{Choosing the random-effects structure}{
+
+The defaults follow conventional GCA practice for citation-tone work:
+by-speaker random intercepts and slopes on the polynomial terms,
+plus a by-item random intercept. Add by-item slopes if items vary
+systematically in shape, or drop random slopes when convergence is
+difficult.
+}
+}
+\examples{
+\dontrun{
+data(sample_f0)
+normed <- normalise_f0(sample_f0,
+                       f0      = "f0_Hz",
+                       speaker = "speaker",
+                       tone    = "tone")
+gca <- fit_gca(normed,
+               f0      = "f0_st",
+               time    = "time",
+               token   = "token",
+               tone    = "tone",
+               speaker = "speaker",
+               item    = "char",
+               degree  = 2,
+               random_slope_speaker = FALSE,
+               random_slope_item    = FALSE)
+predict_gca(gca, n = 100)
+}
+}
+\references{
+Mirman, D. (2014). \emph{Growth Curve Analysis and Visualization Using
+R}. Chapman and Hall/CRC.
+
+Bates, D., Mächler, M., Bolker, B., & Walker, S. (2015). Fitting
+linear mixed-effects models using lme4. \emph{Journal of Statistical
+Software}, 67(1), 1–48. \doi{10.18637/jss.v067.i01}
+
+Xu, C., & Zhang, C. (2024). A cross-linguistic review of citation
+tone production studies: Methodology and recommendations.
+\emph{The Journal of the Acoustical Society of America}, 156(4),
+2538–2565. \doi{10.1121/10.0032356}
 }
 \seealso{
-\code{\link[=predict_gca]{predict_gca()}} for prediction on a time grid.
+\itemize{
+\item \code{\link[=predict_gca]{predict_gca()}} for prediction on a time grid.
+\item \code{\link[=fit_polynomial]{fit_polynomial()}} for a per-token (non-mixed-effects) alternative.
+\item \code{\link[=fit_gamm]{fit_gamm()}} for the GAMM-based alternative when smooth (non-polynomial)
+tone shapes are preferred.
+}
 }

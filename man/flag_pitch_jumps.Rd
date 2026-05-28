@@ -17,45 +17,102 @@ flag_pitch_jumps(
 )
 }
 \arguments{
-\item{data}{A long-format data frame, one row per f0 sample.}
+\item{data}{A long-format data frame with one row per f0 sample.}
 
-\item{f0}{Column name of f0 (Hz). Default \code{"f0"}.}
+\item{f0}{Column name of f0 in Hz. Default \code{"f0"}.}
 
 \item{token}{Column name of token ID. Default \code{"token"}.}
 
 \item{time}{Column name of time. Default \code{"time"}.}
 
 \item{time_unit}{One of \code{"s"}, \code{"ms"}, \code{"norm"}. Default \code{"s"}. The
-"norm" option treats each step as one 10 ms-equivalent unit.}
+\code{"norm"} option treats each step as one 10 ms-equivalent unit.}
 
-\item{rise_threshold}{Maximum plausible rise in ST per 10 ms. Default
-\code{1.263} (Sundberg 1973).}
+\item{rise_threshold}{Maximum plausible rise in ST per 10 ms.
+Default \code{1.263} (Sundberg 1973).}
 
-\item{fall_threshold}{Maximum plausible fall in ST per 10 ms. Default
-\code{1.714} (Sundberg 1973).}
+\item{fall_threshold}{Maximum plausible fall in ST per 10 ms.
+Default \code{1.714} (Sundberg 1973).}
 
-\item{octave_bounds}{Hz-ratio bounds outside which a step is flagged as
-an octave jump. Default \code{c(0.49, 1.99)} (halving / doubling).}
+\item{octave_bounds}{Hz-ratio bounds outside which a step is flagged
+as an octave jump. Default \code{c(0.49, 1.99)} (halving or doubling).}
 
 \item{carryover_mult}{Carryover band as a multiple of the rise/fall
 threshold (in semitones). \code{0} disables carryover. Default \code{1.5}.}
 }
 \value{
 The input data frame with two appended columns:
-\code{flagged_jump} (logical) and \code{jump_note} (character; one of
-\code{"jump (rise)"}, \code{"jump (fall)"}, \code{"octave jump"}, \code{"carryover"}, or
-compound notes joined by \code{"; "}).
+\itemize{
+\item \code{flagged_jump}: logical, \code{TRUE} for samples flagged as artefacts or
+carryover frames.
+\item \code{jump_note}: character describing each flag (e.g., \code{"jump (rise)"},
+\code{"jump (fall)"}, \code{"octave jump"}, \code{"carryover"}, or compound notes
+joined by \code{"; "}).
+}
 }
 \description{
-Within each token, compute the semitone difference between consecutive
-f0 samples. Flag samples where the rate of change exceeds physiological
-plausibility (Sundberg 1973), where the Hz ratio crosses an octave
-boundary, or where the sample is a \emph{carryover} of an upstream error
-(Steffman & Cole 2022).
+Detects sample-level pitch-tracking artefacts inside each token.
+Three classes of artefact are flagged: rate-of-change violations
+(faster rises or falls than human vocal folds can plausibly produce),
+octave jumps (pitch halving or doubling), and carryover samples that
+follow a flagged frame and stay close enough to the error to be
+suspected of being part of the same artefact.
+
+Used as the sample-level counterpart of \code{\link[=flag_outliers]{flag_outliers()}} in the
+Inspect tab of the Shiny app and inside \code{\link[=inspect_f0]{inspect_f0()}}.
 }
 \details{
-Rise / fall thresholds are expressed as semitones per 10 ms; the
-function rescales the observed rate using \code{time_unit} to compare against
-them. Zero-valued f0 samples (unvoiced markers from pitch trackers) are
-treated as missing before any computation.
+\subsection{What the function does internally}{
+\enumerate{
+\item Treat f0 = 0 as \code{NA} (pitch trackers commonly mark unvoiced frames
+with 0 Hz).
+\item Within each token, compute the semitone difference between
+consecutive f0 samples and the Hz ratio between them.
+\item Rescale the observed rate of change to a semitones-per-10-ms
+equivalent using \code{time_unit}, so the result can be compared to a
+fixed threshold (Sundberg 1973).
+\item Flag the \emph{landing} sample (i.e., the sample immediately after the
+jump) for octave jumps, threshold-violating rises, and
+threshold-violating falls.
+\item Extend each flagged sample forward as a chain of carryover frames
+that stay within \code{carryover_mult * threshold} semitones of the
+error sample's f0 (Steffman & Cole 2022).
+}
+}
+
+\subsection{Choosing the thresholds}{
+
+Default \code{rise_threshold} and \code{fall_threshold} come from Sundberg's
+(1973) classic study of the maximum rate of f0 change achievable in
+singing. Changes exceeding these rates are physiologically
+implausible and almost always tracking errors. Tightening these
+values catches more borderline cases at the cost of more false
+positives.
+
+Default \code{octave_bounds = c(0.49, 1.99)} flags any successive Hz ratio
+more extreme than approximate halving or doubling, the dominant
+failure mode of autocorrelation-based pitch trackers.
+
+Setting \code{carryover_mult = 0} disables the carryover extension and
+flags only the landing sample of each jump. The default of \code{1.5}
+follows Steffman & Cole (2022).
+}
+}
+\references{
+Steffman, J., & Cole, J. (2022). Pitch tracking artefacts and the
+detection of voicing errors in spontaneous speech.
+
+Sundberg, J. (1973). The acoustics of the singing voice.
+\emph{Scientific American}, 229(3), 82–91.
+
+Xu, C., & Zhang, C. (2024). A cross-linguistic review of citation
+tone production studies: Methodology and recommendations.
+\emph{The Journal of the Acoustical Society of America}, 156(4),
+2538–2565. \doi{10.1121/10.0032356}
+}
+\seealso{
+\itemize{
+\item \code{\link[=flag_outliers]{flag_outliers()}} for the complementary token-level outlier check.
+\item \code{\link[=inspect_f0]{inspect_f0()}} for the wrapper that joins both.
+}
 }
