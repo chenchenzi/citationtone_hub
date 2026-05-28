@@ -94,8 +94,13 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
       plot_data[[input$tone_var]] <- as.factor(tone_col)
     }
 
+    # Use aes() + .data[[var]] (the modern replacement for aes_string(),
+    # which was deprecated in ggplot2 3.0). Behaviour is identical for our
+    # use case but no longer prints the per-session deprecation warning.
     p <- ggplot(plot_data,
-                aes_string(x = input$x_var, y = input$y_var, color = input$tone_var)) +
+                aes(x = .data[[input$x_var]],
+                    y = .data[[input$y_var]],
+                    color = .data[[input$tone_var]])) +
       geom_point(alpha = 0.75) +
       scale_color_brewer(palette = "Set3") +
       labs(x = input$x_var, y = input$y_var, color = input$tone_var)
