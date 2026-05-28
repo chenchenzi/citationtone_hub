@@ -8,6 +8,7 @@
 ^ui_old\.R$
 ^test$
 ^logo$
+^hex_stickers$
 ^privacy$
 ^screenshots$
 ^rsconnect$
