@@ -170,16 +170,20 @@ speaker:</p>
 <span><span class="co">#&gt; 4   dc102    3 248.5496     237.0675 0.8188289</span></span>
 <span><span class="co">#&gt; 5   dc102    3 249.7015     237.0675 0.8988754</span></span>
 <span><span class="co">#&gt; 6   dc102    3 251.6647     237.0675 1.0344568</span></span></code></pre></div>
-<p>Now <code>f0_st</code> puts every speaker on a comparable scale.
-Quick visual of the mean contour per tone across all speakers:</p>
+<p>Now <code>f0_st</code> puts every speaker on a comparable scale. To
+plot the mean contour per tone, use [compute_mean_contour()], which
+normalises time to <code>[0, 1]</code> <em>within each token</em> before
+averaging. The package function returns its result in the same
+<code>time / f0_predicted / tone</code> schema used by [predict_gca()]
+and [predict_gamm()]:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">normed</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/group_by.html" class="external-link">group_by</a></span><span class="op">(</span><span class="va">tone</span>, time_bin <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">time</span> <span class="op">/</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="va">time</span><span class="op">)</span>, <span class="fl">2</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/summarise.html" class="external-link">summarise</a></span><span class="op">(</span>f0_st <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">f0_st</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>, .groups <span class="op">=</span> <span class="st">"drop"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span><span class="va">time_bin</span>, <span class="va">f0_st</span>, colour <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">tone</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<code class="sourceCode R"><span><span class="va">mean_contour</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/compute_mean_contour.html">compute_mean_contour</a></span><span class="op">(</span><span class="va">normed</span>,</span>
+<span>                                     token <span class="op">=</span> <span class="st">"token"</span>, f0 <span class="op">=</span> <span class="st">"f0_st"</span>,</span>
+<span>                                     time  <span class="op">=</span> <span class="st">"time"</span>,  tone <span class="op">=</span> <span class="st">"tone"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="va">mean_contour</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span><span class="va">time</span>, <span class="va">f0_predicted</span>, colour <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">tone</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_path.html" class="external-link">geom_line</a></span><span class="op">(</span>linewidth <span class="op">=</span> <span class="fl">1</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span>x <span class="op">=</span> <span class="st">"Normalised time"</span>, y <span class="op">=</span> <span class="st">"f0 (semitones)"</span>,</span>
-<span>       colour <span class="op">=</span> <span class="st">"Tone"</span><span class="op">)</span></span></code></pre></div>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span>x <span class="op">=</span> <span class="st">"Normalised time"</span>, y <span class="op">=</span> <span class="st">"f0 (semitones)"</span>, colour <span class="op">=</span> <span class="st">"Tone"</span><span class="op">)</span></span></code></pre></div>
 <p><img src="shinytone_files/figure-html/unnamed-chunk-4-1.png" class="r-plt" alt="" width="672"></p>
 </div>
 <div class="section level2">
@@ -321,8 +325,8 @@ numeral via <code><a href="../reference/classify_contour.html">classify_contour(
 <h2 id="where-to-go-next">Where to go next<a class="anchor" aria-label="anchor" href="#where-to-go-next"></a>
 </h2>
 <ul>
-<li>Browse the <a href="../reference/index.html">function reference</a>
-for the full API.</li>
+<li>Browse the <a href="https://chenchenzi.github.io/citationtone_hub/reference/">function
+reference</a> for the full API.</li>
 <li>Run <code><a href="../reference/run_app.html">shinytone::run_app()</a></code> locally for the full graphical
 workflow, including audio processing and a Praat script generator.</li>
 <li>Cite the package with <code>citation("shinytone")</code> in any work

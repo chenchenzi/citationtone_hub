@@ -101,18 +101,21 @@ head(normed[, c("speaker", "tone", "f0_Hz", "speaker_mean", "f0_st")])
 #> 6   dc102    3 251.6647     237.0675 1.0344568
 ```
 
-Now `f0_st` puts every speaker on a comparable scale. Quick visual of
-the mean contour per tone across all speakers:
+Now `f0_st` puts every speaker on a comparable scale. To plot the mean
+contour per tone, use \[compute_mean_contour()\], which normalises time
+to `[0, 1]` *within each token* before averaging. The package function
+returns its result in the same `time / f0_predicted / tone` schema used
+by \[predict_gca()\] and \[predict_gamm()\]:
 
 ``` r
 
-normed |>
-  group_by(tone, time_bin = round(time / max(time), 2)) |>
-  summarise(f0_st = mean(f0_st, na.rm = TRUE), .groups = "drop") |>
-  ggplot(aes(time_bin, f0_st, colour = factor(tone))) +
+mean_contour <- compute_mean_contour(normed,
+                                     token = "token", f0 = "f0_st",
+                                     time  = "time",  tone = "tone")
+
+ggplot(mean_contour, aes(time, f0_predicted, colour = factor(tone))) +
   geom_line(linewidth = 1) +
-  labs(x = "Normalised time", y = "f0 (semitones)",
-       colour = "Tone")
+  labs(x = "Normalised time", y = "f0 (semitones)", colour = "Tone")
 ```
 
 ![](shinytone_files/figure-html/unnamed-chunk-4-1.png)
@@ -255,7 +258,7 @@ The `shape` column summarises the contour (“rising”, “falling”,
 ## Where to go next
 
 - Browse the [function
-  reference](https://chenchenzi.github.io/citationtone_hub/reference/index.md)
+  reference](https://chenchenzi.github.io/citationtone_hub/reference/)
   for the full API.
 - Run
   [`shinytone::run_app()`](https://chenchenzi.github.io/citationtone_hub/reference/run_app.md)
