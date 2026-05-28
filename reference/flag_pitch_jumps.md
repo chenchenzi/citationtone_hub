@@ -1,10 +1,16 @@
 # Flag sample-to-sample f0 jumps within tokens
 
-Within each token, compute the semitone difference between consecutive
-f0 samples. Flag samples where the rate of change exceeds physiological
-plausibility (Sundberg 1973), where the Hz ratio crosses an octave
-boundary, or where the sample is a *carryover* of an upstream error
-(Steffman & Cole 2022).
+Detects sample-level pitch-tracking artefacts inside each token. Three
+classes of artefact are flagged: rate-of-change violations (faster rises
+or falls than human vocal folds can plausibly produce), octave jumps
+(pitch halving or doubling), and carryover samples that follow a flagged
+frame and stay close enough to the error to be suspected of being part
+of the same artefact.
+
+Used as the sample-level counterpart of
+[`flag_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_outliers.md)
+in the Inspect tab of the Shiny app and inside
+[`inspect_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/inspect_f0.md).
 
 ## Usage
 
@@ -26,11 +32,11 @@ flag_pitch_jumps(
 
 - data:
 
-  A long-format data frame, one row per f0 sample.
+  A long-format data frame with one row per f0 sample.
 
 - f0:
 
-  Column name of f0 (Hz). Default `"f0"`.
+  Column name of f0 in Hz. Default `"f0"`.
 
 - token:
 
@@ -42,7 +48,7 @@ flag_pitch_jumps(
 
 - time_unit:
 
-  One of `"s"`, `"ms"`, `"norm"`. Default `"s"`. The "norm" option
+  One of `"s"`, `"ms"`, `"norm"`. Default `"s"`. The `"norm"` option
   treats each step as one 10 ms-equivalent unit.
 
 - rise_threshold:
@@ -58,7 +64,7 @@ flag_pitch_jumps(
 - octave_bounds:
 
   Hz-ratio bounds outside which a step is flagged as an octave jump.
-  Default `c(0.49, 1.99)` (halving / doubling).
+  Default `c(0.49, 1.99)` (halving or doubling).
 
 - carryover_mult:
 
@@ -67,13 +73,70 @@ flag_pitch_jumps(
 
 ## Value
 
-The input data frame with two appended columns: `flagged_jump` (logical)
-and `jump_note` (character; one of `"jump (rise)"`, `"jump (fall)"`,
-`"octave jump"`, `"carryover"`, or compound notes joined by `"; "`).
+The input data frame with two appended columns:
+
+- `flagged_jump`: logical, `TRUE` for samples flagged as artefacts or
+  carryover frames.
+
+- `jump_note`: character describing each flag (e.g., `"jump (rise)"`,
+  `"jump (fall)"`, `"octave jump"`, `"carryover"`, or compound notes
+  joined by `"; "`).
 
 ## Details
 
-Rise / fall thresholds are expressed as semitones per 10 ms; the
-function rescales the observed rate using `time_unit` to compare against
-them. Zero-valued f0 samples (unvoiced markers from pitch trackers) are
-treated as missing before any computation.
+### What the function does internally
+
+1.  Treat f0 = 0 as `NA` (pitch trackers commonly mark unvoiced frames
+    with 0 Hz).
+
+2.  Within each token, compute the semitone difference between
+    consecutive f0 samples and the Hz ratio between them.
+
+3.  Rescale the observed rate of change to a semitones-per-10-ms
+    equivalent using `time_unit`, so the result can be compared to a
+    fixed threshold (Sundberg 1973).
+
+4.  Flag the *landing* sample (i.e., the sample immediately after the
+    jump) for octave jumps, threshold-violating rises, and
+    threshold-violating falls.
+
+5.  Extend each flagged sample forward as a chain of carryover frames
+    that stay within `carryover_mult * threshold` semitones of the error
+    sample's f0 (Steffman & Cole 2022).
+
+### Choosing the thresholds
+
+Default `rise_threshold` and `fall_threshold` come from Sundberg's
+(1973) classic study of the maximum rate of f0 change achievable in
+singing. Changes exceeding these rates are physiologically implausible
+and almost always tracking errors. Tightening these values catches more
+borderline cases at the cost of more false positives.
+
+Default `octave_bounds = c(0.49, 1.99)` flags any successive Hz ratio
+more extreme than approximate halving or doubling, the dominant failure
+mode of autocorrelation-based pitch trackers.
+
+Setting `carryover_mult = 0` disables the carryover extension and flags
+only the landing sample of each jump. The default of `1.5` follows
+Steffman & Cole (2022).
+
+## References
+
+Steffman, J., & Cole, J. (2022). Pitch tracking artefacts and the
+detection of voicing errors in spontaneous speech.
+
+Sundberg, J. (1973). The acoustics of the singing voice. *Scientific
+American*, 229(3), 82–91.
+
+Xu, C., & Zhang, C. (2024). A cross-linguistic review of citation tone
+production studies: Methodology and recommendations. *The Journal of the
+Acoustical Society of America*, 156(4), 2538–2565.
+[doi:10.1121/10.0032356](https://doi.org/10.1121/10.0032356)
+
+## See also
+
+- [`flag_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_outliers.md)
+  for the complementary token-level outlier check.
+
+- [`inspect_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/inspect_f0.md)
+  for the wrapper that joins both.

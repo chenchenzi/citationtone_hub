@@ -67,8 +67,8 @@ A data frame with 38,808 rows and 12 columns:
 
 ## Source
 
-Xu, C. (2025). *Plastic Mandarin tones: regional identity in prosody.*
-Phonetica.
+Xu, C. (2025). Plastic Mandarin tones: regional identity in prosody.
+*Phonetica*, 82(5), 331–362.
 [doi:10.1515/phon-2025-0001](https://doi.org/10.1515/phon-2025-0001)
 
 ## Examples

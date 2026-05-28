@@ -1,11 +1,13 @@
 # Inspect f0 data for token-level outliers and sample-level jumps
 
-Wrapper that runs
+One-call convenience wrapper that runs both
 [`flag_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_outliers.md)
-(by-speaker z-score outlier detection on per-token max / min) and
+and
 [`flag_pitch_jumps()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_pitch_jumps.md)
-(sample-to-sample jumps, octave jumps, carryover), then combines their
-results into a single long-format data frame with one row per f0 sample.
+on the same dataset, joins their results back into one long-format data
+frame, and produces a single `flag_notes` column with human-readable
+reasons for each flag. This is the function that backs the Inspect tab
+of the Shiny app.
 
 ## Usage
 
@@ -30,11 +32,11 @@ inspect_f0(
 
 - data:
 
-  A long-format data frame, one row per f0 sample.
+  A long-format data frame with one row per f0 sample.
 
 - f0:
 
-  Column name of f0 (Hz). Default `"f0"`.
+  Column name of f0 in Hz. Default `"f0"`.
 
 - token:
 
@@ -55,7 +57,7 @@ inspect_f0(
 - z_threshold:
 
   Absolute z-score above which a token is flagged. Default `3`, covering
-  99.7% of a normal distribution.
+  about 99.7% of a normal distribution.
 
 - rise_threshold:
 
@@ -70,7 +72,7 @@ inspect_f0(
 - octave_bounds:
 
   Hz-ratio bounds outside which a step is flagged as an octave jump.
-  Default `c(0.49, 1.99)` (halving / doubling).
+  Default `c(0.49, 1.99)` (halving or doubling).
 
 - carryover_mult:
 
@@ -79,7 +81,7 @@ inspect_f0(
 
 - time_unit:
 
-  One of `"s"`, `"ms"`, `"norm"`. Default `"s"`. The "norm" option
+  One of `"s"`, `"ms"`, `"norm"`. Default `"s"`. The `"norm"` option
   treats each step as one 10 ms-equivalent unit.
 
 ## Value
@@ -87,13 +89,95 @@ inspect_f0(
 A long-format data frame containing the original `token`, `time`, `f0`,
 `speaker`, `tone` columns plus:
 
-- `f0_token_max`, `f0_token_min`, `f0_token_mean`, `f0_token_sd` —
-  per-token summaries
+- `f0_token_max`, `f0_token_min`, `f0_token_mean`, `f0_token_sd`:
+  per-token summary statistics.
 
-- `flagged_jump` — logical, sample-level jump flag
+- `flagged_jump`: logical, sample-level jump flag.
 
-- `flagged_token` — logical, TRUE if the token has any extreme value or
-  any sample-level jump
+- `flagged_token`: logical, `TRUE` if the token has any extreme value or
+  any sample-level jump.
 
-- `flag_notes` — human-readable concatenation of the reasons a sample
-  was flagged
+- `flag_notes`: human-readable concatenation of the reasons a sample was
+  flagged.
+
+## Details
+
+### What the function does internally
+
+1.  Call
+    [`flag_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_outliers.md)
+    to get token-level outlier flags (`flag_too_high`, `flag_too_low`)
+    plus per-token summary statistics.
+
+2.  Call
+    [`flag_pitch_jumps()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_pitch_jumps.md)
+    to get sample-level pitch-tracking artefact flags (`flagged_jump`,
+    `jump_note`).
+
+3.  Left-join the token-level flags onto the long-format jump output, so
+    every sample carries both kinds of information.
+
+4.  Set `flagged_token` to `TRUE` for any token that has a max/min
+    z-outlier or contains at least one sample-level jump.
+
+5.  Concatenate the human-readable reasons into a single `flag_notes`
+    column for display.
+
+Use the individual functions
+([`flag_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_outliers.md),
+[`flag_pitch_jumps()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_pitch_jumps.md))
+if you want only one kind of check or want to combine the outputs
+yourself in a non-standard way.
+
+## References
+
+Steffman, J., & Cole, J. (2022). Pitch tracking artefacts and the
+detection of voicing errors in spontaneous speech.
+
+Sundberg, J. (1973). The acoustics of the singing voice. *Scientific
+American*, 229(3), 82–91.
+
+Xu, C., & Zhang, C. (2024). A cross-linguistic review of citation tone
+production studies: Methodology and recommendations. *The Journal of the
+Acoustical Society of America*, 156(4), 2538–2565.
+[doi:10.1121/10.0032356](https://doi.org/10.1121/10.0032356)
+
+## See also
+
+- [`flag_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_outliers.md)
+  and
+  [`flag_pitch_jumps()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_pitch_jumps.md),
+  the two components.
+
+- [`normalise_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_f0.md)
+  for the upstream normalisation step.
+
+## Examples
+
+``` r
+data(sample_f0)
+result <- inspect_f0(sample_f0,
+                     f0      = "f0_Hz",
+                     token   = "token",
+                     time    = "time",
+                     speaker = "speaker",
+                     tone    = "tone")
+
+# How many tokens were flagged at default thresholds?
+table(unique(result[, c("token", "flagged_token")])$flagged_token)
+#> 
+#> FALSE  TRUE 
+#>  1667   181 
+
+# Inspect the first few flagged samples
+head(result[result$flagged_jump, c("token", "time", "f0_Hz", "flag_notes")])
+#> # A tibble: 6 × 4
+#>   token             time f0_Hz flag_notes 
+#>   <chr>            <dbl> <dbl> <chr>      
+#> 1 dc102地4s46.6425 0.37   286. jump (rise)
+#> 2 dc103笛4s50.6725 0.126  197. jump (fall)
+#> 3 dc103笛4s50.6725 0.143  193. carryover  
+#> 4 dc103笛4s50.6725 0.160  194. carryover  
+#> 5 dc103笛4s50.6725 0.176  195. carryover  
+#> 6 dc103笛4s50.6725 0.192  195. carryover  
+```
