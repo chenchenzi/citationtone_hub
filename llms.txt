@@ -136,3 +136,9 @@ Convert mean or predicted contours into Chao tone numerals
   [`shinytone-package`](https://chenchenzi.github.io/citationtone_hub/reference/shinytone-package.md)
   : shinytone: A Citation Tone Research Hub
 
+# Articles
+
+### Tutorials
+
+- [Getting started with
+  shinytone](https://chenchenzi.github.io/citationtone_hub/articles/shinytone.md):

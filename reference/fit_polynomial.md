@@ -90,5 +90,5 @@ fit_polynomial(df, degree = 2)
 #>   token speaker tone     c0       c1     c2
 #>   <chr> <chr>   <chr> <dbl>    <dbl>  <dbl>
 #> 1 t1    S01     T1     163. 3.00e+ 0 -10.5 
-#> 2 t2    S01     T2     145. 9.15e-15  -5.71
+#> 2 t2    S01     T2     145. 3.70e-15  -5.71
 ```

@@ -1,8 +1,9 @@
 pandoc: 3.8.3
 pkgdown: 2.2.0
 pkgdown_sha: ~
-articles: {}
-last_built: 2026-05-28T19:24Z
+articles:
+  shinytone: shinytone.html
+last_built: 2026-05-28T19:33Z
 urls:
   reference: https://chenchenzi.github.io/citationtone_hub/reference
   article: https://chenchenzi.github.io/citationtone_hub/articles
