@@ -448,7 +448,7 @@ ui <- fluidPage(
                       tags$div(class = "about-toc",
                         tags$a(href = "#about-sec-features",     "What you can do"),
                         tags$span(class = "sep", " · "),
-                        tags$a(href = "#about-sec-workflows",    "Recommended Workflows"),
+                        tags$a(href = "#about-sec-workflows",    "Recommended workflows"),
                         tags$span(class = "sep", " · "),
                         tags$a(href = "#about-sec-terminology",  "Tone & terminology"),
                         tags$span(class = "sep", " · "),
@@ -561,7 +561,7 @@ ui <- fluidPage(
                         style = "max-width: 1080px; margin: 56px auto 8px auto; text-align: center; padding: 0 15px;",
                         tags$div(style = "width: 56px; height: 3px; background: #78c2ad; margin: 0 auto 24px auto; border-radius: 2px;"),
                         tags$h2(style = "color: #2c5f4f; margin: 0 0 8px 0; font-weight: 700;",
-                                "Recommended Workflows"),
+                                "Recommended workflows"),
                         tags$p(style = "color: #777; font-size: 0.95rem; margin: 0;",
                           "Four major pipelines through Shinytone. The output of each pipeline chains into the input of the next.")
                       ),
