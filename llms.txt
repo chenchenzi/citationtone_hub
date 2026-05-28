@@ -168,10 +168,10 @@ The bundled sample dataset is a subset of:
 
 ## License
 
-MIT for code. See
+[GPL (\>= 3)](https://www.gnu.org/licenses/gpl-3.0.html) for code; see
 [LICENSE.md](https://chenchenzi.github.io/citationtone_hub/LICENSE.md)
-for details. Long-form tutorials and vignettes are CC BY-NC 4.0; see
-individual files for notes.
+for the full text. Long-form tutorials and vignettes are CC BY-NC 4.0;
+see individual files for notes.
 
 ## Authors
 
