@@ -19,8 +19,9 @@ summarisation.
 **1. Online app — no install needed**
 
 The hosted version runs at
-<https://chenzixu.shinyapps.io/shinytone/>. Best for small datasets,
-classroom demos, and trying out the workflow without setup.
+<https://chenzixu.shinyapps.io/shinytone/>. Best for classroom demos,
+trying out the workflow without setup, and any analysis where per-upload
+batches stay under ~100 MB.
 
 **2. Local R package — full control**
 
@@ -53,10 +54,10 @@ library(shinytone)
 | Use case | Online app | Local package |
 |---|:---:|:---:|
 | Trying it out / teaching | ✓ | ✓ |
-| Small datasets (≤100 tokens) | ✓ | ✓ |
-| Large corpora (1000+ files) | ✗ | ✓ |
-| Ethics-restricted recordings | ✗ | ✓ |
-| Scripted / batch analysis | ✗ | ✓ |
+| Typical research datasets (hundreds to a few thousand tokens) | ✓ | ✓ |
+| Per-upload batch over 100 MB | ✗ | ✓ |
+| Ethics-restricted recordings (children, clinical, etc.) | ✗ | ✓ |
+| Scripted / batch / RMarkdown analysis | ✗ | ✓ |
 | Three+ simultaneous collaborators | limited | ✓ |
 
 ## Citation
