@@ -72,10 +72,12 @@ output$instruction_text <- renderUI({
       }
     },
     tags$p(style = "color: #777; font-size: 0.82rem; font-style: italic;",
-      "Source: a subset of the Changsha tone data from ",
+      "Source: a subset of the citation-tone recordings from ",
       tags$a(href = "https://doi.org/10.1515/phon-2025-0001",
              target = "_blank", rel = "noopener noreferrer",
              "Xu (2025)"),
+      ", ",
+      tags$em("Plastic Mandarin tones: regional identity in prosody"),
       "."
     ),
     tags$div(style = "margin: 12px 0;",

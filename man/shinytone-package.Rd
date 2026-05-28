@@ -30,6 +30,7 @@ app in stages. See \code{NEWS.md} for the current state.
 \seealso{
 Useful links:
 \itemize{
+  \item \url{https://chenchenzi.github.io/citationtone_hub/}
   \item \url{https://github.com/chenchenzi/citationtone_hub}
   \item \url{https://chenzixu.shinyapps.io/shinytone/}
   \item Report bugs at \url{https://github.com/chenchenzi/citationtone_hub/issues}
