@@ -25,26 +25,25 @@ Depends:
     R (>= 4.1.0)
 Imports:
     shiny,
-    bslib,
     dplyr,
-    rlang,
-    tidyr,
-    ggplot2,
-    DT,
-    RColorBrewer,
-    lme4,
-    emmeans,
-    mgcv,
-    thematic,
-    gridExtra,
-    plotly,
-    tuneR,
-    rPraat,
-    praatpicture
+    rlang
 Suggests:
-    testthat (>= 3.0.0),
+    bslib,
+    DT,
+    emmeans,
+    ggplot2,
+    gridExtra,
     knitr,
-    rmarkdown
+    lme4,
+    mgcv,
+    plotly,
+    praatpicture,
+    RColorBrewer,
+    rmarkdown,
+    rPraat,
+    testthat (>= 3.0.0),
+    thematic,
+    tuneR
 Config/testthat/edition: 3
 VignetteBuilder: knitr
 Config/roxygen2/version: 8.0.0
