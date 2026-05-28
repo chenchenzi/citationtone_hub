@@ -71,7 +71,7 @@
 <h2 id="two-ways-to-use-it">Two ways to use it<a class="anchor" aria-label="anchor" href="#two-ways-to-use-it"></a>
 </h2>
 <p><strong>1. Online app — no install needed</strong></p>
-<p>The hosted version runs at <a href="https://chenzixu.shinyapps.io/shinytone/" class="external-link uri">https://chenzixu.shinyapps.io/shinytone/</a>. Best for small datasets, classroom demos, and trying out the workflow without setup.</p>
+<p>The hosted version runs at <a href="https://chenzixu.shinyapps.io/shinytone/" class="external-link uri">https://chenzixu.shinyapps.io/shinytone/</a>. Best for classroom demos, trying out the workflow without setup, and any analysis where per-upload batches stay under ~100 MB.</p>
 <p><strong>2. Local R package — full control</strong></p>
 <p>Install from GitHub:</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
@@ -91,6 +91,11 @@
 <h2 id="when-to-use-which">When to use which<a class="anchor" aria-label="anchor" href="#when-to-use-which"></a>
 </h2>
 <table class="table">
+<colgroup>
+<col width="23%">
+<col width="38%">
+<col width="38%">
+</colgroup>
 <thead><tr>
 <th>Use case</th>
 <th align="center">Online app</th>
@@ -103,22 +108,22 @@
 <td align="center">✓</td>
 </tr>
 <tr>
-<td>Small datasets (≤100 tokens)</td>
+<td>Typical research datasets (hundreds to a few thousand tokens)</td>
 <td align="center">✓</td>
 <td align="center">✓</td>
 </tr>
 <tr>
-<td>Large corpora (1000+ files)</td>
+<td>Per-upload batch over 100 MB</td>
 <td align="center">✗</td>
 <td align="center">✓</td>
 </tr>
 <tr>
-<td>Ethics-restricted recordings</td>
+<td>Ethics-restricted recordings (children, clinical, etc.)</td>
 <td align="center">✗</td>
 <td align="center">✓</td>
 </tr>
 <tr>
-<td>Scripted / batch analysis</td>
+<td>Scripted / batch / RMarkdown analysis</td>
 <td align="center">✗</td>
 <td align="center">✓</td>
 </tr>
