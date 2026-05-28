@@ -12,14 +12,15 @@ knitr::opts_chunk$set(
   collapse  = TRUE,
   comment   = "#>",
   fig.width = 7,
-  fig.height = 4
+  fig.height = 4,
+  message   = FALSE,
+  warning   = FALSE
 )
-```
-
-```{r setup}
-library(shinytone)
-library(dplyr)
-library(ggplot2)
+suppressPackageStartupMessages({
+  library(shinytone)
+  library(dplyr)
+  library(ggplot2)
+})
 ```
 
 ## What is shinytone?
@@ -38,6 +39,16 @@ This vignette walks through the scripted side using the package's bundled
 sample dataset. If you prefer a graphical workflow, run
 `shinytone::run_app()` after installing, or visit the hosted app at
 <https://chenzixu.shinyapps.io/shinytone/>.
+
+## Setup
+
+The examples below assume these three packages are loaded:
+
+```{r setup_visible, eval = FALSE}
+library(shinytone)
+library(dplyr)
+library(ggplot2)
+```
 
 ## The bundled `sample_f0` dataset
 
