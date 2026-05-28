@@ -64,6 +64,13 @@ reference:
       - contour_to_chao
       - classify_contour
 
+  - title: Bundled data
+    desc: A small citation-tone corpus that ships with the package for
+      examples, vignettes, and the Shiny app's "Try with our sample data"
+      button.
+    contents:
+      - sample_f0
+
   - title: Package overview
     contents:
       - shinytone-package
