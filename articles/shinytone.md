@@ -18,7 +18,7 @@ library(ggplot2)
 ## What is shinytone?
 
 **shinytone** is a research hub for *citation tone analysis* in tone
-languages. It provides:
+languages. It bundles:
 
 - An interactive Shiny app that walks you through the full workflow —
   pitch extraction, by-speaker f0 normalisation, outlier detection,
@@ -28,102 +28,91 @@ languages. It provides:
   you can run the same analyses scripted from RMarkdown or another
   package.
 
-This vignette walks through the package’s scripted side using a small
-toy dataset. If you prefer a graphical workflow, install the package and
-run
-[`shinytone::run_app()`](https://chenchenzi.github.io/citationtone_hub/reference/run_app.md),
-or visit the hosted app at <https://chenzixu.shinyapps.io/shinytone/>.
+This vignette walks through the scripted side using the package’s
+bundled sample dataset. If you prefer a graphical workflow, run
+[`shinytone::run_app()`](https://chenchenzi.github.io/citationtone_hub/reference/run_app.md)
+after installing, or visit the hosted app at
+<https://chenzixu.shinyapps.io/shinytone/>.
 
-## A toy dataset
+## The bundled `sample_f0` dataset
 
-The package functions expect long-format data — one row per f0 sample.
-For this vignette we build a tiny synthetic corpus: 2 speakers × 3 tones
-× 4 tokens per tone × 20 frames per token.
+shinytone ships with a real citation-tone corpus available immediately
+after
+[`library(shinytone)`](https://chenchenzi.github.io/citationtone_hub/).
+It contains 38,808 f0 samples from 1,848 tokens across 13 speakers.
 
 ``` r
 
-set.seed(1)
-
-make_toy_corpus <- function(n_frames = 20) {
-  spec <- expand.grid(
-    speaker = c("S01", "S02"),
-    tone    = c("T1", "T2", "T3"),
-    rep     = 1:4,
-    stringsAsFactors = FALSE
-  )
-  spec$token <- paste(spec$speaker, spec$tone, spec$rep, sep = "_")
-  spec$item  <- paste0("w", spec$rep)
-
-  do.call(rbind, lapply(seq_len(nrow(spec)), function(i) {
-    r <- spec[i, ]
-    t <- seq(0, 1, length.out = n_frames)
-    # Speaker baseline: female speaker S01 a bit higher than S02
-    base <- if (r$speaker == "S01") 220 else 130
-    # Tone shape: T1 level high, T2 rising, T3 falling
-    shape <- switch(r$tone,
-      T1 = rep(0,  n_frames),
-      T2 = 20 * t,
-      T3 = -25 * t
-    )
-    data.frame(
-      speaker = r$speaker,
-      tone    = r$tone,
-      item    = r$item,
-      token   = r$token,
-      time    = t,
-      f0      = base + shape + rnorm(n_frames, sd = 3),
-      stringsAsFactors = FALSE
-    )
-  }))
-}
-
-toy <- make_toy_corpus()
-head(toy)
-#>   speaker tone item    token       time       f0
-#> 1     S01   T1   w1 S01_T1_1 0.00000000 218.1206
-#> 2     S01   T1   w1 S01_T1_1 0.05263158 220.5509
-#> 3     S01   T1   w1 S01_T1_1 0.10526316 217.4931
-#> 4     S01   T1   w1 S01_T1_1 0.15789474 224.7858
-#> 5     S01   T1   w1 S01_T1_1 0.21052632 220.9885
-#> 6     S01   T1   w1 S01_T1_1 0.26315789 217.5386
+data(sample_f0)
+glimpse(sample_f0)
+#> Rows: 38,808
+#> Columns: 12
+#> $ token      <chr> "dc102椅1s10.0125", "dc102椅1s10.0125", "dc102椅1s10.0125", "d…
+#> $ index      <int> 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, …
+#> $ time       <dbl> 0.090, 0.105, 0.120, 0.135, 0.150, 0.165, 0.180, 0.195, 0.2…
+#> $ f0_Hz      <dbl> 245.7078, 246.4516, 247.5111, 248.5496, 249.7015, 251.6647,…
+#> $ intensity  <dbl> 69.39095, 71.51177, 72.51483, 72.93342, 73.17195, 73.41046,…
+#> $ speaker    <chr> "dc102", "dc102", "dc102", "dc102", "dc102", "dc102", "dc10…
+#> $ char       <chr> "椅", "椅", "椅", "椅", "椅", "椅", "椅", "椅", "椅", "椅", "椅", "椅",…
+#> $ position   <int> 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,…
+#> $ start_time <dbl> 10.0125, 10.0125, 10.0125, 10.0125, 10.0125, 10.0125, 10.01…
+#> $ tone       <int> 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,…
+#> $ ipa        <chr> "i", "i", "i", "i", "i", "i", "i", "i", "i", "i", "i", "i",…
+#> $ vowel      <chr> "i", "i", "i", "i", "i", "i", "i", "i", "i", "i", "i", "i",…
 ```
 
-Two speakers means the absolute Hz values differ — that’s the situation
-[`normalise_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_f0.md)
-is designed for.
+The columns we’ll use:
+
+- `token` — unique identifier for each recorded syllable (groups rows of
+  the same contour together)
+- `time` — time in seconds within each token
+- `f0_Hz` — fundamental frequency
+- `speaker` — speaker ID
+- `tone` — Chao tone category (1-5)
+- `char` — the Chinese character of the syllable
+
+See
+[`?sample_f0`](https://chenchenzi.github.io/citationtone_hub/reference/sample_f0.md)
+for the full schema and source citation.
 
 ## Normalise f0 by speaker
 
+Raw Hz isn’t comparable across speakers (men and women have very
+different baseline f0).
 [`normalise_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_f0.md)
 adds a `speaker_mean` column plus either `f0_st` (semitones, default) or
 `f0_zscore`, computed per speaker:
 
 ``` r
 
-normed <- normalise_f0(toy,
-                       f0          = "f0",
+normed <- normalise_f0(sample_f0,
+                       f0          = "f0_Hz",
                        speaker     = "speaker",
                        tone        = "tone",
                        method      = "semitone",
                        mean_method = "weighted")
-head(normed)
-#>   speaker tone item    token       time       f0 speaker_mean       f0_st
-#> 1     S01   T1   w1 S01_T1_1 0.00000000 218.1206     219.3491 -0.09723267
-#> 2     S01   T1   w1 S01_T1_1 0.05263158 220.5509     219.3491  0.09459405
-#> 3     S01   T1   w1 S01_T1_1 0.10526316 217.4931     219.3491 -0.14711136
-#> 4     S01   T1   w1 S01_T1_1 0.15789474 224.7858     219.3491  0.42386601
-#> 5     S01   T1   w1 S01_T1_1 0.21052632 220.9885     219.3491  0.12890929
-#> 6     S01   T1   w1 S01_T1_1 0.26315789 217.5386     219.3491 -0.14349150
+head(normed[, c("speaker", "tone", "f0_Hz", "speaker_mean", "f0_st")])
+#>   speaker tone    f0_Hz speaker_mean     f0_st
+#> 1   dc102    3 245.7078     237.0675 0.6197450
+#> 2   dc102    3 246.4516     237.0675 0.6720735
+#> 3   dc102    3 247.5111     237.0675 0.7463436
+#> 4   dc102    3 248.5496     237.0675 0.8188289
+#> 5   dc102    3 249.7015     237.0675 0.8988754
+#> 6   dc102    3 251.6647     237.0675 1.0344568
 ```
 
-Now `f0_st` is on a comparable scale across speakers. A quick visual:
+Now `f0_st` puts every speaker on a comparable scale. Quick visual of
+the mean contour per tone across all speakers:
 
 ``` r
 
-ggplot(normed, aes(time, f0_st, colour = tone, group = token)) +
-  geom_line(alpha = 0.6) +
-  facet_wrap(~ speaker) +
-  labs(y = "f0 (semitones, relative to speaker mean)")
+normed |>
+  group_by(tone, time_bin = round(time / max(time), 2)) |>
+  summarise(f0_st = mean(f0_st, na.rm = TRUE), .groups = "drop") |>
+  ggplot(aes(time_bin, f0_st, colour = factor(tone))) +
+  geom_line(linewidth = 1) +
+  labs(x = "Normalised time", y = "f0 (semitones)",
+       colour = "Tone")
 ```
 
 ![](shinytone_files/figure-html/unnamed-chunk-4-1.png)
@@ -138,31 +127,34 @@ where the rate of f0 change exceeds physiological plausibility (Sundberg
 
 ``` r
 
-inspected <- inspect_f0(toy,
-                        f0      = "f0",
+inspected <- inspect_f0(sample_f0,
+                        f0      = "f0_Hz",
                         token   = "token",
                         time    = "time",
                         speaker = "speaker",
                         tone    = "tone")
+
+# How many tokens were flagged overall?
 inspected |>
   distinct(token, .keep_all = TRUE) |>
   count(flagged_token)
-#> # A tibble: 1 × 2
+#> # A tibble: 2 × 2
 #>   flagged_token     n
 #>   <lgl>         <int>
-#> 1 FALSE            24
+#> 1 FALSE          1667
+#> 2 TRUE            181
 ```
 
-For the toy data, nothing is flagged (it’s too clean). On real data,
-`flagged_token` and the human-readable `flag_notes` column tell you
-which tokens to investigate.
+The `flag_notes` column gives a human-readable reason for each flagged
+sample (e.g., `"max too high; jump (rise)"`). On the live app, the
+Inspect tab lets you click through flagged tokens one by one.
 
 ## Fit token-level polynomials
 
 [`fit_polynomial()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_polynomial.md)
 returns one row per token with Legendre polynomial coefficients (`c0`,
-`c1`, `c2`, …). Useful as inputs to downstream classifiers or regression
-models.
+`c1`, `c2`, …). Useful as features for downstream classifiers, or as a
+compact summary of contour shape.
 
 ``` r
 
@@ -175,76 +167,81 @@ poly_coefs <- fit_polynomial(normed,
                              degree  = 2)
 head(poly_coefs)
 #> # A tibble: 6 × 6
-#>   token    speaker tone        c0      c1      c2
-#>   <chr>    <chr>   <chr>    <dbl>   <dbl>   <dbl>
-#> 1 S01_T1_1 S01     T1     0.0944   0.0482  0.0109
-#> 2 S01_T1_2 S01     T1    -0.00218 -0.0975  0.0269
-#> 3 S01_T1_3 S01     T1     0.0535  -0.0328  0.0399
-#> 4 S01_T1_4 S01     T1     0.0104   0.0844  0.0342
-#> 5 S01_T2_1 S01     T2     0.848    0.769  -0.0552
-#> 6 S01_T2_2 S01     T2     0.916    0.823   0.0944
+#>   token            speaker  tone    c0    c1    c2
+#>   <chr>            <chr>   <int> <dbl> <dbl> <dbl>
+#> 1 dc102一1s22.3525 dc102       6 -1.53  3.86 0.114
+#> 2 dc102一2s22.9425 dc102       6 -1.07  2.62 0.282
+#> 3 dc102一3s23.5725 dc102       6 -1.37  2.79 0.474
+#> 4 dc102一4s24.1425 dc102       6 -1.14  1.76 0.732
+#> 5 dc102一5s24.7925 dc102       6 -1.09  1.90 0.296
+#> 6 dc102一6s25.3125 dc102       6 -1.87  2.14 1.28
 ```
 
-`c0` ≈ token-level mean f0 (in semitones). `c1` ≈ linear slope (positive
-for rising, negative for falling). `c2` ≈ curvature.
+Interpretation:
+
+- `c0` ≈ token-level mean f0 (in semitones, relative to speaker mean)
+- `c1` ≈ linear slope across the contour (positive = rising)
+- `c2` ≈ curvature (positive = U-shaped, negative = inverted-U)
 
 ## Fit a Growth Curve Analysis (GCA)
 
 [`fit_gca()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_gca.md)
-is a thin wrapper around
+is a convenience wrapper around
 [`lme4::lmer()`](https://rdrr.io/pkg/lme4/man/lmer.html) with sensible
 defaults for tone-shape modelling — orthogonal polynomials on per-token
 normalised time, plus conventional random effects on speaker and item.
+For non-standard model structures, call
+[`lme4::lmer()`](https://rdrr.io/pkg/lme4/man/lmer.html) directly.
 
 ``` r
 
+# (Skipped on package build for speed; uncomment to run locally.)
 gca <- fit_gca(normed,
                f0      = "f0_st",
                time    = "time",
                token   = "token",
                tone    = "tone",
                speaker = "speaker",
-               item    = "item",
+               item    = "char",                 # use Chinese char as item
                degree  = 2,
                random_slope_speaker = FALSE,
                random_slope_item    = FALSE)
 
 # Population-level per-tone curves
-preds <- predict_gca(gca, n = 60)
+preds <- predict_gca(gca, n = 100)
 ggplot(preds, aes(time, f0_predicted, colour = tone)) +
   geom_line(linewidth = 1)
 ```
 
-For non-standard model structures (custom contrasts, alternative random
-effects), call [`lme4::lmer()`](https://rdrr.io/pkg/lme4/man/lmer.html)
-directly —
-[`fit_gca()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_gca.md)
-is just a convenience wrapper for the common case.
-
 ## Convert to Chao tone numerals
 
 [`contour_to_chao()`](https://chenchenzi.github.io/citationtone_hub/reference/contour_to_chao.md)
-reduces per-tone mean (or model-predicted) contours to Chao numerals —
+reduces per-tone mean (or model-predicted) contours into Chao numerals —
 5-level digit strings like `55`, `35`, or `214`.
 
 ``` r
 
-# Pre-aggregate the toy data into a per-tone mean contour
-mean_contour <- compute_mean_contour(toy,
-                                     token = "token", f0 = "f0",
+# Pre-aggregate into a per-tone mean contour over all speakers
+mean_contour <- compute_mean_contour(sample_f0,
+                                     token = "token", f0 = "f0_Hz",
                                      time  = "time",  tone = "tone")
 
-chao <- contour_to_chao(mean_contour, raw_data = toy,
-                        raw_token = "token", raw_f0 = "f0",
-                        raw_tone  = "tone")
+chao <- contour_to_chao(
+  mean_contour,
+  raw_data  = sample_f0,
+  raw_token = "token", raw_f0 = "f0_Hz", raw_tone = "tone"
+)
 chao[, c("tone", "refline", "interval", "robust", "shape")]
-#>   tone refline interval robust     shape
-#> 1   T1      33       33     44 mid level
-#> 2   T2      35       35     44    rising
-#> 3   T3      31       31     43   falling
+#>   tone refline interval robust         shape
+#> 1    1      22       22     33 mid-low level
+#> 2    2     212      111    222       dipping
+#> 3    3      32       32     33       falling
+#> 4    4      45       45     44        rising
+#> 5    5      22       21     32 mid-low level
+#> 6    6      23       13     23        rising
 ```
 
-Three conversion methods are computed in one pass:
+Three conversion methods in one pass:
 
 - **`refline`** — reference-line FOR, rounded on the `[1, 5]` scale
 - **`interval`** — interval-based FOR, ceiling on the `(0, 5]` scale
@@ -262,8 +259,8 @@ The `shape` column summarises the contour (“rising”, “falling”,
   for the full API.
 - Run
   [`shinytone::run_app()`](https://chenchenzi.github.io/citationtone_hub/reference/run_app.md)
-  locally for the full graphical workflow, including audio handling and
-  a Praat script generator.
+  locally for the full graphical workflow, including audio processing
+  and a Praat script generator.
 - Cite the package with `citation("shinytone")` in any work that uses
   it.
 
@@ -271,5 +268,7 @@ The `shape` column summarises the contour (“rising”, “falling”,
 
 - Steffman, J., & Cole, J. (2022). Pitch tracking artefacts and the
   detection of voicing errors in spontaneous speech.
-- Sundberg, J. (1973). Data on maximum speed of pitch changes.
-- Xu, C. (2025). Tone production in Changsha. *Phonetica*.
+- Sundberg, J. (1973). The acoustics of the singing voice. *Scientific
+  American*, 229(3), 82–91.
+- Xu, C. (2025). Plastic Mandarin tones: regional identity in prosody.
+  *Phonetica*.

@@ -55,6 +55,14 @@ Convert mean or predicted contours into Chao tone numerals
 - [`classify_contour()`](https://chenchenzi.github.io/citationtone_hub/reference/classify_contour.md)
   : Classify a Chao tone numeral string as a shape
 
+## Bundled data
+
+A small citation-tone corpus that ships with the package for examples,
+vignettes, and the Shiny app’s “Try with our sample data” button.
+
+- [`sample_f0`](https://chenchenzi.github.io/citationtone_hub/reference/sample_f0.md)
+  : Sample f0 contour dataset
+
 ## Package overview
 
 - [`shinytone`](https://chenchenzi.github.io/citationtone_hub/reference/shinytone-package.md)

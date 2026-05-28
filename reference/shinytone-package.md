@@ -28,6 +28,8 @@ the current state.
 
 Useful links:
 
+- <https://chenchenzi.github.io/citationtone_hub/>
+
 - <https://github.com/chenchenzi/citationtone_hub>
 
 - <https://chenzixu.shinyapps.io/shinytone/>
