@@ -342,150 +342,117 @@ ui <- fluidPage(
                         }
                         html { scroll-behavior: smooth; }
 
-                        /* Styled blockquote cards used in the Tone &
-                           terminology section. Mint accent on the left,
-                           italic body, attribution on its own line. */
+                        /* Tone & terminology: horizontal scrollable cards.
+                           On wide screens all three cards fit; on narrow
+                           screens the row scrolls left/right with snap. */
+                        .term-row {
+                          display: flex;
+                          gap: 18px;
+                          max-width: 1200px;
+                          margin: 24px auto 0 auto;
+                          padding: 4px 20px 18px 20px;
+                          align-items: stretch;
+                          overflow-x: auto;
+                          scroll-snap-type: x mandatory;
+                          -webkit-overflow-scrolling: touch;
+                          scrollbar-width: thin;
+                          scrollbar-color: #c8d4cf transparent;
+                          /* Soft right-edge fade hints that there is more
+                             content off-screen than the visible viewport. */
+                          mask-image: linear-gradient(to right,
+                                       black 0,
+                                       black calc(100% - 40px),
+                                       transparent 100%);
+                          -webkit-mask-image: linear-gradient(to right,
+                                              black 0,
+                                              black calc(100% - 40px),
+                                              transparent 100%);
+                        }
+                        .term-row::-webkit-scrollbar {
+                          height: 8px;
+                        }
+                        .term-row::-webkit-scrollbar-thumb {
+                          background: #c8d4cf;
+                          border-radius: 4px;
+                        }
+                        .term-card {
+                          flex: 0 0 400px;
+                          scroll-snap-align: start;
+                          background: #ffffff;
+                          border: 1px solid #e3ece8;
+                          border-radius: 10px;
+                          padding: 22px 24px;
+                          box-shadow: 0 2px 6px rgba(44, 95, 79, 0.06);
+                          transition: box-shadow 0.18s ease, transform 0.18s ease;
+                          display: flex;
+                          flex-direction: column;
+                        }
+                        .term-card:hover {
+                          box-shadow: 0 6px 18px rgba(44, 95, 79, 0.10);
+                          transform: translateY(-2px);
+                        }
+                        /* Coloured accent bar at the top of each card */
+                        .term-card::before {
+                          content: '';
+                          display: block;
+                          height: 4px;
+                          width: 42px;
+                          background: #78c2ad;
+                          border-radius: 2px;
+                          margin: -6px 0 14px 0;
+                        }
+                        .term-card h4 {
+                          margin: 0 0 12px 0;
+                          color: #2c5f4f;
+                          font-weight: 700;
+                          font-size: 1.08rem;
+                          display: flex;
+                          align-items: center;
+                          gap: 8px;
+                        }
+                        .term-card h4 .term-icon {
+                          color: #78c2ad;
+                          font-size: 0.95em;
+                        }
+                        .term-card p {
+                          font-size: 0.92rem;
+                          line-height: 1.55;
+                          color: #444;
+                        }
+                        /* Compact quote box for narrow card columns */
                         .tone-quote {
-                          border-left: 4px solid #78c2ad;
+                          border-left: 3px solid #78c2ad;
                           background: #f7fbfa;
-                          padding: 14px 18px;
-                          margin: 12px 0;
-                          border-radius: 0 6px 6px 0;
+                          padding: 10px 14px;
+                          margin: 10px 0;
+                          border-radius: 0 5px 5px 0;
                         }
                         .tone-quote p {
                           font-style: italic;
                           color: #2c5f4f;
-                          margin: 0 0 6px 0;
-                          line-height: 1.55;
+                          margin: 0 0 4px 0;
+                          font-size: 0.85rem;
+                          line-height: 1.5;
                         }
                         .tone-quote .attrib {
                           font-style: normal;
                           color: #666;
-                          font-size: 0.85rem;
+                          font-size: 0.76rem;
                           margin: 0;
                         }
-                        .term-card {
-                          background: #ffffff;
-                          border: 1px solid #e3ece8;
-                          border-radius: 6px;
-                          padding: 16px 20px;
-                          margin: 10px 0 16px 0;
-                        }
-                        .term-card h4 {
-                          margin-top: 0;
-                          color: #2c5f4f;
-                        }
+                        /* On wide screens (3 cards x ~360px + gaps ~ 1140px
+                           fit fine). On narrow screens, the row scrolls
+                           horizontally rather than stacking, so all three
+                           remain peers and the user can swipe to compare. */
                       ")),
                       tags$div(class = "about-toc",
-                        tags$a(href = "#about-sec-terminology", "Tone & terminology"),
+                        tags$a(href = "#about-sec-features",     "What you can do"),
                         tags$span(class = "sep", " · "),
-                        tags$a(href = "#about-sec-features",  "What you can do"),
+                        tags$a(href = "#about-sec-workflows",    "Recommended Workflows"),
                         tags$span(class = "sep", " · "),
-                        tags$a(href = "#about-sec-workflows", "Recommended Workflows"),
+                        tags$a(href = "#about-sec-terminology",  "Tone & terminology"),
                         tags$span(class = "sep", " · "),
-                        tags$a(href = "#about-sec-faq",        "FAQ")
-                      ),
-
-                      # ============ Tone & terminology ============
-                      tags$div(id = "about-sec-terminology",
-                        style = "max-width: 900px; margin: 40px auto 8px auto; text-align: center; padding: 0 15px;",
-                        tags$div(style = "width: 56px; height: 3px; background: #78c2ad; margin: 0 auto 24px auto; border-radius: 2px;"),
-                        tags$h2(style = "color: #2c5f4f; margin: 0 0 8px 0; font-weight: 700;",
-                                "Tone & terminology"),
-                        tags$p(style = "color: #777; font-size: 0.95rem; margin: 0;",
-                          "A brief orientation to the linguistic notions Shinytone is built around.")
-                      ),
-                      tags$div(style = "max-width: 820px; margin: 24px auto 0 auto; padding: 0 15px;",
-
-                        # --- What is tone? ---
-                        tags$div(class = "term-card",
-                          h4("What is tone?"),
-                          tags$p("A ", tags$em("tone language"),
-                            " uses pitch contrastively at the lexical level. ",
-                            "The same string of consonants and vowels can map ",
-                            "to different words depending on the pitch pattern ",
-                            "with which it is produced. Classic definitions span ",
-                            "seventy years of typology and theory:"
-                          ),
-                          tags$div(class = "tone-quote",
-                            tags$p("A tone language may be defined provisionally as a language having lexically significant, contrastive, but relative pitch on each syllable."),
-                            tags$p(class = "attrib", "— Pike (1948), ", tags$em("Tone Languages"), ", p. 3.")
-                          ),
-                          tags$div(class = "tone-quote",
-                            tags$p("A language with tone is one in which an indication of pitch enters into the lexical realisation of at least some morphemes."),
-                            tags$p(class = "attrib", "— Hyman (2006), ", tags$em("Word-prosodic typology"), ", ", tags$em("Phonology"), ", 23(2), p. 229.")
-                          ),
-                          tags$div(class = "tone-quote",
-                            tags$p("Tone is the use of pitch variations to convey lexical or grammatical meaning."),
-                            tags$p(class = "attrib", "— Yip (2002), ", tags$em("Tone"), ", p. 1.")
-                          )
-                        ),
-
-                        # --- Citation tones ---
-                        tags$div(class = "term-card",
-                          h4("Citation tones"),
-                          tags$p(
-                            "A ", tags$em("citation tone"),
-                            " is the pitch shape a word takes when it is ",
-                            "pronounced in isolation, away from the influence ",
-                            "of neighbouring words, sentence intonation, or ",
-                            "discourse context. Citation forms hold ",
-                            "co-articulatory and prosodic variation as constant ",
-                            "as possible, making them the cleanest starting ",
-                            "point for studying a language's tonal contrasts. ",
-                            "Most reference grammars, fieldwork elicitation ",
-                            "protocols, and tone-inventory descriptions begin ",
-                            "from citation data."
-                          ),
-                          tags$p(
-                            "Shinytone is designed for this use case: ",
-                            "controlled recordings of single words or short ",
-                            "syllables, one tone category per token, multiple ",
-                            "speakers and repetitions. The Praat script, ",
-                            "extraction defaults, inspection thresholds, and ",
-                            "Chao numeral conversion routines all assume a ",
-                            "citation-style design."
-                          )
-                        ),
-
-                        # --- Pitch vs f0 ---
-                        tags$div(class = "term-card",
-                          h4("Pitch vs. f0"),
-                          tags$p(
-                            "Strictly speaking, Shinytone analyses ",
-                            tags$strong("f0"),
-                            " (fundamental frequency): the ", tags$em("physical"),
-                            " property of a voiced sound, equal to the lowest ",
-                            "frequency component of its waveform and measured ",
-                            "in Hertz."
-                          ),
-                          tags$p(
-                            tags$strong("Pitch"),
-                            " is the ", tags$em("perceptual"),
-                            " correlate: how high or low a listener hears the ",
-                            "sound. The two are closely related but not ",
-                            "identical, since pitch perception also depends on ",
-                            "intensity, duration, timbre, and listener-specific ",
-                            "factors."
-                          ),
-                          tags$p(
-                            "Throughout the app and documentation we sometimes ",
-                            "use ", tags$em("pitch"),
-                            " informally because it is the more intuitive ",
-                            "term, especially when describing tone shapes ",
-                            "(", tags$em("rising pitch"), ", ",
-                            tags$em("falling pitch"),
-                            "). The underlying measurements, plots, models, ",
-                            "and outputs are always f0 in Hz, or its ",
-                            "by-speaker normalisation in semitones or ",
-                            "z-scores. See ",
-                            tags$a(href = "https://doi.org/10.1121/10.0032356",
-                                   target = "_blank", rel = "noopener noreferrer",
-                                   "Xu & Zhang (2024)"),
-                            " for a discussion of methodological conventions ",
-                            "in citation-tone research."
-                          )
-                        )
+                        tags$a(href = "#about-sec-faq",          "FAQ")
                       ),
 
                       # --- Section break + landing heading ---
@@ -904,9 +871,113 @@ ui <- fluidPage(
                         "))
                       ),
 
+                      # ============ Tone & terminology ============
+                      tags$div(id = "about-sec-terminology",
+                        style = "max-width: 900px; margin: 56px auto 0 auto; text-align: center; padding: 0 15px;",
+                        tags$div(style = "width: 56px; height: 3px; background: #78c2ad; margin: 0 auto 24px auto; border-radius: 2px;"),
+                        tags$h2(style = "color: #2c5f4f; margin: 0 0 8px 0; font-weight: 700;",
+                                "Tone & terminology"),
+                        tags$p(style = "color: #777; font-size: 0.95rem; margin: 0;",
+                          "A brief orientation to the linguistic notions Shinytone is built around.")
+                      ),
+                      tags$div(class = "term-row",
+
+                        # --- What is tone? ---
+                        tags$div(class = "term-card",
+                          h4(tags$span(class = "term-icon", icon("book-open")),
+                             "What is tone?"),
+                          tags$p("A ", tags$em("tone language"),
+                            " uses pitch contrastively at the lexical level. ",
+                            "The same string of consonants and vowels can map ",
+                            "to different words depending on the pitch pattern ",
+                            "with which it is produced. Classic definitions span ",
+                            "seventy years of typology and theory:"
+                          ),
+                          tags$div(class = "tone-quote",
+                            tags$p("A tone language may be defined provisionally as a language having lexically significant, contrastive, but relative pitch on each syllable."),
+                            tags$p(class = "attrib", "Pike (1948), ", tags$em("Tone Languages"), ", p. 3.")
+                          ),
+                          tags$div(class = "tone-quote",
+                            tags$p("A language with tone is one in which an indication of pitch enters into the lexical realisation of at least some morphemes."),
+                            tags$p(class = "attrib", "Hyman (2006), ", tags$em("Word-prosodic typology"), ", ", tags$em("Phonology"), ", 23(2), p. 229.")
+                          ),
+                          tags$div(class = "tone-quote",
+                            tags$p("Tone is the use of pitch variations to convey lexical or grammatical meaning."),
+                            tags$p(class = "attrib", "Yip (2002), ", tags$em("Tone"), ", p. 1.")
+                          )
+                        ),
+
+                        # --- Citation tones ---
+                        tags$div(class = "term-card",
+                          h4(tags$span(class = "term-icon", icon("microphone")),
+                             "Citation tones"),
+                          tags$p(
+                            "A ", tags$em("citation tone"),
+                            " is the pitch shape a word takes when it is ",
+                            "pronounced in isolation, away from the influence ",
+                            "of neighbouring words, sentence intonation, or ",
+                            "discourse context. Citation forms hold ",
+                            "co-articulatory and prosodic variation as constant ",
+                            "as possible, making them the cleanest starting ",
+                            "point for studying a language's tonal contrasts. ",
+                            "Most reference grammars, fieldwork elicitation ",
+                            "protocols, and tone-inventory descriptions begin ",
+                            "from citation data."
+                          ),
+                          tags$p(
+                            "Shinytone is designed for this use case: ",
+                            "controlled recordings of single words or short ",
+                            "syllables, one tone category per token, multiple ",
+                            "speakers and repetitions. The models and Chao ",
+                            "numeral conversion routines all assume a ",
+                            "citation-style design."
+                          )
+                        ),
+
+                        # --- Pitch vs f0 ---
+                        tags$div(class = "term-card",
+                          h4(tags$span(class = "term-icon", icon("wave-square")),
+                             "Pitch vs. f0"),
+                          tags$p(
+                            "Strictly speaking, Shinytone analyses ",
+                            tags$strong("f0"),
+                            " (fundamental frequency): the ", tags$em("physical"),
+                            " property of a voiced sound, equal to the lowest ",
+                            "frequency component of its waveform and measured ",
+                            "in Hertz."
+                          ),
+                          tags$p(
+                            tags$strong("Pitch"),
+                            " is the ", tags$em("perceptual"),
+                            " correlate: how high or low a listener hears the ",
+                            "sound. The two are closely related but not ",
+                            "identical, since pitch perception also depends on ",
+                            "intensity, duration, timbre, and listener-specific ",
+                            "factors."
+                          ),
+                          tags$p(
+                            "Throughout the app and documentation we sometimes ",
+                            "use ", tags$em("pitch"),
+                            " informally because it is the more intuitive ",
+                            "term, especially when describing tone shapes ",
+                            "(", tags$em("rising pitch"), ", ",
+                            tags$em("falling pitch"),
+                            "). The underlying measurements, plots, models, ",
+                            "and outputs are always f0 in Hz, or its ",
+                            "by-speaker normalisation in semitones or ",
+                            "z-scores. See ",
+                            tags$a(href = "https://doi.org/10.1121/10.0032356",
+                                   target = "_blank", rel = "noopener noreferrer",
+                                   "Xu & Zhang (2024)"),
+                            " for a discussion of methodological conventions ",
+                            "in citation-tone research."
+                          )
+                        )
+                      ),
+
                       # --- FAQ ---
                       tags$div(id = "about-sec-faq",
-                        style = "max-width: 900px; margin: 48px auto 0 auto; text-align: center; padding: 0 15px;",
+                        style = "max-width: 900px; margin: 56px auto 0 auto; text-align: center; padding: 0 15px;",
                         tags$div(style = "width: 56px; height: 3px; background: #78c2ad; margin: 0 auto 24px auto; border-radius: 2px;"),
                         tags$h2(style = "color: #2c5f4f; margin: 0 0 8px 0; font-weight: 700;",
                                 "Frequently Asked Questions")
