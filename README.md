@@ -1,7 +1,7 @@
 # shinytone <img src="man/figures/logo.png" align="right" height="138" alt="shinytone hex logo" />
 
-> A Citation Tone Research Hub: an interactive Shiny app and accompanying
-> R functions for citation-tone analysis across tone languages.
+> A Citation Tone Research Hub: an interactive Shiny app and R package
+> for citation-tone research workflows across tone languages.
 
 Developed by [Chenzi Xu](https://chenzixu.rbind.io/). Co-authored with
 [Cong Zhang](https://congzhang-linguist.github.io).
@@ -175,4 +175,4 @@ notes.
 
 - [Chenzi Xu](https://chenzixu.rbind.io/), developer and maintainer
 - [Cong Zhang](https://congzhang-linguist.github.io), co-author of the
-  tutorial paper currently in preparation
+  shinytone project
