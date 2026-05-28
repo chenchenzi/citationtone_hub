@@ -1,0 +1,14 @@
+/* ---------------------------------------------------------------------------
+   shinytone pkgdown overrides.
+
+   Loaded automatically by pkgdown because the file lives at pkgdown/extra.css.
+   --------------------------------------------------------------------------- */
+
+/* Let the hex sticker float directly on the navbar — no white "logo box"
+   behind it. */
+.navbar-brand img {
+  background: transparent !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
