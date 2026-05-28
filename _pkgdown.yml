@@ -1,0 +1,95 @@
+url: https://chenchenzi.github.io/citationtone_hub/
+
+template:
+  bootstrap: 5
+  bootswatch: minty           # match the running Shiny app's bslib theme
+  bslib:
+    primary: "#78c2ad"
+    border-radius: 0.4rem
+
+home:
+  title: shinytone — A Citation Tone Research Hub
+  description: >
+    Interactive Shiny app and accompanying R functions for citation tone
+    research across tone languages.
+
+navbar:
+  structure:
+    left:  [intro, reference, articles, news]
+    right: [search, github]
+  components:
+    intro:
+      text: Get started
+      href: articles/shinytone.html
+
+reference:
+  - title: Launch the app
+    desc: >
+      Run the bundled Shiny UI locally — same interface as the hosted
+      version, no upload limits, recordings stay on your machine.
+    contents:
+      - run_app
+
+  - title: f0 normalisation
+    desc: By-speaker semitone or z-score normalisation.
+    contents:
+      - normalise_f0
+
+  - title: Outlier and artefact inspection
+    desc: >
+      Token-level outlier detection by speaker z-score, plus sample-level
+      pitch-tracking artefacts (Sundberg 1973, Steffman & Cole 2022).
+    contents:
+      - inspect_f0
+      - flag_outliers
+      - flag_pitch_jumps
+
+  - title: Contour modelling
+    desc: >
+      Token-level polynomial fits, mixed-effects growth-curve analysis,
+      and GAMMs over tone contours.
+    contents:
+      - fit_polynomial
+      - fit_gca
+      - predict_gca
+      - fit_gamm
+      - predict_gamm
+
+  - title: Chao tone numerals
+    desc: >
+      Convert mean or predicted contours into Chao tone numerals
+      (reference-line, interval-based, robust FOR methods).
+    contents:
+      - compute_mean_contour
+      - contour_to_chao
+      - classify_contour
+
+  - title: Package overview
+    contents:
+      - shinytone-package
+
+# articles: section intentionally omitted until vignettes exist.
+# When you add vignettes/<name>.Rmd, re-enable:
+#   articles:
+#     - title: Tutorials
+#       contents:
+#         - <vignette-name>
+
+news:
+  releases:
+    - text: All release notes
+      href: news/index.html
+
+# Per-author display tweaks: linked names, no "Developed by" prefix.
+authors:
+  Chenzi Xu:
+    href: https://chenzixu.rbind.io/
+  Cong Zhang:
+    href: https://congzhang-linguist.github.io
+
+footer:
+  structure:
+    left:  authors_line
+    right: built_with
+  components:
+    authors_line: "[Chenzi Xu](https://chenzixu.rbind.io/), [Cong Zhang](https://congzhang-linguist.github.io)"

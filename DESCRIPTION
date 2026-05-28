@@ -15,7 +15,8 @@ Description: An interactive Shiny application and accompanying R functions for
     numeral summarisation. Designed for phoneticians, typologists,
     fieldworkers, and students working on lexical tone production.
 License: MIT + file LICENSE
-URL: https://github.com/chenchenzi/citationtone_hub,
+URL: https://chenchenzi.github.io/citationtone_hub/,
+    https://github.com/chenchenzi/citationtone_hub,
     https://chenzixu.shinyapps.io/shinytone/
 BugReports: https://github.com/chenchenzi/citationtone_hub/issues
 Encoding: UTF-8
