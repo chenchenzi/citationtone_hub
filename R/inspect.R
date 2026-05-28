@@ -304,16 +304,20 @@ flag_pitch_jumps <- function(data,
     dplyr::ungroup()
 
   # Time conversion to semitones-per-10ms equivalent.
-  result <- result |>
-    dplyr::mutate(
-      .time_factor = dplyr::case_when(
-        time_unit == "ms"   ~ ifelse(is.na(.data$.diff_time) | .data$.diff_time == 0,
-                                     1, .data$.diff_time / 10),
-        time_unit == "s"    ~ ifelse(is.na(.data$.diff_time) | .data$.diff_time == 0,
-                                     1, (.data$.diff_time * 1000) / 10),
-        time_unit == "norm" ~ 1
-      )
-    )
+  # `time_unit` is a scalar argument fixed for the whole call, so we
+  # branch with if/else rather than case_when() (which dplyr 1.2.0
+  # deprecates for scalar LHS inputs).
+  time_factor <- if (time_unit == "ms") {
+    ifelse(is.na(result$.diff_time) | result$.diff_time == 0,
+           1, result$.diff_time / 10)
+  } else if (time_unit == "s") {
+    ifelse(is.na(result$.diff_time) | result$.diff_time == 0,
+           1, (result$.diff_time * 1000) / 10)
+  } else {
+    # "norm": treat each step as one 10 ms-equivalent unit
+    rep(1, nrow(result))
+  }
+  result$.time_factor <- time_factor
 
   # Jump flags, then shift to the LANDING sample (where the error actually
   # appears).
