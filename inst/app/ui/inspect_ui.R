@@ -166,6 +166,20 @@ inspect_ui <- function(input, output, session, dataset) {
     n_samples <- nrow(result)
     n_flagged_samples <- sum(result$flagged_jump, na.rm = TRUE)
 
+    # Which check(s) fired, per token (derived from flag_notes / flagged_jump;
+    # the checks can overlap, so these need not sum to the flagged total).
+    per_token_checks <- result %>%
+      group_by(.data[[token_var]]) %>%
+      summarise(
+        extreme = any(grepl("max too high|min too low", flag_notes), na.rm = TRUE),
+        level   = any(grepl("level too", flag_notes), na.rm = TRUE),
+        jump    = any(flagged_jump, na.rm = TRUE),
+        .groups = "drop"
+      )
+    n_extreme_tokens <- sum(per_token_checks$extreme)
+    n_level_tokens   <- sum(per_token_checks$level)
+    n_jump_tokens    <- sum(per_token_checks$jump)
+
     # Speaker x tone groups too small to run the level check (fixed
     # minimum of 5 tokens; matches inspect_f0()'s default min_tokens).
     LEVEL_MIN_TOKENS <- 5
@@ -197,8 +211,16 @@ inspect_ui <- function(input, output, session, dataset) {
         tags$strong("Inspection summary:"),
         tags$ul(style = "margin-bottom: 4px; padding-left: 18px;",
           tags$li(paste0("Tokens flagged: ", n_flagged_tokens, " / ", n_tokens,
-                         " (", round(100 * n_flagged_tokens / max(n_tokens, 1), 1), "%)")),
-          tags$li(paste0("Tokens with potential jumps: ", n_flagged_samples, " / ", n_samples,
+                         " (", round(100 * n_flagged_tokens / max(n_tokens, 1), 1), "%)"),
+            tags$ul(style = "margin: 2px 0; padding-left: 18px;",
+              tags$li(paste0("Extreme-value (max / min by speaker): ", n_extreme_tokens)),
+              tags$li(paste0("Token-level (median by speaker × tone): ", n_level_tokens)),
+              tags$li(paste0("Sample-level (jumps): ", n_jump_tokens)),
+              tags$li(style = "list-style: none; margin-left: -18px; color: #8a6d00;",
+                tags$em("A token can fire more than one check, so these may sum to more than the flagged total."))
+            )
+          ),
+          tags$li(paste0("Samples with potential jumps: ", n_flagged_samples, " / ", n_samples,
                          " (", round(100 * n_flagged_samples / max(n_samples, 1), 1), "%)"))
         ),
         if (n_level_skipped > 0) {
