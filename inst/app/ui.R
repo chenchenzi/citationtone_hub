@@ -337,10 +337,175 @@ ui <- fluidPage(
                         /* Offset scroll target so headings don't slide under
                            the Shinytone navbar + sticky TOC when jumped to. */
                         #about-sec-terminology, #about-sec-features,
-                        #about-sec-workflows, #about-sec-faq {
+                        #about-sec-workflows, #about-sec-faq,
+                        #about-sec-rpackage {
                           scroll-margin-top: 130px;
                         }
                         html { scroll-behavior: smooth; }
+
+                        /* =================================================
+                           R package showcase block
+                           ================================================= */
+                        .rpkg-card {
+                          max-width: 1080px;
+                          margin: 28px auto 0 auto;
+                          padding: 30px 28px;
+                          background:
+                            radial-gradient(circle at top right,
+                                            rgba(120, 194, 173, 0.10) 0%,
+                                            rgba(120, 194, 173, 0)   55%),
+                            #ffffff;
+                          border: 1px solid #e3ece8;
+                          border-radius: 14px;
+                          box-shadow: 0 4px 18px rgba(44, 95, 79, 0.07);
+                          display: grid;
+                          grid-template-columns: 220px 1fr;
+                          gap: 32px;
+                          align-items: center;
+                        }
+                        .rpkg-card .rpkg-logo {
+                          display: flex;
+                          justify-content: center;
+                          align-items: center;
+                        }
+                        .rpkg-card .rpkg-logo img {
+                          width: 200px;
+                          max-width: 100%;
+                          height: auto;
+                          filter: drop-shadow(0 6px 14px rgba(44, 95, 79, 0.18));
+                          transition: transform 0.25s ease,
+                                      filter    0.25s ease;
+                        }
+                        .rpkg-card .rpkg-logo img:hover {
+                          transform: translateY(-3px) rotate(-2deg);
+                          filter: drop-shadow(0 10px 22px rgba(44, 95, 79, 0.28));
+                        }
+                        .rpkg-card .rpkg-body h3 {
+                          margin: 0 0 6px 0;
+                          color: #2c5f4f;
+                          font-weight: 700;
+                          font-size: 1.25rem;
+                        }
+                        .rpkg-card .rpkg-body .rpkg-sub {
+                          color: #6b7d75;
+                          font-size: 0.92rem;
+                          margin: 0 0 14px 0;
+                        }
+                        .rpkg-card .rpkg-body p {
+                          color: #444;
+                          font-size: 0.93rem;
+                          line-height: 1.55;
+                          margin: 0 0 12px 0;
+                        }
+                        .rpkg-install {
+                          background: #14342b;
+                          color: #e4f3ed;
+                          padding: 12px 14px;
+                          border-radius: 8px;
+                          font-family: 'SFMono-Regular', Consolas,
+                                       'Liberation Mono', Menlo, monospace;
+                          font-size: 0.86rem;
+                          line-height: 1.55;
+                          overflow-x: auto;
+                          margin: 6px 0 14px 0;
+                          box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+                        }
+                        .rpkg-install .rpkg-comment {
+                          color: #8eb5a8;
+                        }
+                        .rpkg-install .rpkg-fn {
+                          color: #ffd49a;
+                        }
+                        .rpkg-install .rpkg-str {
+                          color: #c5e6d9;
+                        }
+                        .rpkg-badges {
+                          display: flex;
+                          flex-wrap: wrap;
+                          gap: 8px;
+                          margin-top: 6px;
+                        }
+                        .rpkg-badges a {
+                          display: inline-flex;
+                          align-items: center;
+                          gap: 6px;
+                          padding: 6px 12px;
+                          border-radius: 999px;
+                          font-size: 0.82rem;
+                          font-weight: 600;
+                          text-decoration: none;
+                          border: 1px solid #d2e4dd;
+                          background: #f7fbfa;
+                          color: #2c5f4f;
+                          transition: background 0.15s ease,
+                                      transform  0.15s ease,
+                                      border-color 0.15s ease;
+                        }
+                        .rpkg-badges a:hover {
+                          background: #e8f5f0;
+                          border-color: #78c2ad;
+                          transform: translateY(-1px);
+                          text-decoration: none;
+                        }
+                        .rpkg-badges a.primary {
+                          background: #78c2ad;
+                          color: #ffffff;
+                          border-color: #78c2ad;
+                        }
+                        .rpkg-badges a.primary:hover {
+                          background: #5fa993;
+                          border-color: #5fa993;
+                        }
+                        /* Function-highlight tiles under the main card */
+                        .rpkg-fn-grid {
+                          max-width: 1080px;
+                          margin: 18px auto 0 auto;
+                          display: grid;
+                          grid-template-columns: repeat(4, 1fr);
+                          gap: 14px;
+                        }
+                        .rpkg-fn-tile {
+                          background: #ffffff;
+                          border: 1px solid #e3ece8;
+                          border-radius: 10px;
+                          padding: 14px 16px;
+                          box-shadow: 0 2px 6px rgba(44, 95, 79, 0.05);
+                          transition: box-shadow 0.18s ease,
+                                      transform  0.18s ease;
+                        }
+                        .rpkg-fn-tile:hover {
+                          box-shadow: 0 6px 16px rgba(44, 95, 79, 0.10);
+                          transform: translateY(-2px);
+                        }
+                        .rpkg-fn-tile .rpkg-fn-name {
+                          font-family: 'SFMono-Regular', Consolas,
+                                       'Liberation Mono', Menlo, monospace;
+                          font-size: 0.9rem;
+                          font-weight: 700;
+                          color: #2c5f4f;
+                          margin: 0 0 4px 0;
+                        }
+                        .rpkg-fn-tile .rpkg-fn-desc {
+                          font-size: 0.82rem;
+                          color: #555;
+                          line-height: 1.45;
+                          margin: 0;
+                        }
+                        /* Narrow screens: stack the hero, two columns of tiles */
+                        @media (max-width: 760px) {
+                          .rpkg-card {
+                            grid-template-columns: 1fr;
+                            text-align: center;
+                            padding: 24px 18px;
+                          }
+                          .rpkg-card .rpkg-logo img {
+                            width: 160px;
+                          }
+                          .rpkg-badges { justify-content: center; }
+                          .rpkg-fn-grid {
+                            grid-template-columns: repeat(2, 1fr);
+                          }
+                        }
 
                         /* Tone & terminology: horizontal scrollable cards.
                            On wide screens all three cards fit; on narrow
@@ -451,6 +616,8 @@ ui <- fluidPage(
                         tags$a(href = "#about-sec-workflows",    "Recommended workflows"),
                         tags$span(class = "sep", " · "),
                         tags$a(href = "#about-sec-terminology",  "Tone & terminology"),
+                        tags$span(class = "sep", " · "),
+                        tags$a(href = "#about-sec-rpackage",     "R package"),
                         tags$span(class = "sep", " · "),
                         tags$a(href = "#about-sec-faq",          "FAQ")
                       ),
@@ -975,6 +1142,127 @@ ui <- fluidPage(
                         )
                       ),
 
+                      # ============ R package ============
+                      tags$div(id = "about-sec-rpackage",
+                        style = "max-width: 900px; margin: 56px auto 0 auto; text-align: center; padding: 0 15px;",
+                        tags$div(style = "width: 56px; height: 3px; background: #78c2ad; margin: 0 auto 24px auto; border-radius: 2px;"),
+                        tags$h2(style = "color: #2c5f4f; margin: 0 0 8px 0; font-weight: 700;",
+                                "Shinytone as an R package"),
+                        tags$p(style = "color: #777; font-size: 0.95rem; margin: 0;",
+                          "Everything this Shiny app does is also available as a scriptable, reproducible R package.")
+                      ),
+
+                      # --- Hero card: hex sticker + intro + install + badges ---
+                      tags$div(class = "rpkg-card",
+
+                        # Left column: hex sticker
+                        tags$div(class = "rpkg-logo",
+                          tags$a(
+                            href   = "https://chenchenzi.github.io/citationtone_hub/",
+                            target = "_blank", rel = "noopener noreferrer",
+                            title  = "Open the shinytone pkgdown site",
+                            tags$img(src = "logo.png", alt = "shinytone R package hex sticker")
+                          )
+                        ),
+
+                        # Right column: intro, install, badges
+                        tags$div(class = "rpkg-body",
+                          tags$h3("shinytone ", tags$span(
+                            style = "font-weight: 500; color: #78c2ad; font-size: 0.92rem; vertical-align: middle; margin-left: 6px;",
+                            "v0.1.1"
+                          )),
+                          tags$p(class = "rpkg-sub",
+                            "An R package for citation tone research — ",
+                            "scriptable, reproducible, and CRAN-friendly."
+                          ),
+                          tags$p(
+                            "If you prefer scripting to clicking, want to bake ",
+                            "Shinytone's analyses into a reproducible R Markdown ",
+                            "or Quarto report, or you'd like to run the whole ",
+                            "app locally on private recordings, install it as ",
+                            "an R package:"
+                          ),
+
+                          # Install block with syntax-style colouring
+                          tags$div(class = "rpkg-install",
+                            tags$span(class = "rpkg-comment", "# install from GitHub"), tags$br(),
+                            "remotes::", tags$span(class = "rpkg-fn", "install_github"),
+                            "(", tags$span(class = "rpkg-str", '"chenchenzi/citationtone_hub"'), ")",
+                            tags$br(), tags$br(),
+                            tags$span(class = "rpkg-comment", "# launch the Shiny app locally"), tags$br(),
+                            "shinytone::", tags$span(class = "rpkg-fn", "run_app"), "()"
+                          ),
+
+                          # Badge-style action links
+                          tags$div(class = "rpkg-badges",
+                            tags$a(
+                              class  = "primary",
+                              href   = "https://chenchenzi.github.io/citationtone_hub/",
+                              target = "_blank", rel = "noopener noreferrer",
+                              icon("book"), "Documentation"
+                            ),
+                            tags$a(
+                              href   = "https://github.com/chenchenzi/citationtone_hub",
+                              target = "_blank", rel = "noopener noreferrer",
+                              icon("github"), "Source on GitHub"
+                            ),
+                            tags$a(
+                              href   = "https://github.com/chenchenzi/citationtone_hub/blob/main/NEWS.md",
+                              target = "_blank", rel = "noopener noreferrer",
+                              icon("rss"), "Changelog"
+                            ),
+                            tags$a(
+                              href   = "https://github.com/chenchenzi/citationtone_hub/issues",
+                              target = "_blank", rel = "noopener noreferrer",
+                              icon("bug"), "Issues & feedback"
+                            )
+                          )
+                        )
+                      ),
+
+                      # --- Function-highlight tiles ---
+                      tags$div(class = "rpkg-fn-grid",
+                        tags$div(class = "rpkg-fn-tile",
+                          tags$p(class = "rpkg-fn-name", "normalise_f0()"),
+                          tags$p(class = "rpkg-fn-desc",
+                            "Per-speaker f0 normalisation in semitones, ",
+                            "z-scores, or ERB — the same conversions ",
+                            "the app's Normalise tab uses.")
+                        ),
+                        tags$div(class = "rpkg-fn-tile",
+                          tags$p(class = "rpkg-fn-name", "inspect_f0()"),
+                          tags$p(class = "rpkg-fn-desc",
+                            "Two-layer artefact inspection: per-token ",
+                            "z-scores plus sample-level jump detection ",
+                            "with median-aware flag placement.")
+                        ),
+                        tags$div(class = "rpkg-fn-tile",
+                          tags$p(class = "rpkg-fn-name", "fit_gca() / fit_gamm()"),
+                          tags$p(class = "rpkg-fn-desc",
+                            "Growth-curve and generalised additive mixed ",
+                            "models for tonal contours, with sensible ",
+                            "defaults for citation-tone designs.")
+                        ),
+                        tags$div(class = "rpkg-fn-tile",
+                          tags$p(class = "rpkg-fn-name", "contour_to_chao()"),
+                          tags$p(class = "rpkg-fn-desc",
+                            "Convert a normalised f0 contour into the ",
+                            "Chao (1930) 1–5 tone-letter notation ",
+                            "linguists already read fluently.")
+                        )
+                      ),
+                      tags$p(
+                        style = "max-width: 900px; margin: 14px auto 0 auto; padding: 0 15px; text-align: center; color: #6b7d75; font-size: 0.85rem;",
+                        "Run ", tags$code("?shinytone"),
+                        " or visit the ",
+                        tags$a(
+                          href   = "https://chenchenzi.github.io/citationtone_hub/reference/",
+                          target = "_blank", rel = "noopener noreferrer",
+                          "function reference"
+                        ),
+                        " for the full API. Licensed under GPL (≥ 3)."
+                      ),
+
                       # --- FAQ ---
                       tags$div(id = "about-sec-faq",
                         style = "max-width: 900px; margin: 56px auto 0 auto; text-align: center; padding: 0 15px;",
@@ -1043,17 +1331,72 @@ ui <- fluidPage(
                           h4("Usage"),
                           tags$div(class = "faq-item",
                             tags$p(tags$strong("Is this app open source?")),
-                            tags$p("Yes. The source code is available at ", tags$a(href = "https://github.com/chenchenzi/citationtone_hub", target = "_blank", "github.com/chenchenzi/citationtone_hub"), ". It is licensed under ", tags$a(href = "https://creativecommons.org/licenses/by-nc/4.0/", target = "_blank", "CC BY-NC 4.0"), ". Free to use for research and teaching (non-commercial) purposes with attribution.")
+                            tags$p("Yes. The source code is available at ",
+                              tags$a(href = "https://github.com/chenchenzi/citationtone_hub",
+                                     target = "_blank", "github.com/chenchenzi/citationtone_hub"),
+                              ". The package and app are licensed under ",
+                              tags$a(href = "https://www.gnu.org/licenses/gpl-3.0.html",
+                                     target = "_blank", "GPL (>= 3)"),
+                              ". You can use, modify, and redistribute it freely; ",
+                              "derivative works that you publish must also be GPL-licensed."
+                            )
+                          ),
+                          tags$div(class = "faq-item",
+                            tags$p(tags$strong("Is there an R package?")),
+                            tags$p("Yes. ", tags$code("shinytone"),
+                              " is an R package that bundles both the analytical ",
+                              "functions (",
+                              tags$code("normalise_f0()"), ", ",
+                              tags$code("inspect_f0()"), ", ",
+                              tags$code("fit_gca()"), ", ",
+                              tags$code("contour_to_chao()"), ", …) and the Shiny app. ",
+                              "Install from GitHub with:"
+                            ),
+                            tags$pre(style = "background: #f6f8fa; padding: 8px 12px; border-radius: 4px; font-size: 0.85rem; margin-top: 4px;",
+                              "remotes::install_github(\"chenchenzi/citationtone_hub\")"
+                            ),
+                            tags$p("Then launch the same UI you see online with ",
+                              tags$code("shinytone::run_app()"),
+                              ", or call any function programmatically from RMarkdown / a script. ",
+                              "Full reference at ",
+                              tags$a(href = "https://chenchenzi.github.io/citationtone_hub/",
+                                     target = "_blank", "chenchenzi.github.io/citationtone_hub"),
+                              "."
+                            )
                           ),
                           tags$div(class = "faq-item",
                             tags$p(tags$strong("Can I run Shinytone locally?")),
-                            tags$p("Yes. Clone the repository and run ", tags$code("shiny::runApp()"), " in R. When running locally, your data never leaves your machine. For very large datasets, consider running the app locally.")
+                            tags$p("Yes — strongly recommended for large datasets or ",
+                              "sensitive recordings. Either install the package (see above) and ",
+                              "run ", tags$code("shinytone::run_app()"), ", or clone the ",
+                              "repository and run ", tags$code("shiny::runApp(\"inst/app\")"), ". ",
+                              "Local runs have no file-size limits, no idle timeout, and your ",
+                              "data never leaves your machine."
+                            )
                           ),
                           tags$div(class = "faq-item",
                             tags$p(tags$strong("How do I cite Shinytone?")),
-                            tags$p("If you use Shinytone in your research, please cite it as:"),
-                            tags$blockquote(style = "border-left: 3px solid #78c2ad; padding-left: 12px; color: #555; font-size: 0.9rem;",
-                              "Xu, Chenzi (2026). Shinytone: A citation tone research hub. [Web application]. Available at https://chenzixu.shinyapps.io/shinytone/"
+                            tags$p("Please cite both the software and the methodology paper:"),
+                            tags$blockquote(style = "border-left: 3px solid #78c2ad; padding-left: 12px; color: #555; font-size: 0.88rem; margin-bottom: 6px;",
+                              "Xu, C., & Zhang, C. (2024). A cross-linguistic review of ",
+                              "citation tone production studies: Methodology and ",
+                              "recommendations. ",
+                              tags$em("The Journal of the Acoustical Society of America"),
+                              ", 156(4), 2538–2565. ",
+                              tags$a(href = "https://doi.org/10.1121/10.0032356",
+                                     target = "_blank", "doi.org/10.1121/10.0032356")
+                            ),
+                            tags$blockquote(style = "border-left: 3px solid #78c2ad; padding-left: 12px; color: #555; font-size: 0.88rem;",
+                              "Xu, C., & Zhang, C. (2026). ",
+                              tags$em("shinytone: A citation tone research hub"),
+                              ". R package version 0.1.1. ",
+                              tags$a(href = "https://chenchenzi.github.io/citationtone_hub/",
+                                     target = "_blank", "chenchenzi.github.io/citationtone_hub")
+                            ),
+                            tags$p(style = "font-size: 0.82rem; color: #777; margin-top: 6px;",
+                              "After installing the package locally, ",
+                              tags$code("citation(\"shinytone\")"),
+                              " prints a formatted BibTeX entry."
                             )
                           ),
                           tags$div(class = "faq-item",
