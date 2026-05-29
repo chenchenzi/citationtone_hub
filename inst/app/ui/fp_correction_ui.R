@@ -19,7 +19,10 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   fp_corrections <- reactiveVal(list())
   # Named list: token -> list of past states (for undo)
   fp_history <- reactiveVal(list())
-  # Chronological log of edit actions. One row per apply_edit() / undo call.
+  # Chronological log of finalised edits. One row per apply_edit() call.
+  # When the user undoes an edit, the matching row is removed from the
+  # log (rather than appending an "Undo" row), so the log captures only
+  # the edits the user kept.
   # Surfaced in the "Edit log" table and downloadable as CSV.
   #   date           : YYYY-MM-DD when the edit was applied
   #   token          : which token
@@ -1199,7 +1202,8 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     )
   })
 
-  # Chronological edit log: one row per apply_edit / undo call this session.
+  # Chronological edit log: one row per finalised apply_edit this session
+  # (undo removes the corresponding row rather than appending its own).
   output$fp_corr_edits_table <- DT::renderDataTable({
     df <- fp_edit_log()
     if (nrow(df) == 0) {
@@ -1376,7 +1380,20 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     corr <- fp_corrections()
     corr[[tok]] <- last
     fp_corrections(corr)
-    log_edit(tok, "Undo", NA_integer_, "previous edit reverted")
+
+    # Remove the most recent edit log row for this token so the log
+    # reflects only the finalised edits (rather than accumulating "Undo"
+    # entries). If the user undoes everything for a token, the log for
+    # that token ends up empty, which is what we want.
+    cur_log <- fp_edit_log()
+    if (nrow(cur_log) > 0) {
+      tok_rows <- which(cur_log$token == tok)
+      if (length(tok_rows) > 0) {
+        cur_log <- cur_log[-tail(tok_rows, 1), , drop = FALSE]
+        fp_edit_log(cur_log)
+      }
+    }
+
     showNotification("Undone.", type = "message", duration = 2)
   })
 
