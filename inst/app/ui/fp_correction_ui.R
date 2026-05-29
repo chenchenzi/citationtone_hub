@@ -352,8 +352,8 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       tags$div(style = "color: #888; font-size: 0.72rem; margin-top: -8px; margin-bottom: 4px; font-style: italic; line-height: 1.45;",
         HTML(paste(
           "<strong>✎</strong> = has edited frames (this session, or from a previously uploaded corrected CSV);",
-          "<strong>●</strong> = has frame-level flags from the Inspect tab.",
-          "Unprefixed tokens are flagged for out-of-range only (look at the whole contour) or haven't been edited yet.",
+          "<strong>●</strong> = has frame-level f0 artefact flags from the Inspect tab.",
+          "Unprefixed tokens are flagged for out-of-range values only (look at the whole contour) or haven't been edited yet.",
           sep = "<br>"))),
       verbatimTextOutput("fp_corr_progress", placeholder = TRUE),
       div(style = "display:flex; gap:4px; align-items:center; margin-top: 6px;",
@@ -367,7 +367,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       # the edit-status filter below and with each other.
       tags$details(style = "margin-top: 8px; margin-bottom: 4px;",
         tags$summary(style = "cursor:pointer; font-size: 0.85rem; color: #4a7868; font-weight: 600;",
-                     icon("filter"), " Filter by speaker, tone, flagged tokens"),
+                     icon("filter"), " Filter by speaker, tone, or potential f0 artefacts"),
         div(style = "padding: 6px 0 0 0;",
           fileInput("fp_corr_flagged_csv", NULL,
                     accept = c(".csv", "text/csv"),
@@ -1170,7 +1170,8 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         annotations[[length(annotations) + 1]] <- list(
           x = -0.005, y = (y_min + y_max) / 2,
           xref = "paper", yref = "paper",
-          xanchor = "right", text = tier$name,
+          xanchor = "right", yanchor = "middle",
+          text = tier$name,
           showarrow = FALSE,
           font = list(size = 14, color = "#666")
         )
@@ -1194,6 +1195,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                 x = (tier$t1[j] + tier$t2[j]) / 2,
                 y = (y_min + y_max) / 2,
                 xref = "x", yref = "paper",
+                xanchor = "center", yanchor = "middle",
                 text = lbl, showarrow = FALSE,
                 font = list(size = 15, color = "#222")
               )
@@ -1450,9 +1452,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           color: #2c5f4f;
           font-weight: 700;
           font-size: 0.95rem;
-          margin: 0 0 12px 0;
-          padding-bottom: 8px;
-          border-bottom: 1px solid #f0e9d4;
+          margin: 0 0 4px 0;
           display: flex;
           align-items: center;
           gap: 8px;
@@ -1484,7 +1484,8 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           font-weight: 700;
           line-height: 22px;
         }
-        /* Inline 'tab name' chip */
+        /* Inline 'tab name' chip — no margin so adjacent punctuation
+           (e.g. periods, commas) sits flush against the chip. */
         .tab-chip {
           display: inline-block;
           background: #e8f5f0;
@@ -1494,10 +1495,9 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           font-family: 'SFMono-Regular', Menlo, Consolas, monospace;
           font-size: 0.76rem;
           font-weight: 600;
-          margin: 0 1px;
           white-space: nowrap;
         }
-        /* Inline 'button' chip */
+        /* Inline 'button' chip — same reasoning as .tab-chip above. */
         .btn-chip {
           display: inline-block;
           background: #ffffff;
@@ -1507,9 +1507,20 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           border-radius: 4px;
           font-size: 0.78rem;
           font-weight: 600;
-          margin: 0 1px;
           white-space: nowrap;
           box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+        }
+        /* Tab-path subtitle under each step card title */
+        .resume-card-subtitle {
+          font-size: 0.78rem;
+          color: #777;
+          margin: -8px 0 12px 0;
+          padding-bottom: 8px;
+          border-bottom: 1px solid #f0e9d4;
+        }
+        .resume-card-subtitle .tab-chip {
+          font-size: 0.72rem;
+          padding: 1px 7px;
         }
         /* Centre column: animated arrow + CSV file pill */
         .resume-arrow {
@@ -1561,10 +1572,13 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                      tags$span(style = "color: #b08a35; font-weight: 400; font-size: 0.82rem;",
                                "(click to expand)")),
         tags$p(style = "margin: 10px 0 0 0; color: #5a4d2c; font-size: 0.88rem;",
-          "If your session times out or you close the app, your corrections ",
-          "still live in the downloaded CSV. Re-upload it in ",
+          tags$strong("Before you close the app or leave it idle"),
+          ", click ",
+          tags$span(class = "btn-chip", icon("download"), " Download all tokens"),
+          " from the sidebar. The downloaded CSV is your save file. ",
+          "Re-upload it in ",
           tags$span(class = "tab-chip", "F0 Extraction"),
-          " and the ",
+          " next time, and the ",
           tags$span(class = "tab-chip", "F0 Correction"),
           " tab will restore your progress automatically:"),
         tags$div(class = "resume-flow",
@@ -1580,7 +1594,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                       tags$span(class = "btn-chip", icon("download"), " Download all tokens"),
                       " and save ", tags$code("all_correctedf0.csv"),
                       " somewhere safe."),
-              tags$li("(Optional) Click ",
+              tags$li("(Recommended) Click ",
                       tags$span(class = "btn-chip", icon("download"), " Download edit log (CSV)"),
                       " to keep an action-by-action history of what you ",
                       "changed."),
@@ -1624,6 +1638,103 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                       " to pick up exactly where you left off.")
             )
           )
+        )
+      ),
+
+      # ---- Speaker / tone / flagged filter workflow (collapsible) ----
+      # Reuses the same .resume-* CSS classes from the resume illustration
+      # above for visual consistency.
+      tags$details(class = "resume-wrap",
+        tags$summary(icon("filter"),
+                     " Want to filter by speaker, tone, or potential f0 artefacts? ",
+                     tags$span(style = "color: #b08a35; font-weight: 400; font-size: 0.82rem;",
+                               "(click to expand)")),
+        tags$p(style = "margin: 10px 0 0 0; color: #5a4d2c; font-size: 0.88rem;",
+          "Each filter reads from a column in a CSV you upload. ",
+          tags$strong("Speaker and tone"), " come from your audio metadata; ",
+          tags$strong("potential f0 artefacts"),
+          " (tokens that pitch-tracking may have got wrong, e.g. octave ",
+          "jumps or out-of-range values) come from the ",
+          tags$span(class = "tab-chip", "Inspect"),
+          " tab in F0 Analysis."),
+        tags$div(class = "resume-flow",
+
+          # ----- Step 1: Extract + tag metadata -----
+          tags$div(class = "resume-card",
+            tags$div(class = "resume-card-title",
+              icon("microphone-lines"), " Step 1. Extract f0 + tag metadata"),
+            tags$div(class = "resume-card-subtitle",
+              tags$span(class = "tab-chip", "F0 Processing"),
+              HTML(" &rarr; "),
+              tags$span(class = "tab-chip", "F0 Extraction")),
+            tags$ol(class = "resume-steps",
+              tags$li("Under ", tags$strong("Metadata"),
+                      ", attach speaker / tone / etc. either by ",
+                      tags$span(class = "btn-chip", "Upload metadata CSV"),
+                      " or ",
+                      tags$span(class = "btn-chip", "Derive from filename"),
+                      "."),
+              tags$li("Run extraction on your ", tags$code(".wav"),
+                      " files (or upload a pre-extracted CSV)."),
+              tags$li("Click ",
+                      tags$span(class = "btn-chip", icon("download"), " Download f0 (CSV)"),
+                      " and keep the file handy.")
+            )
+          ),
+
+          # ----- Step 2: Inspect in F0 Analysis -----
+          tags$div(class = "resume-card",
+            tags$div(class = "resume-card-title",
+              icon("magnifying-glass"), " Step 2. Inspect for artefacts"),
+            tags$div(class = "resume-card-subtitle",
+              tags$span(class = "tab-chip", "F0 Analysis"),
+              HTML(" &rarr; "),
+              tags$span(class = "tab-chip", "Inspect")),
+            tags$ol(class = "resume-steps",
+              tags$li("In ",
+                      tags$span(class = "tab-chip", "Start"),
+                      ", upload the f0 CSV from step 1."),
+              tags$li("Open ",
+                      tags$span(class = "tab-chip", "Inspect"),
+                      ", run the inspection (it flags tokens with potential ",
+                      "f0 artefacts)."),
+              tags$li("Click ",
+                      tags$span(class = "btn-chip", icon("download"), " Download Inspected Data"),
+                      " (or the flagged-only subset).")
+            )
+          ),
+
+          # ----- Step 3: Upload back here as filter -----
+          tags$div(class = "resume-card",
+            tags$div(class = "resume-card-title",
+              icon("filter"), " Step 3. Apply as filter"),
+            tags$div(class = "resume-card-subtitle",
+              tags$span(class = "tab-chip", "F0 Processing"),
+              HTML(" &rarr; "),
+              tags$span(class = "tab-chip", "F0 Correction")),
+            tags$ol(class = "resume-steps",
+              tags$li("Open the ",
+                      tags$strong("Filter by speaker, tone, or potential f0 artefacts"),
+                      " drawer in the sidebar."),
+              tags$li("Upload the CSV. Pick the speaker / tone / token ",
+                      "columns from the dropdowns."),
+              tags$li("Filters become live, and tokens with frame-level ",
+                      "artefact flags get a ",
+                      tags$strong("●"),
+                      " in the token picker.")
+            )
+          )
+        ),
+
+        # Shortcut: speaker/tone only without inspection
+        tags$div(style = paste(
+            "margin-top: 14px; padding: 10px 14px;",
+            "background: #fff8f0; border-left: 3px solid #e8c860;",
+            "border-radius: 4px; font-size: 0.85rem; color: #5a4d2c;"),
+          tags$strong(icon("bolt"), " Shortcut:"),
+          " if you only need ", tags$em("speaker"), " or ",
+          tags$em("tone"), " filtering (no artefact flagging), skip step 2. ",
+          "Upload the metadata-tagged CSV from step 1 directly in step 3."
         )
       ),
 
