@@ -1444,13 +1444,11 @@ ui <- fluidPage(
                           ),
                           tags$div(class = "faq-item",
                             tags$p(tags$strong("Can I run Shinytone locally?")),
-                            tags$p("Yes — strongly recommended for large datasets or ",
+                            tags$p("Yes, and it is strongly recommended for large datasets or ",
                               "sensitive recordings. The simplest way is to install the package ",
                               "(see above) and run ", tags$code("shinytone::run_app()"),
-                              " — you do not need to clone the repository, since ",
+                              ". You do not need to clone the repository, since ",
                               tags$code("install_github()"), " downloads and installs it for you. ",
-                              "(If you do want the raw source, you can instead clone the repo and run ",
-                              tags$code("shiny::runApp(\"inst/app\")"), ".) ",
                               "Local runs have no file-size limits, no idle timeout, and your ",
                               "data never leaves your machine."
                             )

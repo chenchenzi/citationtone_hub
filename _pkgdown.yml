@@ -37,11 +37,13 @@ reference:
 
   - title: Outlier and artefact inspection
     desc: >
-      Token-level outlier detection by speaker z-score, plus sample-level
-      pitch-tracking artefacts (Sundberg 1973, Steffman & Cole 2022).
+      Token-level outlier detection by speaker z-score and by
+      speaker x tone level, plus sample-level pitch-tracking artefacts
+      (Sundberg 1973, Steffman & Cole 2022).
     contents:
       - inspect_f0
       - flag_outliers
+      - flag_level_outliers
       - flag_pitch_jumps
 
   - title: Contour modelling
