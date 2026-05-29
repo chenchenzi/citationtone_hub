@@ -166,7 +166,12 @@ flag_outliers <- function(data,
 #' A spread cannot be estimated from a near-empty group, so the check only
 #' runs for speaker x tone groups with at least `min_tokens` tokens; tokens
 #' in smaller groups are returned with `level_modz = NA` and are never
-#' flagged.
+#' flagged. Detection becomes more reliable as the number of
+#' same-speaker-same-tone tokens grows: with very few tokens the median and
+#' MAD are coarse estimates, so a borderline outlier can fall just under the
+#' threshold. Citation-tone designs usually supply several such tokens per
+#' cell (repetitions, items of differing syllable structure, ...), so most
+#' speaker x tone groups comfortably exceed the minimum.
 #'
 #' This is a token-level cleaning step intended to run on **raw f0 (Hz)
 #' before normalisation**: the within speaker x tone comparison is
@@ -181,7 +186,8 @@ flag_outliers <- function(data,
 #' @param level_threshold Absolute modified z-score above which a token's
 #'   level is flagged. Default `3.5` (Iglewicz & Hoaglin 1993).
 #' @param min_tokens Minimum number of same-speaker-same-tone tokens
-#'   required to run the check for a group. Default `4`.
+#'   required to run the check for a group. Default `5`. More tokens give a
+#'   more reliable estimate of the group's spread.
 #'
 #' @return A token-level data frame (one row per token with at least one
 #'   voiced sample) with columns: `f0_token_median`, `level_st`,
@@ -221,7 +227,7 @@ flag_level_outliers <- function(data,
                                 speaker         = "speaker",
                                 tone            = "tone",
                                 level_threshold = 3.5,
-                                min_tokens      = 4) {
+                                min_tokens      = 5) {
   required <- c(f0, token, speaker, tone)
   missing_cols <- setdiff(required, names(data))
   if (length(missing_cols) > 0) {
@@ -639,7 +645,7 @@ inspect_f0 <- function(data,
                        octave_bounds   = c(0.49, 1.99),
                        carryover_mult  = 1.5,
                        level_threshold = 3.5,
-                       min_tokens      = 4,
+                       min_tokens      = 5,
                        time_unit       = c("s", "ms")) {
   time_unit <- match.arg(time_unit)
 

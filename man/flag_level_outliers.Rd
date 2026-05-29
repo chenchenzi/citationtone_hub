@@ -11,7 +11,7 @@ flag_level_outliers(
   speaker = "speaker",
   tone = "tone",
   level_threshold = 3.5,
-  min_tokens = 4
+  min_tokens = 5
 )
 }
 \arguments{
@@ -29,7 +29,8 @@ flag_level_outliers(
 level is flagged. Default \code{3.5} (Iglewicz & Hoaglin 1993).}
 
 \item{min_tokens}{Minimum number of same-speaker-same-tone tokens
-required to run the check for a group. Default \code{4}.}
+required to run the check for a group. Default \code{5}. More tokens give a
+more reliable estimate of the group's spread.}
 }
 \value{
 A token-level data frame (one row per token with at least one
@@ -73,7 +74,12 @@ z-score exceeds \code{+level_threshold} / falls below \code{-level_threshold}.
 A spread cannot be estimated from a near-empty group, so the check only
 runs for speaker x tone groups with at least \code{min_tokens} tokens; tokens
 in smaller groups are returned with \code{level_modz = NA} and are never
-flagged.
+flagged. Detection becomes more reliable as the number of
+same-speaker-same-tone tokens grows: with very few tokens the median and
+MAD are coarse estimates, so a borderline outlier can fall just under the
+threshold. Citation-tone designs usually supply several such tokens per
+cell (repetitions, items of differing syllable structure, ...), so most
+speaker x tone groups comfortably exceed the minimum.
 
 This is a token-level cleaning step intended to run on \strong{raw f0 (Hz)
 before normalisation}: the within speaker x tone comparison is

@@ -213,12 +213,17 @@ test_that("flag_level_outliers flags a token shifted from its same-tone peers", 
 
 test_that("flag_level_outliers does not run below min_tokens", {
   df <- do.call(rbind, list(
-    .lvl_token("t1", "T1", 150), .lvl_token("t2", "T1", 151),
-    .lvl_token("t3", "T1", 250)            # shifted, but only 3 tokens
+    .lvl_token("t1", "T1", 148), .lvl_token("t2", "T1", 150),
+    .lvl_token("t3", "T1", 152), .lvl_token("t4", "T1", 250)  # 4 tokens
   ))
-  out <- flag_level_outliers(df, min_tokens = 4)
+  # Default min_tokens is 5, so a 4-token group is skipped entirely.
+  out <- flag_level_outliers(df)
   expect_true(all(is.na(out$level_modz)))
   expect_false(any(out$flag_level_high))
+
+  # Lowering the minimum to 4 lets the same data run and flag the outlier.
+  out4 <- flag_level_outliers(df, min_tokens = 4)
+  expect_true(out4$flag_level_high[out4$token == "t4"])
 })
 
 test_that("flag_level_outliers compares within tone, not across tones", {

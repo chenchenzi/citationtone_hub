@@ -17,7 +17,7 @@ inspect_f0(
   octave_bounds = c(0.49, 1.99),
   carryover_mult = 1.5,
   level_threshold = 3.5,
-  min_tokens = 4,
+  min_tokens = 5,
   time_unit = c("s", "ms")
 )
 }
@@ -53,7 +53,8 @@ threshold (in semitones). \code{0} disables carryover. Default \code{1.5}.}
 level is flagged. Default \code{3.5} (Iglewicz & Hoaglin 1993).}
 
 \item{min_tokens}{Minimum number of same-speaker-same-tone tokens
-required to run the check for a group. Default \code{4}.}
+required to run the check for a group. Default \code{5}. More tokens give a
+more reliable estimate of the group's spread.}
 
 \item{time_unit}{One of \code{"s"} or \code{"ms"}. Default \code{"s"}. Inspection is
 meant to run on real-time data; a normalised-time option was removed
