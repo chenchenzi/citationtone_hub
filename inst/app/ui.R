@@ -419,6 +419,33 @@ ui <- fluidPage(
                         .rpkg-install .rpkg-str {
                           color: #c5e6d9;
                         }
+                        .rpkg-highlight {
+                          display: flex;
+                          align-items: flex-start;
+                          gap: 10px;
+                          background: #f0f9f5;
+                          border: 1px solid #cde8dc;
+                          border-left: 3px solid #78c2ad;
+                          border-radius: 0 8px 8px 0;
+                          padding: 11px 14px;
+                          margin: 0 0 14px 0;
+                          font-size: 0.88rem;
+                          line-height: 1.5;
+                          color: #2c5f4f;
+                        }
+                        .rpkg-highlight .rpkg-highlight-icon {
+                          color: #78c2ad;
+                          font-size: 1.05rem;
+                          line-height: 1.45;
+                          flex: 0 0 auto;
+                        }
+                        .rpkg-highlight code {
+                          background: #e0f0e9;
+                          color: #2c5f4f;
+                          padding: 1px 5px;
+                          border-radius: 3px;
+                          font-size: 0.85em;
+                        }
                         .rpkg-badges {
                           display: flex;
                           flex-wrap: wrap;
@@ -784,6 +811,9 @@ ui <- fluidPage(
                           background: #e8f5f0; border: 1.5px solid #78c2ad;
                           color: #2a7a5a;
                         }
+                        .wf-step.wf-app.wf-opt {
+                          border-style: dashed;
+                        }
                         .wf-step.wf-external {
                           background: #fff8e1; border: 1.5px dashed #e0a800;
                           color: #8a6d00; font-style: italic;
@@ -844,11 +874,11 @@ ui <- fluidPage(
                             tags$span(class = "tab-ref-chip", "F0 Analysis tab")
                           ),
                           tags$div(class = "workflow-desc",
-                            "Normalise, visualise, and inspect to flag pitch-tracking errors."),
+                            "Optionally normalise, then visualise and inspect to flag pitch-tracking errors. Inspection runs on raw f0, so Normalise is not required here."),
                           tags$div(class = "workflow-flow",
                             tags$span(class = "wf-step wf-data", `data-flow-in` = "extracted-f0", HTML("&#128202; f0 .csv")),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
-                            tags$span(class = "wf-step wf-app", "Normalise"),
+                            tags$span(class = "wf-step wf-app wf-opt", "Normalise (optional)"),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
                             tags$span(class = "wf-step wf-app", "Visualise"),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
@@ -905,6 +935,7 @@ ui <- fluidPage(
                           tags$div(tags$span(class = "wf-swatch", style = "background:#e3f2fd; border:1px solid #90caf9;"), "Data file"),
                           tags$div(tags$span(class = "wf-swatch", style = "background:#f4faff; border:1px dashed #90caf9;"), "Optional data"),
                           tags$div(tags$span(class = "wf-swatch", style = "background:#e8f5f0; border:1px solid #78c2ad;"), "In-app step"),
+                          tags$div(tags$span(class = "wf-swatch", style = "background:#e8f5f0; border:1px dashed #78c2ad;"), "Optional step"),
                           tags$div(tags$span(class = "wf-swatch", style = "background:#fff8e1; border:1px dashed #e0a800;"), "External step (Praat)"),
                           tags$div(tags$span(class = "wf-swatch", style = "background:#fde6e7; border:1px solid #f3969a;"), "Output")
                         ),
@@ -1057,7 +1088,7 @@ ui <- fluidPage(
                             " uses pitch contrastively at the lexical level. ",
                             "The same string of consonants and vowels can map ",
                             "to different words depending on the pitch pattern ",
-                            "with which it is produced. Classic definitions span ",
+                            "with which it is produced. Definitions span ",
                             "seventy years of typology and theory:"
                           ),
                           tags$div(class = "tone-quote",
@@ -1193,6 +1224,20 @@ ui <- fluidPage(
                             "shinytone::", tags$span(class = "rpkg-fn", "run_app"), "()"
                           ),
 
+                          # Highlight: same interface locally, no hosting limits
+                          tags$div(class = "rpkg-highlight",
+                            tags$span(class = "rpkg-highlight-icon", icon("desktop")),
+                            tags$span(
+                              tags$strong("Same app, no limits. "),
+                              tags$code("run_app()"),
+                              " serves the exact interface you're using right now, but on ",
+                              "your own machine — with no upload-size cap, memory ceiling, or ",
+                              "session timeout. Ideal for ",
+                              tags$strong("large-scale datasets"),
+                              " and recordings that never leave your computer."
+                            )
+                          ),
+
                           # Badge-style action links
                           tags$div(class = "rpkg-badges",
                             tags$a(
@@ -1293,7 +1338,7 @@ ui <- fluidPage(
                             tags$p("Before uploading audio:"),
                             tags$ul(style = "margin-top: -4px;",
                               tags$li("Confirm that your participant consent covers web-based processing on third-party infrastructure (Posit, AWS)."),
-                              tags$li("For sensitive recordings (children, clinical participants, endangered-language speakers, or any identifiable individuals), running Shinytone locally is strongly recommended. Clone the repo and run ", tags$code("shiny::runApp()"), "; your audio never leaves your machine."),
+                              tags$li("For sensitive recordings (children, clinical participants, endangered-language speakers, or any identifiable individuals), running Shinytone locally is strongly recommended. Install the package and run ", tags$code("shinytone::run_app()"), " (no need to clone the repo); your audio never leaves your machine."),
                               tags$li("If in doubt, consult your IRB or ethics committee.")
                             )
                           ),
@@ -1367,9 +1412,12 @@ ui <- fluidPage(
                           tags$div(class = "faq-item",
                             tags$p(tags$strong("Can I run Shinytone locally?")),
                             tags$p("Yes — strongly recommended for large datasets or ",
-                              "sensitive recordings. Either install the package (see above) and ",
-                              "run ", tags$code("shinytone::run_app()"), ", or clone the ",
-                              "repository and run ", tags$code("shiny::runApp(\"inst/app\")"), ". ",
+                              "sensitive recordings. The simplest way is to install the package ",
+                              "(see above) and run ", tags$code("shinytone::run_app()"),
+                              " — you do not need to clone the repository, since ",
+                              tags$code("install_github()"), " downloads and installs it for you. ",
+                              "(If you do want the raw source, you can instead clone the repo and run ",
+                              tags$code("shiny::runApp(\"inst/app\")"), ".) ",
                               "Local runs have no file-size limits, no idle timeout, and your ",
                               "data never leaves your machine."
                             )

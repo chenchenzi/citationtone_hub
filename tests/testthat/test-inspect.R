@@ -176,3 +176,88 @@ test_that("inspect_f0 errors on missing columns", {
   expect_error(inspect_f0(df, f0 = "nonexistent"),
                "Column.*not found")
 })
+
+
+# ---------- flag_level_outliers ----------------------------------------------
+
+# Helper: build a token of 3 samples around `med` Hz.
+.lvl_token <- function(tok, tone, med, speaker = "S01") {
+  data.frame(token = tok, speaker = speaker, tone = tone,
+             f0 = c(med - 1, med, med + 1))
+}
+
+test_that("flag_level_outliers returns one row per voiced token with expected columns", {
+  df <- do.call(rbind, list(
+    .lvl_token("t1", "T1", 145), .lvl_token("t2", "T1", 148),
+    .lvl_token("t3", "T1", 150), .lvl_token("t4", "T1", 152),
+    .lvl_token("t5", "T1", 155), .lvl_token("t6", "T1", 250)
+  ))
+  out <- flag_level_outliers(df)
+  expect_equal(nrow(out), 6)
+  expect_true(all(c("f0_token_median", "level_st", "n_tone_peers",
+                    "level_modz", "flag_level_high", "flag_level_low")
+                  %in% names(out)))
+})
+
+test_that("flag_level_outliers flags a token shifted from its same-tone peers", {
+  df <- do.call(rbind, list(
+    .lvl_token("t1", "T1", 145), .lvl_token("t2", "T1", 148),
+    .lvl_token("t3", "T1", 150), .lvl_token("t4", "T1", 152),
+    .lvl_token("t5", "T1", 155), .lvl_token("t6", "T1", 250)
+  ))
+  out <- flag_level_outliers(df)
+  expect_true(out$flag_level_high[out$token == "t6"])
+  expect_false(any(out$flag_level_high[out$token != "t6"]))
+  expect_false(any(out$flag_level_low))
+})
+
+test_that("flag_level_outliers does not run below min_tokens", {
+  df <- do.call(rbind, list(
+    .lvl_token("t1", "T1", 150), .lvl_token("t2", "T1", 151),
+    .lvl_token("t3", "T1", 250)            # shifted, but only 3 tokens
+  ))
+  out <- flag_level_outliers(df, min_tokens = 4)
+  expect_true(all(is.na(out$level_modz)))
+  expect_false(any(out$flag_level_high))
+})
+
+test_that("flag_level_outliers compares within tone, not across tones", {
+  # T1 sits ~150 Hz, T3 ~250 Hz. A T1 token mis-tracked up to 250 is
+  # perfectly normal for the speaker overall (T3 lives there) but is an
+  # outlier *within* T1.
+  df <- do.call(rbind, c(
+    list(.lvl_token("a1", "T1", 145), .lvl_token("a2", "T1", 148),
+         .lvl_token("a3", "T1", 150), .lvl_token("a4", "T1", 152),
+         .lvl_token("a5", "T1", 155), .lvl_token("a_bad", "T1", 250)),
+    list(.lvl_token("b1", "T3", 245), .lvl_token("b2", "T3", 248),
+         .lvl_token("b3", "T3", 250), .lvl_token("b4", "T3", 252),
+         .lvl_token("b5", "T3", 255))
+  ))
+  out <- flag_level_outliers(df)
+  expect_true(out$flag_level_high[out$token == "a_bad"])
+  # The genuine T3 tokens (also ~250 Hz) are normal for their tone.
+  expect_false(any(out$flag_level_high[grepl("^b", out$token)]))
+})
+
+
+# ---------- inspect_f0: level layer ------------------------------------------
+
+test_that("inspect_f0 catches a smooth, within-speaker-normal token that is off for its tone", {
+  mk <- function(tok, tone, base) data.frame(
+    token = tok, time = seq(0, 0.04, by = 0.01),
+    f0 = base + c(0, 1, 0, -1, 0),         # smooth: 1 Hz steps, no jumps
+    speaker = "S01", tone = tone)
+  df <- do.call(rbind, c(
+    list(mk("a1", "T1", 145), mk("a2", "T1", 148), mk("a3", "T1", 150),
+         mk("a4", "T1", 152), mk("a5", "T1", 155),
+         mk("a_bad", "T1", 250)),           # mis-tracked up into T3 range
+    list(mk("b1", "T3", 245), mk("b2", "T3", 248), mk("b3", "T3", 250),
+         mk("b4", "T3", 252), mk("b5", "T3", 255))
+  ))
+  out <- inspect_f0(df)
+  bad <- out[out$token == "a_bad", ]
+  expect_true(all(bad$flagged_token))
+  expect_false(any(bad$flagged_jump))                        # no sample jumps
+  expect_true(any(grepl("level too high", bad$flag_notes)))  # caught by level
+  expect_false(any(grepl("max too high",  bad$flag_notes)))  # not by pooled max
+})

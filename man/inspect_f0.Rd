@@ -16,7 +16,9 @@ inspect_f0(
   fall_threshold = 1.714,
   octave_bounds = c(0.49, 1.99),
   carryover_mult = 1.5,
-  time_unit = c("s", "ms", "norm")
+  level_threshold = 3.5,
+  min_tokens = 4,
+  time_unit = c("s", "ms")
 )
 }
 \arguments{
@@ -47,8 +49,16 @@ as an octave jump. Default \code{c(0.49, 1.99)} (halving or doubling).}
 \item{carryover_mult}{Carryover band as a multiple of the rise/fall
 threshold (in semitones). \code{0} disables carryover. Default \code{1.5}.}
 
-\item{time_unit}{One of \code{"s"}, \code{"ms"}, \code{"norm"}. Default \code{"s"}. The
-\code{"norm"} option treats each step as one 10 ms-equivalent unit.}
+\item{level_threshold}{Absolute modified z-score above which a token's
+level is flagged. Default \code{3.5} (Iglewicz & Hoaglin 1993).}
+
+\item{min_tokens}{Minimum number of same-speaker-same-tone tokens
+required to run the check for a group. Default \code{4}.}
+
+\item{time_unit}{One of \code{"s"} or \code{"ms"}. Default \code{"s"}. Inspection is
+meant to run on real-time data; a normalised-time option was removed
+because the physiological rate thresholds below lose their meaning once
+real time is discarded.}
 }
 \value{
 A long-format data frame containing the original \code{token},
@@ -57,10 +67,11 @@ A long-format data frame containing the original \code{token},
 \item \code{f0_token_max}, \code{f0_token_min}, \code{f0_token_mean}, \code{f0_token_sd}:
 per-token summary statistics.
 \item \code{flagged_jump}: logical, sample-level jump flag.
-\item \code{flagged_token}: logical, \code{TRUE} if the token has any extreme value
-or any sample-level jump.
+\item \code{flagged_token}: logical, \code{TRUE} if the token has any extreme value,
+any sample-level jump, or an unusual overall level for its tone.
 \item \code{flag_notes}: human-readable concatenation of the reasons a sample
-was flagged.
+was flagged (e.g. \code{"max too high"}, \code{"jump (rise)"},
+\code{"level too high"}).
 }
 }
 \description{
@@ -121,7 +132,8 @@ tone production studies: Methodology and recommendations.
 }
 \seealso{
 \itemize{
-\item \code{\link[=flag_outliers]{flag_outliers()}} and \code{\link[=flag_pitch_jumps]{flag_pitch_jumps()}}, the two components.
-\item \code{\link[=normalise_f0]{normalise_f0()}} for the upstream normalisation step.
+\item \code{\link[=flag_outliers]{flag_outliers()}}, \code{\link[=flag_pitch_jumps]{flag_pitch_jumps()}}, and \code{\link[=flag_level_outliers]{flag_level_outliers()}},
+the three components.
+\item \code{\link[=normalise_f0]{normalise_f0()}} for the downstream normalisation step.
 }
 }

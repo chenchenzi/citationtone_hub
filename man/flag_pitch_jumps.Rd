@@ -9,7 +9,7 @@ flag_pitch_jumps(
   f0 = "f0",
   token = "token",
   time = "time",
-  time_unit = c("s", "ms", "norm"),
+  time_unit = c("s", "ms"),
   rise_threshold = 1.263,
   fall_threshold = 1.714,
   octave_bounds = c(0.49, 1.99),
@@ -25,8 +25,10 @@ flag_pitch_jumps(
 
 \item{time}{Column name of time. Default \code{"time"}.}
 
-\item{time_unit}{One of \code{"s"}, \code{"ms"}, \code{"norm"}. Default \code{"s"}. The
-\code{"norm"} option treats each step as one 10 ms-equivalent unit.}
+\item{time_unit}{One of \code{"s"} or \code{"ms"}. Default \code{"s"}. Inspection is
+meant to run on real-time data; a normalised-time option was removed
+because the physiological rate thresholds below lose their meaning once
+real time is discarded.}
 
 \item{rise_threshold}{Maximum plausible rise in ST per 10 ms.
 Default \code{1.263} (Sundberg 1973).}
