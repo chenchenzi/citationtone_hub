@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">shinytone</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -73,7 +73,7 @@
       </dl></div><div class="section level2">
       <h2 id="outlier-and-artefact-inspection">Outlier and artefact inspection<a class="anchor" aria-label="anchor" href="#outlier-and-artefact-inspection"></a></h2>
 
-      <div class="section-desc"><p>Token-level outlier detection by speaker z-score, plus sample-level pitch-tracking artefacts (Sundberg 1973, Steffman &amp; Cole 2022).</p></div>
+      <div class="section-desc"><p>Token-level outlier detection by speaker z-score and by speaker x tone level, plus sample-level pitch-tracking artefacts (Sundberg 1973, Steffman &amp; Cole 2022).</p></div>
 
       <dl></dl></div><div class="section level2">
 
@@ -93,6 +93,13 @@
 
         </dt>
         <dd>Flag per-token f0 outliers using by-speaker z-scores</dd>
+
+        <dt>
+
+          <code><a href="flag_level_outliers.html">flag_level_outliers()</a></code>
+
+        </dt>
+        <dd>Flag tokens whose overall f0 level is unusual for their speaker and tone</dd>
 
         <dt>
 

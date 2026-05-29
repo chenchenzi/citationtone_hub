@@ -15,7 +15,7 @@ is the function that backs the Inspect tab of the Shiny app."><meta property="og
 
     <a class="navbar-brand me-2" href="../index.html">shinytone</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -70,7 +70,9 @@ is the function that backs the Inspect tab of the Shiny app.</p>
 <span>  fall_threshold <span class="op">=</span> <span class="fl">1.714</span>,</span>
 <span>  octave_bounds <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.49</span>, <span class="fl">1.99</span><span class="op">)</span>,</span>
 <span>  carryover_mult <span class="op">=</span> <span class="fl">1.5</span>,</span>
-<span>  time_unit <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"s"</span>, <span class="st">"ms"</span>, <span class="st">"norm"</span><span class="op">)</span></span>
+<span>  level_threshold <span class="op">=</span> <span class="fl">3.5</span>,</span>
+<span>  min_tokens <span class="op">=</span> <span class="fl">5</span>,</span>
+<span>  time_unit <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"s"</span>, <span class="st">"ms"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -127,9 +129,22 @@ as an octave jump. Default <code>c(0.49, 1.99)</code> (halving or doubling).</p>
 threshold (in semitones). <code>0</code> disables carryover. Default <code>1.5</code>.</p></dd>
 
 
+<dt id="arg-level-threshold">level_threshold<a class="anchor" aria-label="anchor" href="#arg-level-threshold"></a></dt>
+<dd><p>Absolute modified z-score above which a token's
+level is flagged. Default <code>3.5</code> (Iglewicz &amp; Hoaglin 1993).</p></dd>
+
+
+<dt id="arg-min-tokens">min_tokens<a class="anchor" aria-label="anchor" href="#arg-min-tokens"></a></dt>
+<dd><p>Minimum number of same-speaker-same-tone tokens
+required to run the check for a group. Default <code>5</code>. More tokens give a
+more reliable estimate of the group's spread.</p></dd>
+
+
 <dt id="arg-time-unit">time_unit<a class="anchor" aria-label="anchor" href="#arg-time-unit"></a></dt>
-<dd><p>One of <code>"s"</code>, <code>"ms"</code>, <code>"norm"</code>. Default <code>"s"</code>. The
-<code>"norm"</code> option treats each step as one 10 ms-equivalent unit.</p></dd>
+<dd><p>One of <code>"s"</code> or <code>"ms"</code>. Default <code>"s"</code>. Inspection is
+meant to run on real-time data; a normalised-time option was removed
+because the physiological rate thresholds below lose their meaning once
+real time is discarded.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -138,10 +153,11 @@ threshold (in semitones). <code>0</code> disables carryover. Default <code>1.5</
 <code>time</code>, <code>f0</code>, <code>speaker</code>, <code>tone</code> columns plus:</p><ul><li><p><code>f0_token_max</code>, <code>f0_token_min</code>, <code>f0_token_mean</code>, <code>f0_token_sd</code>:
 per-token summary statistics.</p></li>
 <li><p><code>flagged_jump</code>: logical, sample-level jump flag.</p></li>
-<li><p><code>flagged_token</code>: logical, <code>TRUE</code> if the token has any extreme value
-or any sample-level jump.</p></li>
+<li><p><code>flagged_token</code>: logical, <code>TRUE</code> if the token has any extreme value,
+any sample-level jump, or an unusual overall level for its tone.</p></li>
 <li><p><code>flag_notes</code>: human-readable concatenation of the reasons a sample
-was flagged.</p></li>
+was flagged (e.g. <code>"max too high"</code>, <code>"jump (rise)"</code>,
+<code>"level too high"</code>).</p></li>
 </ul></div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -180,8 +196,9 @@ tone production studies: Methodology and recommendations.
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
     <div class="dont-index">
-<ul><li><p><code><a href="flag_outliers.html">flag_outliers()</a></code> and <code><a href="flag_pitch_jumps.html">flag_pitch_jumps()</a></code>, the two components.</p></li>
-<li><p><code><a href="normalise_f0.html">normalise_f0()</a></code> for the upstream normalisation step.</p></li>
+<ul><li><p><code><a href="flag_outliers.html">flag_outliers()</a></code>, <code><a href="flag_pitch_jumps.html">flag_pitch_jumps()</a></code>, and <code><a href="flag_level_outliers.html">flag_level_outliers()</a></code>,
+the three components.</p></li>
+<li><p><code><a href="normalise_f0.html">normalise_f0()</a></code> for the downstream normalisation step.</p></li>
 </ul></div>
     </div>
 
@@ -199,7 +216,7 @@ tone production studies: Methodology and recommendations.
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/table.html" class="external-link">table</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique</a></span><span class="op">(</span><span class="va">result</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"token"</span>, <span class="st">"flagged_token"</span><span class="op">)</span><span class="op">]</span><span class="op">)</span><span class="op">$</span><span class="va">flagged_token</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> FALSE  TRUE </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  1667   181 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  1586   262 </span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Inspect the first few flagged samples</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">result</span><span class="op">[</span><span class="va">result</span><span class="op">$</span><span class="va">flagged_jump</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"token"</span>, <span class="st">"time"</span>, <span class="st">"f0_Hz"</span>, <span class="st">"flag_notes"</span><span class="op">)</span><span class="op">]</span><span class="op">)</span></span></span>

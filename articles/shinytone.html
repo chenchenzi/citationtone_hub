@@ -26,7 +26,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">shinytone</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -186,11 +186,12 @@ and [predict_gamm()]:</p>
 <div class="section level2">
 <h2 id="inspect-for-outliers-and-pitch-tracking-artefacts">Inspect for outliers and pitch-tracking artefacts<a class="anchor" aria-label="anchor" href="#inspect-for-outliers-and-pitch-tracking-artefacts"></a>
 </h2>
-<p><code><a href="../reference/inspect_f0.html">inspect_f0()</a></code> flags two kinds of issues: tokens whose
-per-token max or min sits more than <code>z_threshold</code> SDs from
-the speaker’s mean, and individual samples where the rate of f0 change
-exceeds physiological plausibility (Sundberg 1973, Steffman &amp; Cole
-2022).</p>
+<p><code><a href="../reference/inspect_f0.html">inspect_f0()</a></code> runs three complementary checks: tokens
+whose per-token max or min sits more than <code>z_threshold</code> SDs
+from the speaker’s mean (extreme-value), tokens whose median is unusual
+for their speaker and tone (token-level), and individual samples where
+the rate of f0 change exceeds physiological plausibility (sample-level;
+Sundberg 1973, Steffman &amp; Cole 2022).</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">inspected</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/inspect_f0.html">inspect_f0</a></span><span class="op">(</span><span class="va">sample_f0</span>,</span>
 <span>                        f0      <span class="op">=</span> <span class="st">"f0_Hz"</span>,</span>
@@ -206,8 +207,8 @@ exceeds physiological plausibility (Sundberg 1973, Steffman &amp; Cole
 <span><span class="co">#&gt; <span style="color: #949494;"># A tibble: 2 × 2</span></span></span>
 <span><span class="co">#&gt;   flagged_token     n</span></span>
 <span><span class="co">#&gt;   <span style="color: #949494; font-style: italic;">&lt;lgl&gt;</span>         <span style="color: #949494; font-style: italic;">&lt;int&gt;</span></span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> FALSE          <span style="text-decoration: underline;">1</span>667</span></span>
-<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> TRUE            181</span></span></code></pre></div>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">1</span> FALSE          <span style="text-decoration: underline;">1</span>586</span></span>
+<span><span class="co">#&gt; <span style="color: #BCBCBC;">2</span> TRUE            262</span></span></code></pre></div>
 <p>The <code>flag_notes</code> column gives a human-readable reason for
 each flagged sample (e.g., <code>"max too high; jump (rise)"</code>). On
 the live app, the Inspect tab lets you click through flagged tokens one

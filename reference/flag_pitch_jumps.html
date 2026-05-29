@@ -21,7 +21,7 @@ Inspect tab of the Shiny app and inside inspect_f0()."><meta property="og:image"
 
     <a class="navbar-brand me-2" href="../index.html">shinytone</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -72,7 +72,7 @@ Inspect tab of the Shiny app and inside <code><a href="inspect_f0.html">inspect_
 <span>  f0 <span class="op">=</span> <span class="st">"f0"</span>,</span>
 <span>  token <span class="op">=</span> <span class="st">"token"</span>,</span>
 <span>  time <span class="op">=</span> <span class="st">"time"</span>,</span>
-<span>  time_unit <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"s"</span>, <span class="st">"ms"</span>, <span class="st">"norm"</span><span class="op">)</span>,</span>
+<span>  time_unit <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"s"</span>, <span class="st">"ms"</span><span class="op">)</span>,</span>
 <span>  rise_threshold <span class="op">=</span> <span class="fl">1.263</span>,</span>
 <span>  fall_threshold <span class="op">=</span> <span class="fl">1.714</span>,</span>
 <span>  octave_bounds <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.49</span>, <span class="fl">1.99</span><span class="op">)</span>,</span>
@@ -101,8 +101,10 @@ Inspect tab of the Shiny app and inside <code><a href="inspect_f0.html">inspect_
 
 
 <dt id="arg-time-unit">time_unit<a class="anchor" aria-label="anchor" href="#arg-time-unit"></a></dt>
-<dd><p>One of <code>"s"</code>, <code>"ms"</code>, <code>"norm"</code>. Default <code>"s"</code>. The
-<code>"norm"</code> option treats each step as one 10 ms-equivalent unit.</p></dd>
+<dd><p>One of <code>"s"</code> or <code>"ms"</code>. Default <code>"s"</code>. Inspection is
+meant to run on real-time data; a normalised-time option was removed
+because the physiological rate thresholds below lose their meaning once
+real time is discarded.</p></dd>
 
 
 <dt id="arg-rise-threshold">rise_threshold<a class="anchor" aria-label="anchor" href="#arg-rise-threshold"></a></dt>

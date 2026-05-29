@@ -24,7 +24,9 @@ inspect_f0(
   fall_threshold = 1.714,
   octave_bounds = c(0.49, 1.99),
   carryover_mult = 1.5,
-  time_unit = c("s", "ms", "norm")
+  level_threshold = 3.5,
+  min_tokens = 5,
+  time_unit = c("s", "ms")
 )
 ```
 
@@ -79,10 +81,23 @@ inspect_f0(
   Carryover band as a multiple of the rise/fall threshold (in
   semitones). `0` disables carryover. Default `1.5`.
 
+- level_threshold:
+
+  Absolute modified z-score above which a token's level is flagged.
+  Default `3.5` (Iglewicz & Hoaglin 1993).
+
+- min_tokens:
+
+  Minimum number of same-speaker-same-tone tokens required to run the
+  check for a group. Default `5`. More tokens give a more reliable
+  estimate of the group's spread.
+
 - time_unit:
 
-  One of `"s"`, `"ms"`, `"norm"`. Default `"s"`. The `"norm"` option
-  treats each step as one 10 ms-equivalent unit.
+  One of `"s"` or `"ms"`. Default `"s"`. Inspection is meant to run on
+  real-time data; a normalised-time option was removed because the
+  physiological rate thresholds below lose their meaning once real time
+  is discarded.
 
 ## Value
 
@@ -94,11 +109,11 @@ A long-format data frame containing the original `token`, `time`, `f0`,
 
 - `flagged_jump`: logical, sample-level jump flag.
 
-- `flagged_token`: logical, `TRUE` if the token has any extreme value or
-  any sample-level jump.
+- `flagged_token`: logical, `TRUE` if the token has any extreme value,
+  any sample-level jump, or an unusual overall level for its tone.
 
 - `flag_notes`: human-readable concatenation of the reasons a sample was
-  flagged.
+  flagged (e.g. `"max too high"`, `"jump (rise)"`, `"level too high"`).
 
 ## Details
 
@@ -144,13 +159,14 @@ Acoustical Society of America*, 156(4), 2538–2565.
 
 ## See also
 
-- [`flag_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_outliers.md)
-  and
+- [`flag_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_outliers.md),
   [`flag_pitch_jumps()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_pitch_jumps.md),
-  the two components.
+  and
+  [`flag_level_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_level_outliers.md),
+  the three components.
 
 - [`normalise_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_f0.md)
-  for the upstream normalisation step.
+  for the downstream normalisation step.
 
 ## Examples
 
@@ -167,7 +183,7 @@ result <- inspect_f0(sample_f0,
 table(unique(result[, c("token", "flagged_token")])$flagged_token)
 #> 
 #> FALSE  TRUE 
-#>  1667   181 
+#>  1586   262 
 
 # Inspect the first few flagged samples
 head(result[result$flagged_jump, c("token", "time", "f0_Hz", "flag_notes")])

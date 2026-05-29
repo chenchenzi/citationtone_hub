@@ -2,6 +2,30 @@
 
 ## shinytone (development version)
 
+### shinytone 0.1.2
+
+- New
+  [`flag_level_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_level_outliers.md):
+  a third inspection layer that compares each token’s overall level (its
+  median f0, in semitones) against other tokens of the *same speaker and
+  same tone* using a robust modified z-score (median/MAD; Iglewicz &
+  Hoaglin 1993, cutoff 3.5). It flags smoothly shifted contours — e.g. a
+  low-tone token mis-tracked up into the mid-tone band — that the pooled
+  max/min check and the sample-level jump check both miss. Surfaced
+  through
+  [`inspect_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/inspect_f0.md)
+  (new `level_threshold` and `min_tokens` arguments, `level too high` /
+  `level too low` notes) and the Inspect tab.
+- The `"norm"` (normalised-time) option was removed from `time_unit` in
+  [`flag_pitch_jumps()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_pitch_jumps.md),
+  [`inspect_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/inspect_f0.md),
+  and the Inspect tab: the rate-of- change thresholds are physiological
+  (ST per 10 ms) and have no meaning once real time is discarded.
+  Inspection runs on real-time data (s / ms).
+- Inspect-tab guide rewritten around three complementary layers, and the
+  “Pitch-tracking quality check” workflow now marks Normalise as
+  optional (inspection runs on raw f0).
+
 ### shinytone 0.1.1
 
 - [`flag_pitch_jumps()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_pitch_jumps.md)

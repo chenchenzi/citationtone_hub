@@ -20,7 +20,7 @@ flag_pitch_jumps(
   f0 = "f0",
   token = "token",
   time = "time",
-  time_unit = c("s", "ms", "norm"),
+  time_unit = c("s", "ms"),
   rise_threshold = 1.263,
   fall_threshold = 1.714,
   octave_bounds = c(0.49, 1.99),
@@ -48,8 +48,10 @@ flag_pitch_jumps(
 
 - time_unit:
 
-  One of `"s"`, `"ms"`, `"norm"`. Default `"s"`. The `"norm"` option
-  treats each step as one 10 ms-equivalent unit.
+  One of `"s"` or `"ms"`. Default `"s"`. Inspection is meant to run on
+  real-time data; a normalised-time option was removed because the
+  physiological rate thresholds below lose their meaning once real time
+  is discarded.
 
 - rise_threshold:
 

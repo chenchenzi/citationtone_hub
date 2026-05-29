@@ -198,13 +198,17 @@ By-speaker semitone or z-score normalisation.
 
 ## Outlier and artefact inspection
 
-Token-level outlier detection by speaker z-score, plus sample-level
-pitch-tracking artefacts (Sundberg 1973, Steffman & Cole 2022).
+Token-level outlier detection by speaker z-score and by speaker x tone
+level, plus sample-level pitch-tracking artefacts (Sundberg 1973,
+Steffman & Cole 2022).
 
 - [`inspect_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/inspect_f0.md)
   : Inspect f0 data for token-level outliers and sample-level jumps
 - [`flag_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_outliers.md)
   : Flag per-token f0 outliers using by-speaker z-scores
+- [`flag_level_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_level_outliers.md)
+  : Flag tokens whose overall f0 level is unusual for their speaker and
+  tone
 - [`flag_pitch_jumps()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_pitch_jumps.md)
   : Flag sample-to-sample f0 jumps within tokens
 

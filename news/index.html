@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">shinytone</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -42,14 +42,20 @@
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="development version" id="shinytone-development-version">shinytone (development version)<a class="anchor" aria-label="anchor" href="#shinytone-development-version"></a></h2>
 <div class="section level3">
-<h3 id="shinytone-development-version-1">shinytone 0.1.1<a class="anchor" aria-label="anchor" href="#shinytone-development-version-1"></a></h3>
+<h3 id="shinytone-development-version-1">shinytone 0.1.2<a class="anchor" aria-label="anchor" href="#shinytone-development-version-1"></a></h3>
+<ul><li>New <code><a href="../reference/flag_level_outliers.html">flag_level_outliers()</a></code>: a third inspection layer that compares each token’s overall level (its median f0, in semitones) against other tokens of the <em>same speaker and same tone</em> using a robust modified z-score (median/MAD; Iglewicz &amp; Hoaglin 1993, cutoff 3.5). It flags smoothly shifted contours — e.g. a low-tone token mis-tracked up into the mid-tone band — that the pooled max/min check and the sample-level jump check both miss. Surfaced through <code><a href="../reference/inspect_f0.html">inspect_f0()</a></code> (new <code>level_threshold</code> and <code>min_tokens</code> arguments, <code>level too high</code> / <code>level too low</code> notes) and the Inspect tab.</li>
+<li>The <code>"norm"</code> (normalised-time) option was removed from <code>time_unit</code> in <code><a href="../reference/flag_pitch_jumps.html">flag_pitch_jumps()</a></code>, <code><a href="../reference/inspect_f0.html">inspect_f0()</a></code>, and the Inspect tab: the rate-of- change thresholds are physiological (ST per 10 ms) and have no meaning once real time is discarded. Inspection runs on real-time data (s / ms).</li>
+<li>Inspect-tab guide rewritten around three complementary layers, and the “Pitch-tracking quality check” workflow now marks Normalise as optional (inspection runs on raw f0).</li>
+</ul></div>
+<div class="section level3">
+<h3 id="shinytone-development-version-2">shinytone 0.1.1<a class="anchor" aria-label="anchor" href="#shinytone-development-version-2"></a></h3>
 <ul><li>
 <code><a href="../reference/flag_pitch_jumps.html">flag_pitch_jumps()</a></code> (and therefore <code><a href="../reference/inspect_f0.html">inspect_f0()</a></code> and the Inspect tab): when a sample-to-sample jump is detected, the flag is now placed on whichever side of the jump is <em>farther from the token’s median f0</em>, rather than always on the landing sample. This correctly identifies the artefact whether it sits at the start or the end of a sequence (e.g. an octave doubling on the first frame of a token, which the previous landing-only logic mis-flagged).</li>
 <li>Carryover now walks both forward AND backward from each flagged sample, so artefact runs that begin or end the token are extended in both directions.</li>
 <li>Inspect-tab guide text and <code><a href="../reference/flag_pitch_jumps.html">flag_pitch_jumps()</a></code>’s function docs describe the new median-aware logic as an adaptation of the rate-of-change + carryover approach in Steffman &amp; Cole (2022).</li>
 </ul></div>
 <div class="section level3">
-<h3 id="shinytone-development-version-2">shinytone 0.1.0<a class="anchor" aria-label="anchor" href="#shinytone-development-version-2"></a></h3>
+<h3 id="shinytone-development-version-3">shinytone 0.1.0<a class="anchor" aria-label="anchor" href="#shinytone-development-version-3"></a></h3>
 <ul><li>First public release as an R package, alongside the existing online Shiny app at <a href="https://chenzixu.shinyapps.io/shinytone/" class="external-link uri">https://chenzixu.shinyapps.io/shinytone/</a>.</li>
 <li>Package skin only at this stage: the Shiny app continues to run unchanged. Standalone analytical functions (<code><a href="../reference/normalise_f0.html">normalise_f0()</a></code>, <code><a href="../reference/fit_gca.html">fit_gca()</a></code>, <code><a href="../reference/fit_gamm.html">fit_gamm()</a></code>, <code><a href="../reference/contour_to_chao.html">contour_to_chao()</a></code>, …) will be extracted in subsequent releases.</li>
 </ul></div>

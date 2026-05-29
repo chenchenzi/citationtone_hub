@@ -119,10 +119,11 @@ ggplot(mean_contour, aes(time, f0_predicted, colour = factor(tone))) +
 ## Inspect for outliers and pitch-tracking artefacts
 
 [`inspect_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/inspect_f0.md)
-flags two kinds of issues: tokens whose per-token max or min sits more
-than `z_threshold` SDs from the speaker’s mean, and individual samples
-where the rate of f0 change exceeds physiological plausibility (Sundberg
-1973, Steffman & Cole 2022).
+runs three complementary checks: tokens whose per-token max or min sits
+more than `z_threshold` SDs from the speaker’s mean (extreme-value),
+tokens whose median is unusual for their speaker and tone (token-level),
+and individual samples where the rate of f0 change exceeds physiological
+plausibility (sample-level; Sundberg 1973, Steffman & Cole 2022).
 
 ``` r
 
@@ -140,8 +141,8 @@ inspected |>
 #> # A tibble: 2 × 2
 #>   flagged_token     n
 #>   <lgl>         <int>
-#> 1 FALSE          1667
-#> 2 TRUE            181
+#> 1 FALSE          1586
+#> 2 TRUE            262
 ```
 
 The `flag_notes` column gives a human-readable reason for each flagged
