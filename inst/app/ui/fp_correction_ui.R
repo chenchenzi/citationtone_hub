@@ -99,6 +99,65 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     sub[order(sub$time), , drop = FALSE]
   })
 
+  # Original (pre-edit) f0 contour for the current token. Used by the
+  # plot's "ghost markers" trace and by the edit-status banner so the
+  # user can see what changed and where.
+  original_f0 <- reactive({
+    req(input$fp_corr_token)
+    df <- fp_f0_data()
+    if (is.null(df)) return(NULL)
+    tok <- input$fp_corr_token
+    sub <- df[df$token == tok, c("time", "f0")]
+    sub[order(sub$time), , drop = FALSE]
+  })
+
+  # Per-frame edit diff for the current token. Returns NULL when there
+  # are no edits (so callers can short-circuit), otherwise a data frame
+  # with the indices, times, original and current f0 values of every
+  # frame that changed.
+  edit_diff <- reactive({
+    orig <- original_f0()
+    cur  <- current_f0()
+    if (is.null(orig) || is.null(cur) || nrow(orig) != nrow(cur)) return(NULL)
+    changed <- mapply(function(a, b) {
+      if (is.na(a) && is.na(b)) return(FALSE)
+      if (is.na(a) || is.na(b)) return(TRUE)
+      abs(a - b) > 1e-6
+    }, orig$f0, cur$f0)
+    if (!any(changed)) return(NULL)
+    idx <- which(changed)
+    data.frame(
+      idx          = idx,
+      time         = orig$time[idx],
+      original_f0  = orig$f0[idx],
+      current_f0   = cur$f0[idx],
+      stringsAsFactors = FALSE
+    )
+  })
+
+  # Status banner shown above the plot whenever the current token has
+  # been edited this session.
+  output$fp_corr_edit_status <- renderUI({
+    diff <- edit_diff()
+    if (is.null(diff)) return(NULL)
+    n <- nrow(diff)
+    tags$div(
+      style = paste(
+        "background: #fff3e0;",
+        "border-left: 3px solid #e0712d;",
+        "padding: 8px 12px;",
+        "margin: 8px 0;",
+        "border-radius: 4px;",
+        "font-size: 0.88rem;",
+        "color: #5a3010;"
+      ),
+      icon("pen-to-square"), " ",
+      tags$strong(sprintf("%d frame%s edited in this token.",
+                          n, if (n == 1) "" else "s")),
+      " Original values are shown on the plot as outlined grey markers."
+    )
+  })
+
   # Helper: push a snapshot of the current corrected contour onto the undo stack
   push_history <- function(tok, snapshot) {
     h <- fp_history()
@@ -220,8 +279,9 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                   choices = token_choices, selected = token_selected,
                   selectize = FALSE),
       tags$div(style = "color: #888; font-size: 0.72rem; margin-top: -8px; margin-bottom: 4px; font-style: italic;",
-        HTML("Tokens prefixed with <strong>●</strong> have frame-level flags (visible markers on the plot). ",
-             "Unprefixed tokens are flagged for out-of-range only, so look at the whole contour.")),
+        HTML("<strong>✎</strong> = already edited this session; ",
+             "<strong>●</strong> = has frame-level flags from the Inspect tab. ",
+             "Unprefixed tokens are flagged for out-of-range only (look at the whole contour) or haven't been touched yet.")),
       verbatimTextOutput("fp_corr_progress", placeholder = TRUE),
       div(style = "display:flex; gap:4px; align-items:center; margin-top: 6px;",
         actionButton("fp_corr_prev", HTML("&#9664;"), title = "Previous token"),
@@ -368,15 +428,15 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   # Keep the token dropdown in sync with filtered_tokens() WITHOUT re-rendering
   # the sidebar. The currently-selected token is preserved if it still appears
   # in the new filtered list; otherwise we fall back to the first token.
-  # Display labels are prefixed with a small bullet for tokens that have
-  # frame-level flags (so you can tell them apart from range-only flagged
-  # tokens at a glance). Underlying values stay as plain token names so all
-  # downstream matching logic keeps working.
+  # Display labels are prefixed with small symbols so users can see at a
+  # glance which tokens they have already edited (✎) and which carry
+  # per-frame flags from the Inspect tab (●). Underlying values stay as
+  # plain token names so all downstream matching logic keeps working.
+  # Re-fires when fp_edit_log changes so the ✎ marker appears / disappears
+  # as the user edits or undoes.
   observe({
     toks <- filtered_tokens()
     if (length(toks) == 0) {
-      # Pick a more specific placeholder depending on why the list is empty:
-      # no extracted data yet vs. all extracted tokens filtered out.
       df <- fp_f0_data()
       placeholder <- if (is.null(df) || nrow(df) == 0) {
         "(run F0 Extraction first)"
@@ -389,15 +449,28 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       return()
     }
 
+    # Tokens that have at least one finalised edit this session (the log
+    # only contains finalised edits since undo removes the matching row).
+    log_df <- fp_edit_log()
+    edited_set <- if (nrow(log_df) > 0) unique(log_df$token) else character(0)
+
+    # Tokens that have per-frame flags from an uploaded Inspect-tab CSV.
     frames_by_tok <- fp_flagged_frames()
-    labels <- if (!is.null(frames_by_tok) && length(frames_by_tok) > 0) {
-      strip_ext  <- isTRUE(input$fp_corr_strip_ext)
-      tok_keys   <- make_corr_key(toks, strip_ext)
-      flagged_set <- names(frames_by_tok)
-      ifelse(tok_keys %in% flagged_set, paste("●", toks), toks)
-    } else {
-      toks
-    }
+    strip_ext     <- isTRUE(input$fp_corr_strip_ext)
+    tok_keys      <- if (!is.null(frames_by_tok) && length(frames_by_tok) > 0)
+                       make_corr_key(toks, strip_ext)
+                     else
+                       character(length(toks))
+    flagged_set   <- if (!is.null(frames_by_tok)) names(frames_by_tok) else character(0)
+
+    labels <- vapply(seq_along(toks), function(i) {
+      tok      <- toks[i]
+      key      <- tok_keys[i]
+      prefix   <- ""
+      if (tok %in% edited_set)        prefix <- paste0(prefix, "✎ ")
+      if (key %in% flagged_set)       prefix <- paste0(prefix, "● ")
+      paste0(prefix, tok)
+    }, character(1))
     named_choices <- setNames(toks, labels)
 
     current  <- isolate(input$fp_corr_token)
@@ -922,6 +995,36 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       showlegend = FALSE
     )
 
+    # --- Ghost markers for original f0 at edited frames ---
+    # Shows the pre-edit value as an outlined grey circle next to the
+    # current (edited) value, so users see both old and new without
+    # losing the corrected contour. NA-original frames are skipped
+    # (nothing to draw at the original location).
+    diff <- edit_diff()
+    if (!is.null(diff)) {
+      ghost <- diff[!is.na(diff$original_f0), , drop = FALSE]
+      if (nrow(ghost) > 0) {
+        ghost_hover <- sprintf(
+          "ORIGINAL frame %d<br>time: %.3fs<br>old f0: %.1f Hz<br>now: %s",
+          ghost$idx, ghost$time, ghost$original_f0,
+          ifelse(is.na(ghost$current_f0),
+                 "(removed)",
+                 sprintf("%.1f Hz", ghost$current_f0))
+        )
+        p <- plotly::add_trace(
+          p,
+          x = ghost$time, y = ghost$original_f0,
+          type = "scatter", mode = "markers",
+          yaxis = "y",
+          marker = list(size = 9, color = "rgba(0,0,0,0)",
+                        line = list(width = 1.6, color = "#8a8a8a")),
+          opacity = 0.8,
+          hovertext = ghost_hover, hoverinfo = "text",
+          showlegend = FALSE
+        )
+      }
+    }
+
     # --- Optional TextGrid annotation strip below f0 ---
     tg <- current_textgrid()
     n_tiers <- if (!is.null(tg)) length(tg) else 0
@@ -1189,6 +1292,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         tags$kbd("+"), " / ", tags$kbd("-"), " (zoom), ",
         tags$kbd("←"), " / ", tags$kbd("→"), " (pan), ",
         tags$kbd("0"), " (reset). Only the time axis zooms; f0 / waveform stay fixed."),
+      uiOutput("fp_corr_edit_status"),
       plotly::plotlyOutput("fp_corr_plot", height = "560px"),
       tags$h4(style = "margin-top: 16px;", "Edit log"),
       tags$div(style = "display: flex; align-items: center; gap: 12px; margin-bottom: 6px;",
