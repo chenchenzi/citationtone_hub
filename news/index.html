@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">shinytone</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -42,7 +42,14 @@
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="development version" id="shinytone-development-version">shinytone (development version)<a class="anchor" aria-label="anchor" href="#shinytone-development-version"></a></h2>
 <div class="section level3">
-<h3 id="shinytone-development-version-1">shinytone 0.1.0<a class="anchor" aria-label="anchor" href="#shinytone-development-version-1"></a></h3>
+<h3 id="shinytone-development-version-1">shinytone 0.1.1<a class="anchor" aria-label="anchor" href="#shinytone-development-version-1"></a></h3>
+<ul><li>
+<code><a href="../reference/flag_pitch_jumps.html">flag_pitch_jumps()</a></code> (and therefore <code><a href="../reference/inspect_f0.html">inspect_f0()</a></code> and the Inspect tab): when a sample-to-sample jump is detected, the flag is now placed on whichever side of the jump is <em>farther from the token’s median f0</em>, rather than always on the landing sample. This correctly identifies the artefact whether it sits at the start or the end of a sequence (e.g. an octave doubling on the first frame of a token, which the previous landing-only logic mis-flagged).</li>
+<li>Carryover now walks both forward AND backward from each flagged sample, so artefact runs that begin or end the token are extended in both directions.</li>
+<li>Inspect-tab guide text and <code><a href="../reference/flag_pitch_jumps.html">flag_pitch_jumps()</a></code>’s function docs describe the new median-aware logic as an adaptation of the rate-of-change + carryover approach in Steffman &amp; Cole (2022).</li>
+</ul></div>
+<div class="section level3">
+<h3 id="shinytone-development-version-2">shinytone 0.1.0<a class="anchor" aria-label="anchor" href="#shinytone-development-version-2"></a></h3>
 <ul><li>First public release as an R package, alongside the existing online Shiny app at <a href="https://chenzixu.shinyapps.io/shinytone/" class="external-link uri">https://chenzixu.shinyapps.io/shinytone/</a>.</li>
 <li>Package skin only at this stage: the Shiny app continues to run unchanged. Standalone analytical functions (<code><a href="../reference/normalise_f0.html">normalise_f0()</a></code>, <code><a href="../reference/fit_gca.html">fit_gca()</a></code>, <code><a href="../reference/fit_gamm.html">fit_gamm()</a></code>, <code><a href="../reference/contour_to_chao.html">contour_to_chao()</a></code>, …) will be extracted in subsequent releases.</li>
 </ul></div>

@@ -175,9 +175,9 @@ head(result[result$flagged_jump, c("token", "time", "f0_Hz", "flag_notes")])
 #>   token             time f0_Hz flag_notes 
 #>   <chr>            <dbl> <dbl> <chr>      
 #> 1 dc102地4s46.6425 0.37   286. jump (rise)
-#> 2 dc103笛4s50.6725 0.126  197. jump (fall)
-#> 3 dc103笛4s50.6725 0.143  193. carryover  
-#> 4 dc103笛4s50.6725 0.160  194. carryover  
-#> 5 dc103笛4s50.6725 0.176  195. carryover  
-#> 6 dc103笛4s50.6725 0.192  195. carryover  
+#> 2 dc103笛4s50.6725 0.11   249. jump (fall)
+#> 3 dc103雾2s71.2525 0.366  255. carryover  
+#> 4 dc103雾2s71.2525 0.38   221. jump (fall)
+#> 5 dc103题3s33.4525 0.115  222. jump (fall)
+#> 6 dc103骂3s97.2325 0.08   247. jump (fall)
 ```
