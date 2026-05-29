@@ -99,6 +99,77 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     sub[order(sub$time), , drop = FALSE]
   })
 
+  # Cross-session resume: when the user uploads a previously downloaded
+  # all_correctedf0.csv (via F0 Extraction > Upload existing f0 CSV),
+  # rehydrate the in-memory corrections so that:
+  #   * current_f0() returns the corrected values for previously edited
+  #     tokens, not the original,
+  #   * the plot shows ghost markers + the edit-status banner, and
+  #   * ✎ keeps showing in the picker.
+  # Runs whenever fp_f0_data() changes; only fires if the data carries
+  # both f0_corrected and edited columns (the resume schema).
+  observeEvent(fp_f0_data(), {
+    df <- fp_f0_data()
+    if (is.null(df)) return()
+    if (!all(c("f0_corrected", "edited") %in% names(df))) return()
+
+    edited_mask <- !is.na(df$edited) & df$edited
+    toks <- unique(df$token[edited_mask])
+    if (length(toks) == 0) return()
+
+    new_corr <- list()
+    for (tok in toks) {
+      sub <- df[df$token == tok, , drop = FALSE]
+      sub <- sub[order(sub$time), , drop = FALSE]
+      new_corr[[tok]] <- data.frame(
+        time = sub$time,
+        f0   = sub$f0_corrected,
+        stringsAsFactors = FALSE
+      )
+    }
+    fp_corrections(new_corr)
+    fp_history(list())   # fresh undo stack; previous history is unrecoverable
+    showNotification(
+      sprintf(paste0("Restored previous corrections for %d token(s) from the ",
+                     "uploaded CSV. ✎ markers and ghost dots reflect the ",
+                     "earlier edits."),
+              length(toks)),
+      type = "message", duration = 6
+    )
+  }, ignoreNULL = TRUE)
+
+  # Set of "edited" tokens, combining two sources so the workflow holds
+  # across sessions:
+  #
+  #   (a) In-session edits: tokens that appear in the (undo-aware) edit
+  #       log because the user halved / doubled / set / picked something
+  #       this session.
+  #   (b) Carry-over edits from a previously uploaded corrected CSV:
+  #       tokens that have at least one row whose `edited` column is
+  #       TRUE. This is exactly the column build_corrected_df() writes
+  #       on download, so re-uploading a session's output recovers the
+  #       set without needing to re-run any edits.
+  #
+  # The ✎ token-picker marker and the "Show by edit status" filter both
+  # read from here, so both work uniformly whether the edits happened in
+  # this session or a previous one.
+  edited_tokens_set <- reactive({
+    in_session <- {
+      log_df <- fp_edit_log()
+      if (nrow(log_df) > 0) unique(log_df$token) else character(0)
+    }
+    from_csv <- {
+      df <- fp_f0_data()
+      if (!is.null(df) && "edited" %in% names(df)) {
+        ed <- suppressWarnings(as.logical(df$edited))
+        unique(df$token[!is.na(ed) & ed])
+      } else {
+        character(0)
+      }
+    }
+    union(in_session, from_csv)
+  })
+
   # Original (pre-edit) f0 contour for the current token. Used by the
   # plot's "ghost markers" trace and by the edit-status banner so the
   # user can see what changed and where.
@@ -278,20 +349,25 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       selectInput("fp_corr_token", "Token:",
                   choices = token_choices, selected = token_selected,
                   selectize = FALSE),
-      tags$div(style = "color: #888; font-size: 0.72rem; margin-top: -8px; margin-bottom: 4px; font-style: italic;",
-        HTML("<strong>✎</strong> = already edited this session; ",
-             "<strong>●</strong> = has frame-level flags from the Inspect tab. ",
-             "Unprefixed tokens are flagged for out-of-range only (look at the whole contour) or haven't been touched yet.")),
+      tags$div(style = "color: #888; font-size: 0.72rem; margin-top: -8px; margin-bottom: 4px; font-style: italic; line-height: 1.45;",
+        HTML(paste(
+          "<strong>✎</strong> = has edited frames (this session, or from a previously uploaded corrected CSV);",
+          "<strong>●</strong> = has frame-level flags from the Inspect tab.",
+          "Unprefixed tokens are flagged for out-of-range only (look at the whole contour) or haven't been edited yet.",
+          sep = "<br>"))),
       verbatimTextOutput("fp_corr_progress", placeholder = TRUE),
       div(style = "display:flex; gap:4px; align-items:center; margin-top: 6px;",
         actionButton("fp_corr_prev", HTML("&#9664;"), title = "Previous token"),
         actionButton("fp_corr_next", HTML("&#9654;"), title = "Next token")
       ),
 
-      # ---- Flagged-tokens filter (collapsible, optional) ----
+      # ---- CSV-based filters (collapsible, optional) ----
+      # Filters that need an uploaded Inspect-tab CSV: flagged-token
+      # subset, speaker keep-list, tone keep-list. All AND together with
+      # the edit-status filter below and with each other.
       tags$details(style = "margin-top: 8px; margin-bottom: 4px;",
         tags$summary(style = "cursor:pointer; font-size: 0.85rem; color: #4a7868; font-weight: 600;",
-                     icon("filter"), " Filter by flagged tokens"),
+                     icon("filter"), " Filter by uploaded CSV (flagged / speaker / tone)"),
         div(style = "padding: 6px 0 0 0;",
           fileInput("fp_corr_flagged_csv", NULL,
                     accept = c(".csv", "text/csv"),
@@ -305,12 +381,34 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           uiOutput("fp_corr_tone_col_picker"),
           uiOutput("fp_corr_tone_keep_picker"),
           checkboxInput("fp_corr_only_flagged",
-                        "Only show flagged tokens", value = FALSE),
-          actionButton("fp_corr_clear_filters", "Clear filters",
-                       icon = icon("filter-circle-xmark"),
-                       title = "Reset all filters (CSV stays uploaded)",
-                       class = "btn-sm")
+                        "Only show flagged tokens", value = FALSE)
         )
+      ),
+
+      # ---- Edit-status filter (independent, always available) ----
+      # Works whether or not a CSV has been uploaded. Pairs with the ✎
+      # marker: "Only unedited" lets the user resume work, either from
+      # mid-session or from a re-uploaded corrected CSV.
+      tags$details(style = "margin-top: 4px; margin-bottom: 4px;",
+        tags$summary(style = "cursor:pointer; font-size: 0.85rem; color: #4a7868; font-weight: 600;",
+                     icon("pen-to-square"), " Filter by edit status"),
+        div(style = "padding: 6px 0 2px 0;",
+          radioButtons("fp_corr_edit_filter",
+                       label = NULL,
+                       choices = c("All tokens"     = "all",
+                                   "Only unedited"  = "unedited",
+                                   "Only edited"    = "edited"),
+                       selected = "all",
+                       inline = TRUE)
+        )
+      ),
+
+      # ---- Clear all filters (resets both drawers in one click) ----
+      tags$div(style = "margin-top: 4px;",
+        actionButton("fp_corr_clear_filters", "Clear filters",
+                     icon = icon("filter-circle-xmark"),
+                     title = "Reset all filters (CSV stays uploaded)",
+                     class = "btn-sm")
       ),
 
       tags$hr(),
@@ -449,10 +547,10 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       return()
     }
 
-    # Tokens that have at least one finalised edit this session (the log
-    # only contains finalised edits since undo removes the matching row).
-    log_df <- fp_edit_log()
-    edited_set <- if (nrow(log_df) > 0) unique(log_df$token) else character(0)
+    # Tokens that have at least one edit, either in this session OR
+    # carried over from a previously uploaded corrected CSV (see the
+    # edited_tokens_set() reactive for details).
+    edited_set <- edited_tokens_set()
 
     # Tokens that have per-frame flags from an uploaded Inspect-tab CSV.
     frames_by_tok <- fp_flagged_frames()
@@ -501,9 +599,10 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   # Clear filters: reset all filter inputs back to "off" state, but keep the
   # CSV uploaded so the user can re-enable filtering without re-uploading.
   observeEvent(input$fp_corr_clear_filters, {
-    updateSelectInput(session,    "fp_corr_speaker_col", selected = "")
-    updateSelectInput(session,    "fp_corr_tone_col",    selected = "")
-    updateCheckboxInput(session,  "fp_corr_only_flagged", value = FALSE)
+    updateSelectInput(session,     "fp_corr_speaker_col", selected = "")
+    updateSelectInput(session,     "fp_corr_tone_col",    selected = "")
+    updateCheckboxInput(session,   "fp_corr_only_flagged", value = FALSE)
+    updateRadioButtons(session,    "fp_corr_edit_filter", selected = "all")
     showNotification("Filters cleared. The uploaded CSV is still loaded.",
                      type = "message", duration = 3)
   })
@@ -738,6 +837,21 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       m  <- as.character(raw[[tone_col]]) %in% tone_keep
       ok <- make_corr_key(unique(as.character(raw[[token_col]])[m]), strip_ext)
       keep <- keep[all_key %in% ok]
+    }
+
+    # 4) Edit-status filter ("All" / "Only unedited" / "Only edited").
+    # Uses the combined set of edited tokens (in-session + uploaded CSV),
+    # so re-uploading a previous session's all_correctedf0.csv lets the
+    # user filter to unedited tokens and pick up exactly where they
+    # left off.
+    edit_mode <- input$fp_corr_edit_filter
+    if (!is.null(edit_mode) && edit_mode %in% c("unedited", "edited")) {
+      edited_set <- edited_tokens_set()
+      if (edit_mode == "unedited") {
+        keep <- keep[!(keep %in% edited_set)]
+      } else {
+        keep <- keep[keep %in% edited_set]
+      }
     }
 
     keep
@@ -1184,7 +1298,12 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       dragmode = "select",
       shapes = shapes,
       annotations = annotations,
-      margin = list(l = 60, r = 20, t = 20, b = bottom_margin)
+      margin = list(l = 60, r = 20, t = 20, b = bottom_margin),
+      # `uirevision` keyed on the token keeps Plotly's UI state (zoom,
+      # pan, current selection) across re-renders triggered by data
+      # changes inside the same token. Switching tokens changes the key,
+      # so the view resets to default for a new contour.
+      uirevision = tok
     )
     if (!is.null(wav)) {
       layout_args$yaxis2 <- list(title = "waveform",
@@ -1630,6 +1749,15 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         out$f0_corrected[mask] <- corr[[tok]]$f0[seq_len(sum(mask))]
       }
     }
+    # `edited` flags frames whose corrected value differs from the
+    # original. NA in either column counts as edited if the other is not
+    # NA (e.g., a sample that was marked NA, or a sample whose original
+    # was NA and now has a value).
+    out$edited <- mapply(function(a, b) {
+      if (is.na(a) && is.na(b)) return(FALSE)
+      if (is.na(a) || is.na(b)) return(TRUE)
+      abs(a - b) > 1e-6
+    }, out$f0, out$f0_corrected)
     out
   }
 
