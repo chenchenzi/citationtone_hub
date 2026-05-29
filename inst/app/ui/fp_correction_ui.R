@@ -367,7 +367,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       # the edit-status filter below and with each other.
       tags$details(style = "margin-top: 8px; margin-bottom: 4px;",
         tags$summary(style = "cursor:pointer; font-size: 0.85rem; color: #4a7868; font-weight: 600;",
-                     icon("filter"), " Filter by uploaded CSV (flagged / speaker / tone)"),
+                     icon("filter"), " Filter by speaker, tone, flagged tokens"),
         div(style = "padding: 6px 0 0 0;",
           fileInput("fp_corr_flagged_csv", NULL,
                     accept = c(".csv", "text/csv"),
@@ -1403,6 +1403,230 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           "When you're done, download the corrected f0 from the sidebar."
         )
       ),
+
+      # ---- Resume-across-sessions illustration (collapsible) ----
+      tags$style(HTML("
+        .resume-wrap {
+          background: #fffaf0;
+          border: 1px solid #f0e2bf;
+          border-radius: 8px;
+          padding: 12px 18px 16px 18px;
+          margin-bottom: 12px;
+        }
+        .resume-wrap > summary {
+          cursor: pointer;
+          font-weight: 700;
+          color: #6b4d10;
+          font-size: 0.95rem;
+          padding: 4px 0;
+          list-style: none;
+        }
+        .resume-wrap > summary::before {
+          content: '▸';
+          display: inline-block;
+          color: #c89c30;
+          margin-right: 8px;
+          transition: transform 0.15s ease;
+        }
+        .resume-wrap[open] > summary::before { transform: rotate(90deg); }
+        .resume-flow {
+          display: flex;
+          align-items: stretch;
+          gap: 14px;
+          margin-top: 14px;
+          flex-wrap: wrap;
+        }
+        .resume-card {
+          flex: 1 1 280px;
+          background: #ffffff;
+          border: 1px solid #e6dec3;
+          border-radius: 8px;
+          padding: 14px 16px;
+          font-size: 0.86rem;
+          color: #444;
+          box-shadow: 0 1px 3px rgba(123, 99, 26, 0.05);
+        }
+        .resume-card .resume-card-title {
+          color: #2c5f4f;
+          font-weight: 700;
+          font-size: 0.95rem;
+          margin: 0 0 12px 0;
+          padding-bottom: 8px;
+          border-bottom: 1px solid #f0e9d4;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        /* Numbered step circles */
+        .resume-steps {
+          list-style: none;
+          padding-left: 0;
+          margin: 0;
+          counter-reset: step;
+        }
+        .resume-steps > li {
+          counter-increment: step;
+          position: relative;
+          padding-left: 32px;
+          margin-bottom: 10px;
+          line-height: 1.5;
+        }
+        .resume-steps > li::before {
+          content: counter(step);
+          position: absolute;
+          left: 0; top: 1px;
+          width: 22px; height: 22px;
+          background: #78c2ad;
+          color: #ffffff;
+          border-radius: 50%;
+          text-align: center;
+          font-size: 0.74rem;
+          font-weight: 700;
+          line-height: 22px;
+        }
+        /* Inline 'tab name' chip */
+        .tab-chip {
+          display: inline-block;
+          background: #e8f5f0;
+          color: #2c5f4f;
+          padding: 1px 9px;
+          border-radius: 10px;
+          font-family: 'SFMono-Regular', Menlo, Consolas, monospace;
+          font-size: 0.76rem;
+          font-weight: 600;
+          margin: 0 1px;
+          white-space: nowrap;
+        }
+        /* Inline 'button' chip */
+        .btn-chip {
+          display: inline-block;
+          background: #ffffff;
+          border: 1px solid #c8d4cf;
+          color: #2c5f4f;
+          padding: 1px 8px;
+          border-radius: 4px;
+          font-size: 0.78rem;
+          font-weight: 600;
+          margin: 0 1px;
+          white-space: nowrap;
+          box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+        }
+        /* Centre column: animated arrow + CSV file pill */
+        .resume-arrow {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          min-width: 130px;
+          padding: 8px 0;
+        }
+        .resume-arrow .resume-arrow-svg {
+          font-size: 1.8rem;
+          color: #78c2ad;
+          line-height: 1;
+          margin-bottom: 6px;
+          animation: resume-bounce 2.2s ease-in-out infinite;
+        }
+        @keyframes resume-bounce {
+          0%, 100% { transform: translateX(0); }
+          50%      { transform: translateX(6px); }
+        }
+        .resume-arrow .resume-file {
+          background: #fff3d4;
+          border: 1px solid #e8c860;
+          color: #5a4010;
+          padding: 5px 10px;
+          border-radius: 6px;
+          font-family: 'SFMono-Regular', Menlo, Consolas, monospace;
+          font-size: 0.78rem;
+          font-weight: 600;
+          white-space: nowrap;
+          box-shadow: 0 2px 5px rgba(184, 132, 26, 0.10);
+        }
+        .resume-arrow .resume-file-note {
+          color: #777;
+          font-size: 0.74rem;
+          text-align: center;
+          margin-top: 6px;
+          max-width: 130px;
+        }
+        @media (max-width: 720px) {
+          .resume-arrow { min-width: auto; flex-direction: row; gap: 10px; padding: 6px 0; }
+          .resume-arrow .resume-arrow-svg { transform: rotate(90deg); margin: 0; animation: none; }
+        }
+      ")),
+      tags$details(class = "resume-wrap",
+        tags$summary(icon("rotate"),
+                     " Continue later? Resume work across sessions ",
+                     tags$span(style = "color: #b08a35; font-weight: 400; font-size: 0.82rem;",
+                               "(click to expand)")),
+        tags$p(style = "margin: 10px 0 0 0; color: #5a4d2c; font-size: 0.88rem;",
+          "If your session times out or you close the app, your corrections ",
+          "still live in the downloaded CSV. Re-upload it in ",
+          tags$span(class = "tab-chip", "F0 Extraction"),
+          " and the ",
+          tags$span(class = "tab-chip", "F0 Correction"),
+          " tab will restore your progress automatically:"),
+        tags$div(class = "resume-flow",
+
+          # ----- Session 1 -----
+          tags$div(class = "resume-card",
+            tags$div(class = "resume-card-title",
+              icon("pen-to-square"), " Session 1: edit + download"),
+            tags$ol(class = "resume-steps",
+              tags$li("Make your edits in ",
+                      tags$span(class = "tab-chip", "F0 Correction"), "."),
+              tags$li("Click ",
+                      tags$span(class = "btn-chip", icon("download"), " Download all tokens"),
+                      " and save ", tags$code("all_correctedf0.csv"),
+                      " somewhere safe."),
+              tags$li("(Optional) Click ",
+                      tags$span(class = "btn-chip", icon("download"), " Download edit log (CSV)"),
+                      " to keep an action-by-action history of what you ",
+                      "changed."),
+              tags$li("Close the app whenever.")
+            )
+          ),
+
+          # ----- Arrow + file -----
+          tags$div(class = "resume-arrow",
+            tags$div(class = "resume-arrow-svg", HTML("&#10142;")),
+            tags$div(class = "resume-file",
+                     icon("file-csv"), " all_correctedf0.csv"),
+            tags$div(class = "resume-file-note",
+              "carries ", tags$code("f0_corrected"), " + ", tags$code("edited"))
+          ),
+
+          # ----- Session 2 -----
+          tags$div(class = "resume-card",
+            tags$div(class = "resume-card-title",
+              icon("play"), " Session 2: upload + continue"),
+            tags$ol(class = "resume-steps",
+              tags$li("Open the app. In ",
+                      tags$span(class = "tab-chip", "Start"),
+                      ", re-upload your ", tags$code(".wav"), " files."),
+              tags$li("Go to ",
+                      tags$span(class = "tab-chip", "F0 Extraction"),
+                      ", choose ",
+                      tags$span(class = "btn-chip", "Upload existing f0 CSV"),
+                      ", and pick the ", tags$code("all_correctedf0.csv"),
+                      " you saved at the end of session 1."),
+              tags$li("A toast confirms: ",
+                      tags$em("\"Restored previous corrections...\""), "."),
+              tags$li("Open ",
+                      tags$span(class = "tab-chip", "F0 Correction"),
+                      ": ✎ marks, edited dots, and the edit-status banner ",
+                      "recover automatically."),
+              tags$li("Open the ",
+                      tags$strong("Filter by edit status"),
+                      " drawer and pick ",
+                      tags$span(class = "btn-chip", "Only unedited"),
+                      " to pick up exactly where you left off.")
+            )
+          )
+        )
+      ),
+
       tags$h4("Audio"),
       uiOutput("fp_corr_audio"),
       tags$h4(style = "margin-top: 14px;", "Waveform + f0"),
