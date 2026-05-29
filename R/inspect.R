@@ -131,44 +131,121 @@ flag_outliers <- function(data,
 
 
 # -----------------------------------------------------------------------------
-# Internal carryover helper.
-# Given the sample-wise jump flags (already shifted to the landing sample),
-# extend each flagged jump forward as long as following samples stay within
-# `mult * threshold` semitones of the error frame's f0 (in semitones).
-# The band uses rise_threshold when the immediate next sample is HIGHER and
-# fall_threshold when it is LOWER, matching Steffman & Cole (2022).
-# Setting mult <= 0 disables carryover entirely.
+# Internal per-token artefact detector.
+#
+# Two-pass algorithm, adapted from the rate-of-change + carryover approach
+# of Steffman & Cole (2022):
+#
+#   Pass 1 (jump detection).  For each consecutive pair (i, i+1), check
+#   the semitone rate of change against rise / fall thresholds and the Hz
+#   ratio against the octave bounds. When a jump is detected, the FLAG
+#   is placed on whichever side (i or i+1) is FARTHER from the token's
+#   median f0 in semitones. This is the shinytone-specific adaptation:
+#   the Steffman & Cole convention always flags the landing sample,
+#   which mis-identifies the artefact when it sits at the start of a
+#   sequence (e.g. an octave doubling on the first frame of a token).
+#   The median-distance rule reduces to landing-side flagging when the
+#   landing sample is the outlier, and to source-side flagging when the
+#   source sample is the outlier.
+#
+#   Pass 2 (carryover).  Walk both forward and backward from each
+#   primary-flagged sample, marking neighbours that stay within
+#   `mult * threshold` semitones of the artefact's f0. The chain breaks
+#   the first time a neighbour falls outside the band. Setting
+#   carryover_mult <= 0 disables carryover.
+#
+# Returns a list with `flagged_jump` (logical) and `jump_note`
+# (character: one of "octave jump" / "jump (rise)" / "jump (fall)" /
+# "carryover", or a "; "-joined composite when multiple apply).
 # -----------------------------------------------------------------------------
-detect_carryover_chain <- function(flagged_jump, f0_st,
-                                   rise_threshold, fall_threshold, mult) {
-  n <- length(flagged_jump)
-  carryover      <- rep(FALSE, n)
-  carryover_note <- rep("",    n)
-  if (n < 2 || mult <= 0) {
-    return(list(carryover = carryover, carryover_note = carryover_note))
+detect_token_artefacts <- function(f0_hz, time, time_unit,
+                                   rise_threshold, fall_threshold,
+                                   octave_bounds, carryover_mult) {
+  n      <- length(f0_hz)
+  primary <- rep(FALSE, n)
+  notes   <- rep("",    n)
+
+  if (n < 2) {
+    return(list(flagged_jump = primary, jump_note = notes))
   }
 
-  error_f0 <- NA_real_
-  for (i in 2:n) {
-    if (isTRUE(flagged_jump[i]) && !is.na(f0_st[i])) {
-      error_f0 <- f0_st[i]
-    } else if (!is.na(error_f0) && !is.na(f0_st[i]) &&
-               (isTRUE(flagged_jump[i - 1]) || carryover[i - 1])) {
-      band <- if (i < n && !is.na(f0_st[i + 1])) {
-        if (f0_st[i + 1] > f0_st[i]) rise_threshold * mult
-        else                          fall_threshold * mult
-      } else {
-        max(rise_threshold, fall_threshold) * mult
-      }
-      if (abs(f0_st[i] - error_f0) <= band) {
-        carryover[i]      <- TRUE
-        carryover_note[i] <- "carryover"
-      } else {
-        error_f0 <- NA_real_   # chain broken
+  f0_st  <- suppressWarnings(12 * log2(f0_hz))
+  valid  <- !is.na(f0_st)
+  if (sum(valid) < 2) {
+    return(list(flagged_jump = primary, jump_note = notes))
+  }
+  token_median_st <- stats::median(f0_st[valid])
+
+  # ---------- Pass 1: detect jumps, choose median-farther side ----------
+  for (i in seq_len(n - 1)) {
+    if (is.na(f0_hz[i]) || is.na(f0_hz[i + 1])) next
+
+    diff_st   <- f0_st[i + 1] - f0_st[i]
+    diff_time <- time[i + 1]  - time[i]
+    tf <- if (time_unit == "ms") max(diff_time / 10,        1e-9)
+          else if (time_unit == "s") max((diff_time * 1000) / 10, 1e-9)
+          else 1                                    # "norm"
+    rate     <- abs(diff_st) / tf
+    hz_ratio <- f0_hz[i + 1] / f0_hz[i]
+
+    is_oct  <- !is.na(hz_ratio) &&
+               (hz_ratio < octave_bounds[1] || hz_ratio > octave_bounds[2])
+    is_rise <- diff_st > 0 && rate > rise_threshold
+    is_fall <- diff_st < 0 && rate > fall_threshold
+    if (!(is_oct || is_rise || is_fall)) next
+
+    # Pick the side farther from the token median; ties go to the landing
+    # sample to preserve historical behaviour for symmetric jumps.
+    dist_i  <- abs(f0_st[i]     - token_median_st)
+    dist_i1 <- abs(f0_st[i + 1] - token_median_st)
+    flag_idx <- if (dist_i > dist_i1) i else i + 1
+    primary[flag_idx] <- TRUE
+
+    parts <- character(0)
+    if (is_oct)  parts <- c(parts, "octave jump")
+    if (is_rise) parts <- c(parts, "jump (rise)")
+    if (is_fall) parts <- c(parts, "jump (fall)")
+    new_note <- paste(parts, collapse = "; ")
+    notes[flag_idx] <- if (nchar(notes[flag_idx]) > 0)
+                         paste(notes[flag_idx], new_note, sep = "; ")
+                       else new_note
+  }
+
+  # ---------- Pass 2: bidirectional carryover ----------
+  carry <- rep(FALSE, n)
+  if (carryover_mult > 0) {
+
+    extend_chain <- function(start_idx, direction) {
+      # direction: +1 walks forward (start_idx + 1, +2, ...),
+      # -1 walks backward (start_idx - 1, -2, ...).
+      error_f0 <- f0_st[start_idx]
+      if (is.na(error_f0)) return(invisible(NULL))
+      idx <- start_idx + direction
+      while (idx >= 1 && idx <= n) {
+        if (is.na(f0_st[idx]) || primary[idx]) break
+        prev_idx <- idx - direction
+        band <- if (prev_idx >= 1 && prev_idx <= n && !is.na(f0_st[prev_idx])) {
+          if (f0_st[prev_idx] > f0_st[idx]) rise_threshold * carryover_mult
+          else                              fall_threshold * carryover_mult
+        } else {
+          max(rise_threshold, fall_threshold) * carryover_mult
+        }
+        if (abs(f0_st[idx] - error_f0) > band) break
+        carry[idx] <<- TRUE
+        idx <- idx + direction
       }
     }
+
+    for (i in which(primary)) {
+      extend_chain(i, +1L)
+      extend_chain(i, -1L)
+    }
   }
-  list(carryover = carryover, carryover_note = carryover_note)
+
+  flagged_jump <- primary | carry
+  jump_note    <- ifelse(primary, notes,
+                         ifelse(carry, "carryover", ""))
+  list(flagged_jump = flagged_jump, jump_note = jump_note)
 }
 
 
@@ -195,12 +272,18 @@ detect_carryover_chain <- function(flagged_jump, f0_st,
 #' 3. Rescale the observed rate of change to a semitones-per-10-ms
 #'    equivalent using `time_unit`, so the result can be compared to a
 #'    fixed threshold (Sundberg 1973).
-#' 4. Flag the *landing* sample (i.e., the sample immediately after the
-#'    jump) for octave jumps, threshold-violating rises, and
-#'    threshold-violating falls.
-#' 5. Extend each flagged sample forward as a chain of carryover frames
-#'    that stay within `carryover_mult * threshold` semitones of the
-#'    error sample's f0 (Steffman & Cole 2022).
+#' 4. When a jump is detected between samples *i* and *i + 1*, flag
+#'    whichever side is FARTHER from the token's median f0 (in
+#'    semitones). The Steffman & Cole (2022) convention always flags
+#'    the landing sample, which mis-identifies the artefact when it
+#'    sits at the start of a token (e.g., an octave doubling on the
+#'    first frame). The median-distance rule reduces to landing-side
+#'    flagging when the landing sample is the outlier and to
+#'    source-side flagging when the source sample is the outlier.
+#' 5. Walk both forward and backward from each flagged sample as a
+#'    chain of carryover frames that stay within `carryover_mult *
+#'    threshold` semitones of the artefact's f0 (adapted from
+#'    Steffman & Cole 2022).
 #'
 #' ## Choosing the thresholds
 #'
@@ -288,97 +371,27 @@ flag_pitch_jumps <- function(data,
   data <- data |>
     dplyr::mutate(!!f0 := ifelse(.data[[f0]] == 0, NA_real_, .data[[f0]]))
 
-  # Per-sample diffs.
-  result <- data |>
+  # All per-token logic (jump detection + carryover) lives in
+  # detect_token_artefacts(); see its header for the algorithm and the
+  # rationale for the median-aware flag placement.
+  data |>
     dplyr::arrange(.data[[token]], .data[[time]]) |>
     dplyr::group_by(.data[[token]]) |>
-    dplyr::mutate(
-      .f0_st     = 12 * log2(.data[[f0]]),
-      .lead_st   = dplyr::lead(.data$.f0_st,    order_by = .data[[time]]),
-      .lead_hz   = dplyr::lead(.data[[f0]],     order_by = .data[[time]]),
-      .diff_st   = .data$.lead_st - .data$.f0_st,
-      .diff_time = dplyr::lead(.data[[time]], order_by = .data[[time]]) -
-                   .data[[time]],
-      .hz_ratio  = .data$.lead_hz / .data[[f0]]
-    ) |>
-    dplyr::ungroup()
-
-  # Time conversion to semitones-per-10ms equivalent.
-  # `time_unit` is a scalar argument fixed for the whole call, so we
-  # branch with if/else rather than case_when() (which dplyr 1.2.0
-  # deprecates for scalar LHS inputs).
-  time_factor <- if (time_unit == "ms") {
-    ifelse(is.na(result$.diff_time) | result$.diff_time == 0,
-           1, result$.diff_time / 10)
-  } else if (time_unit == "s") {
-    ifelse(is.na(result$.diff_time) | result$.diff_time == 0,
-           1, (result$.diff_time * 1000) / 10)
-  } else {
-    # "norm": treat each step as one 10 ms-equivalent unit
-    rep(1, nrow(result))
-  }
-  result$.time_factor <- time_factor
-
-  # Jump flags, then shift to the LANDING sample (where the error actually
-  # appears).
-  result <- result |>
-    dplyr::group_by(.data[[token]]) |>
-    dplyr::mutate(
-      .oct_jump  = !is.na(.data$.hz_ratio) &
-                   (.data$.hz_ratio < octave_bounds[1] |
-                    .data$.hz_ratio > octave_bounds[2]),
-      .jump_rise = !is.na(.data$.diff_st) & .data$.diff_st > 0 &
-                   (abs(.data$.diff_st) / .data$.time_factor) > rise_threshold,
-      .jump_fall = !is.na(.data$.diff_st) & .data$.diff_st < 0 &
-                   (abs(.data$.diff_st) / .data$.time_factor) > fall_threshold,
-      .flag_landing = dplyr::lag(.data$.oct_jump | .data$.jump_rise | .data$.jump_fall,
-                                 default = FALSE),
-      .note_landing = dplyr::case_when(
-        dplyr::lag(.data$.oct_jump,  default = FALSE) &
-        dplyr::lag(.data$.jump_rise, default = FALSE) ~ "octave jump; jump (rise)",
-        dplyr::lag(.data$.oct_jump,  default = FALSE) &
-        dplyr::lag(.data$.jump_fall, default = FALSE) ~ "octave jump; jump (fall)",
-        dplyr::lag(.data$.oct_jump,  default = FALSE) ~ "octave jump",
-        dplyr::lag(.data$.jump_rise, default = FALSE) ~ "jump (rise)",
-        dplyr::lag(.data$.jump_fall, default = FALSE) ~ "jump (fall)",
-        TRUE ~ ""
-      )
-    ) |>
-    dplyr::ungroup()
-
-  # Per-token carryover extension.
-  result <- result |>
-    dplyr::group_by(.data[[token]]) |>
     dplyr::group_modify(~ {
-      co <- detect_carryover_chain(.x$.flag_landing, .x$.f0_st,
-                                   rise_threshold, fall_threshold,
-                                   carryover_mult)
-      .x$.carryover      <- co$carryover
-      .x$.carryover_note <- co$carryover_note
+      out <- detect_token_artefacts(
+        f0_hz          = .x[[f0]],
+        time           = .x[[time]],
+        time_unit      = time_unit,
+        rise_threshold = rise_threshold,
+        fall_threshold = fall_threshold,
+        octave_bounds  = octave_bounds,
+        carryover_mult = carryover_mult
+      )
+      .x$flagged_jump <- out$flagged_jump
+      .x$jump_note    <- out$jump_note
       .x
     }) |>
     dplyr::ungroup()
-
-  # Final flag + note combining jumps and carryover.
-  result <- result |>
-    dplyr::mutate(
-      flagged_jump = .data$.flag_landing | .data$.carryover,
-      jump_note = dplyr::case_when(
-        nchar(.data$.carryover_note) > 0 & nchar(.data$.note_landing) > 0 ~
-          paste0(.data$.note_landing, "; ", .data$.carryover_note),
-        nchar(.data$.carryover_note) > 0 ~ .data$.carryover_note,
-        TRUE ~ .data$.note_landing
-      )
-    )
-
-  # Drop all the dotted internal columns.
-  result |>
-    dplyr::select(-dplyr::any_of(c(".f0_st", ".lead_st", ".lead_hz",
-                                   ".diff_st", ".diff_time", ".hz_ratio",
-                                   ".time_factor", ".oct_jump",
-                                   ".jump_rise", ".jump_fall",
-                                   ".flag_landing", ".note_landing",
-                                   ".carryover", ".carryover_note")))
 }
 
 

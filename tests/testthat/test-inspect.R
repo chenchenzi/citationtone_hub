@@ -72,6 +72,46 @@ test_that("flag_pitch_jumps respects rise/fall thresholds", {
   expect_true(out$flagged_jump[3])
 })
 
+test_that("flag_pitch_jumps picks the side farther from token median", {
+  # Artefact at the START of the token (e.g. pitch doubling on frame 1).
+  # Frame 1 is the outlier; frames 2..6 are the real signal.
+  df <- data.frame(
+    token = rep("t1", 6),
+    time  = seq(0, 0.05, by = 0.01),
+    f0    = c(400, 200, 200, 202, 198, 201)
+  )
+  out <- flag_pitch_jumps(df, time_unit = "s", carryover_mult = 0)
+  # Median-aware flag placement should land on frame 1 (the outlier),
+  # NOT frame 2 (which is the correct value the contour falls back to).
+  expect_true(out$flagged_jump[1])
+  expect_false(out$flagged_jump[2])
+
+  # Same dataset reversed: artefact at the END of the token.
+  # Frame 6 is the outlier; frames 1..5 are the real signal.
+  df2 <- data.frame(
+    token = rep("t1", 6),
+    time  = seq(0, 0.05, by = 0.01),
+    f0    = c(201, 198, 202, 200, 200, 400)
+  )
+  out2 <- flag_pitch_jumps(df2, time_unit = "s", carryover_mult = 0)
+  expect_true(out2$flagged_jump[6])
+  expect_false(out2$flagged_jump[5])
+
+  # Artefact in the MIDDLE: a single bad sample surrounded by good ones.
+  # Both the prev->middle and middle->next pairs trigger detection, and
+  # both should flag the middle (median-farther) sample, not the
+  # neighbours.
+  df3 <- data.frame(
+    token = rep("t1", 7),
+    time  = seq(0, 0.06, by = 0.01),
+    f0    = c(200, 198, 202, 400, 199, 201, 200)
+  )
+  out3 <- flag_pitch_jumps(df3, time_unit = "s", carryover_mult = 0)
+  expect_true(out3$flagged_jump[4])
+  expect_false(out3$flagged_jump[3])
+  expect_false(out3$flagged_jump[5])
+})
+
 test_that("flag_pitch_jumps handles f0 == 0 as unvoiced", {
   df <- data.frame(
     token = rep("t1", 5),
