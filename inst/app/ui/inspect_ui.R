@@ -6,9 +6,7 @@ inspect_ui <- function(input, output, session, dataset) {
 
   # Guide text for the Inspect tab
   output$inspect_guide <- renderUI({
-    tagList(
-      tags$div(style = "background-color: #f0faf7; border-left: 4px solid #78c2ad; padding: 10px 14px; margin-bottom: 12px; border-radius: 4px; font-size: 0.88rem; color: #555;",
-        tags$strong("Inspect guide:"),
+    guide_box("Inspect guide",
         tags$ul(style = "margin-bottom: 8px; padding-left: 18px;",
           tags$li(tags$strong("f0 (Hz):"), " The raw fundamental frequency column in Hertz."),
           tags$li(tags$strong("Token ID:"), " A unique identifier for each token/syllable (groups rows belonging to the same contour)."),
@@ -25,17 +23,19 @@ inspect_ui <- function(input, output, session, dataset) {
           ),
           tags$li(
             tags$em("Token-level"), " (speaker × tone): per-token median, compared against the ",
-            tags$strong("same speaker and tone"), ". Flags a contour smoothly shifted too high ",
+            HTML("<strong>same speaker and tone</strong>."),
+            " Flags a contour smoothly shifted too high ",
             "or low for its tone but still appearing normal for the speaker."
           ),
           tags$li(
             tags$em("Sample-level"), " (within token): rate of change, octave bounds, and carryover, ",
-            tags$strong("frame by frame"), ". Flags individual mis-tracked samples in an otherwise normal token."
+            HTML("<strong>frame by frame</strong>."),
+            " Flags individual mis-tracked samples in an otherwise normal token."
           )
         ),
         tags$p(style = "margin: 0 0 8px 0;",
           tags$code(style = "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;", "flagged_token = TRUE"),
-          " whenever any check fires. The token-level check needs at least 4 same-speaker-same-tone tokens."
+          " whenever any check fires. The token-level check needs at least 5 same-speaker-same-tone tokens, and is more reliable with more (repetitions, different items, etc.)."
         ),
         tags$strong("Detection methods:"),
         tags$ul(style = "margin-bottom: 8px; padding-left: 18px;",
@@ -49,9 +49,8 @@ inspect_ui <- function(input, output, session, dataset) {
         tags$ul(style = "margin-bottom: 0; padding-left: 18px;",
           tags$li(tags$strong("Extreme-value (z-score) = 3:"), " A standard convention for outlier detection (\u00b13 SD covers 99.7% of a normal distribution)."),
           tags$li(tags$strong("Rise = 1.263 ST, Fall = 1.714 ST per 10ms:"), " Based on the maximum rate of f0 change in human speech production (Sundberg, 1973). Changes exceeding these rates are physiologically implausible and likely tracking errors."),
-          tags$li(tags$strong("Token-level (modified z) = 3.5:"), " The cutoff recommended by Iglewicz & Hoaglin (1993) for the median/MAD modified z-score, the robust analogue of the \u00b13 SD rule. Requires at least 4 same-speaker-same-tone tokens.")
+          tags$li(tags$strong("Token-level (modified z) = 3.5:"), " The cutoff recommended by Iglewicz & Hoaglin (1993) for the median/MAD modified z-score, the robust analogue of the \u00b13 SD rule. Requires at least 5 same-speaker-same-tone tokens (more is more reliable).")
         )
-      )
     )
   })
 
@@ -168,8 +167,8 @@ inspect_ui <- function(input, output, session, dataset) {
     n_flagged_samples <- sum(result$flagged_jump, na.rm = TRUE)
 
     # Speaker x tone groups too small to run the level check (fixed
-    # minimum of 4 tokens; matches inspect_f0()'s default min_tokens).
-    LEVEL_MIN_TOKENS <- 4
+    # minimum of 5 tokens; matches inspect_f0()'s default min_tokens).
+    LEVEL_MIN_TOKENS <- 5
     small_grps <- token_level %>%
       group_by(.data[[speaker_var]], .data[[tone_var]]) %>%
       summarise(n = n(), .groups = "drop") %>%

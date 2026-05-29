@@ -27,10 +27,7 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
   output$summarise_guide <- renderUI({
     code_style <- "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;"
     tagList(
-      tags$div(
-        id = "summarise_guide",
-        style = "background-color: #f0faf7; border-left: 4px solid #78c2ad; padding: 10px 14px; margin-bottom: 12px; border-radius: 4px; font-size: 0.88rem; color: #555;",
-        tags$strong("Chao tone numeral guide:"),
+      guide_box("Chao tone numeral guide",
         tags$p(style = "margin-bottom: 8px;",
           "Chao tone numerals describe tone contours using a 5-level pitch scale (1 = lowest, 5 = highest). ",
           "For example, Mandarin T1 = ", tags$code(style = code_style, "55"),

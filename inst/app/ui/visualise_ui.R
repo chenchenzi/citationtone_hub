@@ -12,8 +12,7 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
   # Variable guide box on the right panel
   output$visualise_guide <- renderUI({
     tagList(
-      tags$div(style = "background-color: #f0faf7; border-left: 4px solid #78c2ad; padding: 10px 14px; margin-bottom: 12px; border-radius: 4px; font-size: 0.88rem; color: #555;",
-        tags$strong("Plotting guide:"),
+      guide_box("Plotting guide",
         tags$ul(style = "margin-bottom: 0; padding-left: 18px;",
           tags$li(tags$strong("Data source:"), " Use the uploaded (raw) dataset or the normalised dataset (available after using the Normalise tab)."),
           tags$li(tags$strong("X (time):"), " A time-related or index variable, e.g., normalised time points within a syllable."),

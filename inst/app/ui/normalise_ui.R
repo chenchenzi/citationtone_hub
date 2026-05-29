@@ -3,8 +3,7 @@ normalised_ui <- function(input, output, session, dataset, normalised_data) {
   # Guide text for the Normalise tab
   output$normalise_guide <- renderUI({
     tagList(
-      tags$div(style = "background-color: #f0faf7; border-left: 4px solid #78c2ad; padding: 10px 14px; margin-bottom: 12px; border-radius: 4px; font-size: 0.88rem; color: #555;",
-        tags$strong("Normalisation guide:"),
+      guide_box("Normalisation guide",
         tags$ul(style = "margin-bottom: 8px; padding-left: 18px;",
           tags$li(tags$strong("f0 (Hz):"), " The raw fundamental frequency column in Hertz."),
           tags$li(tags$strong("Speaker:"), " A speaker ID column for by-speaker normalisation."),

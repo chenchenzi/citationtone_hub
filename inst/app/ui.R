@@ -30,6 +30,39 @@ ui <- fluidPage(
       #plot_button, #show_code_button { display: block; }
       #save_plot_button { display: block; margin-top: 4px; width: fit-content; }
       #visualise_guide strong, #normalise_guide strong, #view_guide strong, #inspect_guide strong, #model_guide strong, #gca_guide strong, #gamm_guide strong, #summarise_guide strong { font-weight: 900; color: #3a3a3a; }
+      /* Foldable guide boxes (native <details>, open by default) */
+      details.guide-box {
+        background-color: #f0faf7; border-left: 4px solid #78c2ad;
+        padding: 8px 14px; margin-bottom: 12px; border-radius: 4px;
+        font-size: 0.88rem; color: #555;
+      }
+      details.guide-box > summary.guide-summary {
+        cursor: pointer; font-weight: 900; color: #3a3a3a;
+        list-style: none; outline: none; user-select: none;
+        display: flex; align-items: center; gap: 6px; padding: 2px 0;
+      }
+      details.guide-box > summary.guide-summary::-webkit-details-marker { display: none; }
+      details.guide-box > summary.guide-summary::before {
+        content: '▸'; display: inline-block; color: #78c2ad;
+        font-size: 0.9em; transition: transform 0.15s ease;
+      }
+      details.guide-box[open] > summary.guide-summary::before { transform: rotate(90deg); }
+      details.guide-box > .guide-body { margin-top: 8px; }
+      details.guide-box > .guide-body > *:last-child { margin-bottom: 0; }
+      /* Keyboard-shortcut reference: keys on the left, description on the right */
+      .kbd-ref { padding: 6px 0 2px 2px; font-size: 0.84rem; color: #555; }
+      .kbd-ref .kbd-set-title {
+        font-weight: 700; color: #2c5f4f; font-size: 0.82rem;
+        margin: 9px 0 3px 0;
+      }
+      .kbd-ref .kbd-set-title:first-child { margin-top: 0; }
+      .kbd-ref .kbd-row {
+        display: grid; grid-template-columns: 150px 1fr;
+        gap: 10px; align-items: baseline; padding: 2px 0;
+      }
+      .kbd-ref .kbd-keys { white-space: nowrap; }
+      .kbd-ref .kbd-keys .sep { color: #b0b0b0; margin: 0 3px; }
+      .kbd-ref .kbd-desc { color: #555; line-height: 1.45; }
       .plot-spinner-wrap { position: relative; }
       .plot-spinner-wrap .recalculating { opacity: 0.3 !important; }
       .plot-spinner-wrap .recalculating ~ .plot-spinner,

@@ -271,9 +271,7 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   output$fp_extraction_guide <- renderUI({
     box_style <- "background-color: #f0faf7; border-left: 4px solid #78c2ad; padding: 10px 14px; margin-bottom: 12px; border-radius: 4px; font-size: 0.88rem; color: #555;"
     tagList(
-      tags$div(
-        style = box_style,
-        HTML("<strong>F0 Extraction</strong>"),
+      guide_box("F0 Extraction",
         tags$p(style = "margin: 6px 0 0 0;",
           HTML("Choose how to obtain f0 contours from your audio files, then click <strong>Run extraction</strong>.")),
         tags$ul(style = "margin-bottom: 0; padding-left: 18px;",

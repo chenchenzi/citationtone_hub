@@ -9,9 +9,7 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
     code_style <- "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;"
 
     tagList(
-      tags$div(
-        style = "background-color: #f0faf7; border-left: 4px solid #78c2ad; padding: 10px 14px; margin-bottom: 12px; border-radius: 4px; font-size: 0.88rem; color: #555;",
-        tags$strong("Growth Curve Analysis guide:"),
+      guide_box("Growth Curve Analysis guide",
         tags$ul(style = "margin-bottom: 8px; padding-left: 18px;",
           tags$li(tags$strong("Token ID:"), " A unique identifier for each token/syllable."),
           tags$li(tags$strong("f0:"), " An f0-related variable. Normalised f0 (e.g. semitone or z-score) is recommended for more interpretable and comparable coefficients across speakers.",

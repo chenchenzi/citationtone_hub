@@ -39,6 +39,22 @@ var_patterns <- list(
 )
 
 # ---------------------------------------------------------------------------
+# Foldable guide box. Wraps a tab's explanatory guide in a native
+# <details>/<summary> element so the (often long) guide can be collapsed to
+# free up room for plots and output. Open by default. The visual styling
+# lives in ui.R (selector `details.guide-box`).
+#   guide_box("Inspect guide", tags$ul(...), tags$p(...))
+# ---------------------------------------------------------------------------
+guide_box <- function(title, ..., open = TRUE) {
+  tags$details(
+    class = "guide-box",
+    open  = if (isTRUE(open)) NA else NULL,
+    tags$summary(class = "guide-summary", title),
+    tags$div(class = "guide-body", ...)
+  )
+}
+
+# ---------------------------------------------------------------------------
 # Make the package's analytical functions (normalise_f0, fit_gca, ...)
 # reachable from the running app. Three launch paths to support:
 #
