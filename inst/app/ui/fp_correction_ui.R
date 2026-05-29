@@ -357,8 +357,10 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           sep = "<br>"))),
       verbatimTextOutput("fp_corr_progress", placeholder = TRUE),
       div(style = "display:flex; gap:4px; align-items:center; margin-top: 6px;",
-        actionButton("fp_corr_prev", HTML("&#9664;"), title = "Previous token"),
-        actionButton("fp_corr_next", HTML("&#9654;"), title = "Next token")
+        actionButton("fp_corr_prev", HTML("&#9664;"),
+                     title = "Previous token  (,)"),
+        actionButton("fp_corr_next", HTML("&#9654;"),
+                     title = "Next token  (.)")
       ),
 
       # ---- CSV-based filters (collapsible, optional) ----
@@ -1340,6 +1342,37 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
             if (!fp || fp.tabs_fp !== 'F0 Correction') return;
             var nav = document.querySelector('.navbar .nav-link.active');
             if (!nav || nav.textContent.trim() !== 'F0 Processing') return;
+
+            // Action-button shortcuts (don't need the plot to exist).
+            // Delete / Backspace → mark selected frames as NA.
+            if ((e.key === 'Delete' || e.key === 'Backspace') &&
+                !e.metaKey && !e.ctrlKey && !e.altKey) {
+              var delBtn = document.getElementById('fp_corr_delete');
+              if (delBtn) { e.preventDefault(); delBtn.click(); }
+              return;
+            }
+            // Cmd+Z (Mac) or Ctrl+Z (Win/Linux) → undo last edit.
+            if ((e.key === 'z' || e.key === 'Z') &&
+                (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey) {
+              var undoBtn = document.getElementById('fp_corr_undo');
+              if (undoBtn) { e.preventDefault(); undoBtn.click(); }
+              return;
+            }
+            // , / .  → previous / next token (filtered list).
+            // Same convention Praat's editor uses; works on every
+            // keyboard layout (US, AZERTY, QWERTZ, etc.) without
+            // modifiers.
+            if (e.key === ',' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+              var prevBtn = document.getElementById('fp_corr_prev');
+              if (prevBtn) { e.preventDefault(); prevBtn.click(); }
+              return;
+            }
+            if (e.key === '.' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+              var nextBtn = document.getElementById('fp_corr_next');
+              if (nextBtn) { e.preventDefault(); nextBtn.click(); }
+              return;
+            }
+
             var gd = document.getElementById('fp_corr_plot');
             if (!gd || !gd._fullLayout || !gd._fullLayout.xaxis) return;
             var xa = gd._fullLayout.xaxis;
@@ -1403,6 +1436,30 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         tags$p(style = "margin: 6px 0 0 0;",
           tags$strong("Undo last edit"), " reverts the most recent change. ",
           "When you're done, download the corrected f0 from the sidebar."
+        ),
+        # Collapsible keyboard reference
+        tags$details(style = "margin-top: 8px;",
+          tags$summary(style = "cursor: pointer; color: #2c5f4f; font-weight: 600; font-size: 0.88rem;",
+                       icon("keyboard"), " Keyboard shortcuts"),
+          tags$div(style = "padding: 6px 0 0 18px; font-size: 0.84rem; color: #555;",
+            tags$div(style = "margin-bottom: 4px;",
+              tags$strong("Edits"), " — ",
+              tags$kbd("Delete"), " / ", tags$kbd("Backspace"),
+              " mark selected frames as NA; ",
+              tags$kbd("Cmd"), "+", tags$kbd("Z"), " or ",
+              tags$kbd("Ctrl"), "+", tags$kbd("Z"), " undo the last edit."),
+            tags$div(style = "margin-bottom: 4px;",
+              tags$strong("Navigation"), " — ",
+              tags$kbd(","), " previous token, ",
+              tags$kbd("."), " next token ",
+              tags$span(style = "color: #888; font-size: 0.85em;",
+                       "(same convention as Praat's editor)"), "."),
+            tags$div(
+              tags$strong("Plot zoom / pan"), " — ",
+              tags$kbd("+"), " / ", tags$kbd("-"), " zoom, ",
+              tags$kbd("←"), " / ", tags$kbd("→"), " pan, ",
+              tags$kbd("0"), " reset.")
+          )
         )
       ),
 
@@ -1741,11 +1798,19 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       tags$h4("Audio"),
       uiOutput("fp_corr_audio"),
       tags$h4(style = "margin-top: 14px;", "Waveform + f0"),
-      tags$p(style = "color: #888; font-size: 0.82rem; margin: 0 0 6px 0;",
-        "Zoom with the mouse wheel or use ",
-        tags$kbd("+"), " / ", tags$kbd("-"), " (zoom), ",
-        tags$kbd("←"), " / ", tags$kbd("→"), " (pan), ",
-        tags$kbd("0"), " (reset). Only the time axis zooms; f0 / waveform stay fixed."),
+      tags$p(style = "color: #888; font-size: 0.82rem; margin: 0 0 6px 0; line-height: 1.7;",
+        tags$strong("Plot:"), " mouse wheel or ",
+        tags$kbd("+"), " / ", tags$kbd("-"), " to zoom, ",
+        tags$kbd("←"), " / ", tags$kbd("→"), " to pan, ",
+        tags$kbd("0"), " to reset (time axis only).",
+        tags$br(),
+        tags$strong("Edits:"), " ",
+        tags$kbd("Delete"), " (or ", tags$kbd("Backspace"),
+        ") mark selected frames as NA, ",
+        tags$kbd("Cmd"), "+", tags$kbd("Z"),
+        " / ", tags$kbd("Ctrl"), "+", tags$kbd("Z"),
+        " undo the last edit, ",
+        tags$kbd(","), " / ", tags$kbd("."), " previous / next token."),
       uiOutput("fp_corr_edit_status"),
       plotly::plotlyOutput("fp_corr_plot", height = "560px"),
       tags$h4(style = "margin-top: 16px;", "Edit log"),
