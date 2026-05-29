@@ -71,12 +71,17 @@ consecutive f0 samples and the Hz ratio between them.
 \item Rescale the observed rate of change to a semitones-per-10-ms
 equivalent using \code{time_unit}, so the result can be compared to a
 fixed threshold (Sundberg 1973).
-\item Flag the \emph{landing} sample (i.e., the sample immediately after the
-jump) for octave jumps, threshold-violating rises, and
-threshold-violating falls.
-\item Extend each flagged sample forward as a chain of carryover frames
-that stay within \code{carryover_mult * threshold} semitones of the
-error sample's f0 (Steffman & Cole 2022).
+\item When a jump is detected between samples \emph{i} and \emph{i + 1}, flag
+whichever side is FARTHER from the token's median f0 (in
+semitones). The Steffman & Cole (2022) convention always flags
+the landing sample, which mis-identifies the artefact when it
+sits at the start of a token (e.g., an octave doubling on the
+first frame). The median-distance rule reduces to landing-side
+flagging when the landing sample is the outlier and to
+source-side flagging when the source sample is the outlier.
+\item Walk both forward and backward from each flagged sample as a
+chain of carryover frames that stay within \code{carryover_mult * threshold} semitones of the artefact's f0 (adapted from
+Steffman & Cole 2022).
 }
 }
 

@@ -61,15 +61,31 @@ test_that("flag_pitch_jumps detects an obvious octave doubling", {
 })
 
 test_that("flag_pitch_jumps respects rise/fall thresholds", {
-  # ~10 ms steps; a +5 ST jump in one step well exceeds rise_threshold=1.263
-  hz <- 150 * 2^(c(0, 0, 0.5, 0.5, 0.5))   # frame 3 jumps +6 ST
+  # A single-sample upward spike on an otherwise flat 150 Hz contour
+  # (10 ms steps). The +6 ST step into frame 3 and the -6 ST step out of
+  # it both far exceed the rise/fall thresholds, and frame 3 is the lone
+  # outlier (farthest from the token median), so it is the sample flagged.
+  spike <- c(150, 150, 150 * 2^0.5, 150, 150)   # frame 3 is +6 ST, then back
   df <- data.frame(
     token = rep("t1", 5),
     time  = seq(0, 0.04, by = 0.01),
-    f0    = hz
+    f0    = spike
   )
   out <- flag_pitch_jumps(df, time_unit = "s", carryover_mult = 0)
   expect_true(out$flagged_jump[3])
+  expect_false(out$flagged_jump[2])
+  expect_false(out$flagged_jump[4])
+
+  # A gentle ramp of +1 ST per 10 ms stays under rise_threshold = 1.263
+  # and must not be flagged anywhere.
+  ramp <- 150 * 2^((0:4) / 12)
+  df2 <- data.frame(
+    token = rep("t1", 5),
+    time  = seq(0, 0.04, by = 0.01),
+    f0    = ramp
+  )
+  out2 <- flag_pitch_jumps(df2, time_unit = "s", carryover_mult = 0)
+  expect_false(any(out2$flagged_jump))
 })
 
 test_that("flag_pitch_jumps picks the side farther from token median", {
