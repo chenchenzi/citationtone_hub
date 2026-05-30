@@ -1133,7 +1133,7 @@ ui <- fluidPage(
                             tags$p(class = "attrib", "Hyman (2006), ", tags$em("Word-prosodic typology"), ", ", tags$em("Phonology"), ", 23(2), p. 229.")
                           ),
                           tags$div(class = "tone-quote",
-                            tags$p("Tone is the use of pitch variations to convey lexical or grammatical meaning."),
+                            tags$p("A language is a tone language if the pitch of a word can change the meaning of the word."),
                             tags$p(class = "attrib", "Yip (2002), ", tags$em("Tone"), ", p. 1.")
                           )
                         ),
