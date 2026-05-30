@@ -1810,12 +1810,13 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       ),
 
       # ---- Link to the full waveform-reading guide (Data Collection tab) ----
-      tags$div(
-        style = "background:#fffaf0; border:1px solid #f0e2bf; border-radius:8px; padding:12px 18px; margin-bottom:12px;",
-        tags$div(style = "font-weight:700; color:#6b4d10; font-size:0.95rem;",
-          icon("wave-square"), " Not sure if a value is a tracking error or real?"),
-        tags$p(style = "margin:6px 0 10px 0; color:#5a4d2c; font-size:0.88rem;",
-          "The waveform is the ground truth. A full illustrated guide covering the ",
+      tags$details(class = "resume-wrap",
+        tags$summary(icon("wave-square"),
+          " Not sure if an f0 value is a tracking error or real?",
+          tags$span(style = "color: #b08a35; font-weight: 400; font-size: 0.82rem;",
+                    " (click to expand)")),
+        tags$p(style = "margin:10px 0 10px 0; color:#5a4d2c; font-size:0.88rem;",
+          "The waveform is the ground truth. An illustrated guide covering the ",
           "glottal period, octave errors, voice-quality patterns, and how to tell a ",
           "genuine tracking error (correct it) from real-but-messy phonation ",
           "(don't over-clean) lives under ", tags$strong("Data Collection"), "."),
@@ -1823,7 +1824,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           style = "background:#78c2ad; color:#fff; font-weight:600; border:none;",
           onclick = "Shiny.setInputValue('about_nav_target', 'Data Collection|f0 artefacts', {priority:'event'}); return false;",
           icon("arrow-right"),
-          " How to identify and correct f0 artefacts")
+          " Open the guide")
       ),
 
       tags$h4("Audio"),

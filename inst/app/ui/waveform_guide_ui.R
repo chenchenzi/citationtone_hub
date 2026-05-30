@@ -10,6 +10,13 @@
 
 waveform_guide_ui <- function(input, output, session) {
 
+  # Numbered green section heading (the six main sections are peers).
+  sec <- function(n, title) {
+    tags$div(class = "wf-sec",
+      tags$span(class = "wf-num", n),
+      tags$span(class = "wf-sec-t", title))
+  }
+
   # Card in the voice-quality gallery.
   vq_card <- function(img, name, waveform, tracker, fix) {
     tags$div(class = "vq-card",
@@ -26,7 +33,12 @@ waveform_guide_ui <- function(input, output, session) {
 
   output$waveform_guide_content <- renderUI({
     tagList(
-      h2("How to identify and correct f0 artefacts: a guide to reading the waveform"),
+      h2("How to identify and correct f0 artefacts: a guide to reading the waveform",
+         class = "wf-title"),
+      tags$p(class = "wf-lead",
+        "A pitch tracker turns sound into an f0 contour automatically, but it makes ",
+        "mistakes. This guide shows how to read the waveform underneath the contour so ",
+        "you can tell a real error from real-but-messy speech, and decide what to do."),
 
       tags$style(HTML("
         .wf-fig {
@@ -40,9 +52,32 @@ waveform_guide_ui <- function(input, output, session) {
           font-size: 0.78rem; color: #777; margin: 0 0 14px 0;
           font-style: italic; max-width: 80ch;
         }
-        .wf-h5 {
-          color: #2c5f4f; font-weight: 700; font-size: 1.0rem;
-          margin: 22px 0 4px 0;
+        .wf-title { margin-bottom: 6px; }
+        .wf-lead {
+          margin: 0 0 8px 0; font-size: 0.95rem; color: #555;
+          max-width: 82ch; line-height: 1.5;
+        }
+        /* the six main sections are peers: numbered, green, top rule */
+        .wf-sec {
+          display: flex; align-items: center; gap: 11px;
+          margin: 34px 0 6px 0; padding-top: 14px;
+          border-top: 1px solid #e6dec3;
+        }
+        .wf-sec .wf-num {
+          flex: none; width: 27px; height: 27px;
+          border: 2px solid #78c2ad; border-radius: 50%;
+          color: #2c8a63; font-weight: 700; font-size: 0.92rem;
+          text-align: center; line-height: 23px;
+        }
+        .wf-sec .wf-sec-t {
+          color: #2c5f4f; font-weight: 700; font-size: 1.18rem;
+        }
+        /* appendix sections are subordinate: muted, smaller, no number */
+        .wf-appx {
+          color: #6b7a73; font-weight: 700; font-size: 0.86rem;
+          text-transform: uppercase; letter-spacing: 0.05em;
+          margin: 30px 0 4px 0; padding-top: 10px;
+          border-top: 1px dashed #e6dec3;
         }
         .wf-p { margin: 2px 0 0 0; font-size: 0.9rem; color: #444; max-width: 78ch; }
         .vq-gallery {
@@ -86,8 +121,8 @@ waveform_guide_ui <- function(input, output, session) {
         .wf-real { border: 1px solid #d6e7df; border-radius: 8px; background: #fbfdfc; padding: 12px 16px; margin-top: 12px; }
       ")),
 
-      # ===================== Why correct f0 at all =====================
-      h4("Why correct f0?"),
+      # ===================== 1. Why correct f0 at all =====================
+      sec("1", "Why correct f0?"),
       tags$p(class = "wf-p",
         "f0 is extracted automatically by a pitch tracker, and no tracker is perfect. ",
         "It can report the wrong octave, get confused by noise or by a change in ",
@@ -96,9 +131,8 @@ waveform_guide_ui <- function(input, output, session) {
         "The waveform itself is the ground truth: when a tracked value looks wrong, ",
         "read the glottal pulses underneath it before deciding what to do."),
 
-      # ===================== Two kinds of correction =====================
-      tags$hr(),
-      h4("Two kinds of f0 “correction”"),
+      # ===================== 2. Two kinds of correction =====================
+      sec("2", "Two kinds of f0 “correction”"),
       tags$p(class = "wf-p",
         "“Correction” means two quite different things. They look similar on screen ",
         "but call for opposite habits, and confusing them is the fastest way to ",
@@ -138,9 +172,8 @@ waveform_guide_ui <- function(input, output, session) {
         " to look like, that is analysis (Case 2): make it a documented, consistent rule, ",
         "not a per-token clean-up."),
 
-      # ===================== 1. The glottal period =====================
-      tags$hr(),
-      tags$div(class = "wf-h5", "1. The core: the glottal period (f0 = 1 / T)"),
+      # ===================== 3. The glottal period =====================
+      sec("3", "The core: the glottal period (f0 = 1 / T)"),
       tags$p(class = "wf-p",
         "Voiced speech is a train of repeating glottal pulses. The time between two ",
         "successive pulses is the period ", tags$strong("T"),
@@ -155,8 +188,8 @@ waveform_guide_ui <- function(input, output, session) {
         "A steady vowel from the sample set (~198 Hz). Orange markers sit one glottal ",
         "pulse apart; the spacing between them is T."),
 
-      # ===================== 2. Octave errors =====================
-      tags$div(class = "wf-h5", "2. The commonest tracking error: octaves"),
+      # ===================== 4. Octave errors =====================
+      sec("4", "The commonest tracking error: octaves"),
       tags$p(class = "wf-p",
         "The single most common mistake is reporting the pitch an octave off, and it ",
         "comes down to ", tags$em("which"), " distance the tracker measures between pulses. ",
@@ -186,8 +219,8 @@ waveform_guide_ui <- function(input, output, session) {
         " in the sidebar usually include the correct octave; clicking one is often ",
         "quicker than halving or doubling by hand."),
 
-      # ===================== 3. Voice-quality-related errors =====================
-      tags$div(class = "wf-h5", "3. Voice-quality-related errors: creak and utterance edges"),
+      # ===================== 5. Voice-quality-related errors =====================
+      sec("5", "Voice-quality-related errors: creak and utterance edges"),
       tags$p(class = "wf-p",
         "Trackers are most fragile where voice quality departs from clean modal voicing, ",
         "and that happens most reliably at the ", tags$strong("edges of an utterance"),
@@ -243,8 +276,8 @@ waveform_guide_ui <- function(input, output, session) {
           "interpolate, consistently) a real but messy edge if its timing falls inside ",
           "your analysis window. Whatever you choose, do it the same way for every token.")),
 
-      # ===================== 4. Correct-but-awkward patterns =====================
-      tags$div(class = "wf-h5", "4. Awkward f0 patterns that are (arguably) correct"),
+      # ===================== 6. Correct-but-awkward patterns =====================
+      sec("6", "Awkward f0 patterns that are (arguably) correct"),
       tags$p(class = "wf-p",
         "Sometimes the tracker is right and the f0 is still hard to deal with. Creak can ",
         "be tracked perfectly accurately yet you may not want it in a model of tonal ",
@@ -283,7 +316,7 @@ waveform_guide_ui <- function(input, output, session) {
         "variation. Decide once, document it, and apply it to every token."),
 
       # ===================== Listen =====================
-      tags$div(class = "wf-h5", "Hear the difference"),
+      tags$div(class = "wf-appx", "Hear the difference"),
       tags$p(class = "wf-p",
         "Training your ear helps you trust your eyes. These open teaching collections let ",
         "you listen to each phonation type (external sites):"),
@@ -298,7 +331,7 @@ waveform_guide_ui <- function(input, output, session) {
                 ": recordings from hundreds of languages, many with phonation contrasts.")),
 
       # ===================== References =====================
-      tags$div(class = "wf-h5", "Where this comes from"),
+      tags$div(class = "wf-appx", "Where this comes from"),
       tags$ul(class = "wf-refs",
         tags$li("Laver, J. (1980). ", tags$em("The Phonetic Description of Voice Quality"),
                 ". Cambridge University Press. ",
