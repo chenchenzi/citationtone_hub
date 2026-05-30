@@ -22,7 +22,7 @@ filename_guide_ui <- function(input, output, session) {
       tags$style(HTML("
         .fn-page { max-width: 720px; margin: 0 auto; }
         .fn-toc {
-          position: fixed; top: 138px; left: 16px; width: 168px;
+          position: fixed; top: 138px; left: 32px; width: 168px;
           font-size: 0.82rem; line-height: 1.5;
           border-left: 2px solid #e6dec3; padding-left: 12px;
           max-height: calc(100vh - 170px); overflow-y: auto;
@@ -33,7 +33,7 @@ filename_guide_ui <- function(input, output, session) {
         }
         .fn-toc a { display: block; color: #5a6b63; text-decoration: none; padding: 3px 0; }
         .fn-toc a:hover { color: #2c8a63; }
-        @media (max-width: 1100px) { .fn-toc { display: none; } }
+        @media (max-width: 1150px) { .fn-toc { display: none; } }
         .fn-title { margin-bottom: 14px; }
         .fn-lead { margin: 0 0 22px 0; font-size: 0.95rem; color: #555; line-height: 1.5; }
         .fn-sec {

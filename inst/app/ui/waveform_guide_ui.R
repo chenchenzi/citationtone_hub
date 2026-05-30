@@ -59,7 +59,7 @@ waveform_guide_ui <- function(input, output, session) {
         .wf-page { max-width: 720px; margin: 0 auto; }
         /* floating table of contents, pinned in the left margin */
         .wf-toc {
-          position: fixed; top: 138px; left: 16px; width: 168px;
+          position: fixed; top: 138px; left: 32px; width: 168px;
           font-size: 0.82rem; line-height: 1.5;
           border-left: 2px solid #e6dec3; padding-left: 12px;
           max-height: calc(100vh - 170px); overflow-y: auto;
@@ -72,7 +72,7 @@ waveform_guide_ui <- function(input, output, session) {
           display: block; color: #5a6b63; text-decoration: none; padding: 3px 0;
         }
         .wf-toc a:hover { color: #2c8a63; }
-        @media (max-width: 1100px) { .wf-toc { display: none; } }
+        @media (max-width: 1150px) { .wf-toc { display: none; } }
         .wf-fig {
           width: 100%; height: auto; display: block;
           margin: 8px 0 4px 0;
@@ -109,6 +109,17 @@ waveform_guide_ui <- function(input, output, session) {
         .wf-sec.case2 .wf-num { background: #d8902a; border-color: #d8902a; color: #fff; }
         /* sub-topic label within a section */
         .wf-sub { color: #2c5f4f; font-weight: 700; font-size: 1.0rem; margin: 18px 0 2px 0; }
+        /* a typeset equation (serif, centred, real fraction bar) */
+        .wf-eq {
+          text-align: center; margin: 14px 0; color: #2c5f4f;
+          font-family: Georgia, 'Times New Roman', serif; font-size: 1.3rem;
+        }
+        .wf-eq .frac {
+          display: inline-flex; flex-direction: column; vertical-align: middle;
+          text-align: center; line-height: 1.05;
+        }
+        .wf-eq .frac .num { border-bottom: 1.5px solid currentColor; padding: 0 7px; }
+        .wf-eq .frac .den { padding: 2px 7px 0 7px; }
         /* appendix sections are subordinate: muted, smaller, no number */
         .wf-appx {
           color: #6b7a73; font-weight: 700; font-size: 0.86rem;
@@ -216,12 +227,15 @@ waveform_guide_ui <- function(input, output, session) {
         "not a per-token clean-up."),
 
       # ===================== 3. The glottal period =====================
-      sec("3", "The core: the glottal period (f0 = 1 / T)"),
+      sec("3", "The core: the glottal period"),
       tags$p(class = "wf-p",
         "Voiced speech is a train of repeating glottal pulses. The time between two ",
-        "successive pulses is the period ", tags$strong("T"),
-        "; the pitch is its reciprocal, ", tags$strong("f0 = 1 / T"),
-        ". So a 5 ms period is about 200 Hz, a 10 ms period about 100 Hz. Counting ",
+        "successive pulses is the period ", HTML("<i>T</i>"),
+        ", and the pitch is its reciprocal:"),
+      tags$div(class = "wf-eq",
+        HTML("<i>f</i><sub>0</sub> &nbsp;=&nbsp; <span class='frac'><span class='num'>1</span><span class='den'><i>T</i></span></span>")),
+      tags$p(class = "wf-p",
+        "So a 5 ms period is about 200 Hz, and a 10 ms period about 100 Hz. Counting ",
         "pulses by eye is the most reliable check on any tracked value, and every ",
         "section below comes back to it."),
       tags$img(src = "waveforms/modal_period.png",
@@ -278,8 +292,8 @@ waveform_guide_ui <- function(input, output, session) {
       # ===================== 5. CASE 1: genuine tracking errors =====================
       sec("5", "Case 1: genuine tracking errors — fix them", "case1"),
       tags$p(class = "wf-p",
-        "Here the voice has a clear period but the tracker reported the wrong number. ",
-        "The waveform shows what the f0 ", tags$em("should"), " have been, so fixing it ",
+        "When the voice has a clear period but the tracker reports the wrong number, ",
+        "the waveform shows what the f0 ", tags$em("should"), " have been, so fixing it ",
         "recovers the true value. Correct these with confidence."),
 
       tags$div(class = "wf-sub", "Octave errors (the commonest)"),
@@ -325,16 +339,18 @@ waveform_guide_ui <- function(input, output, session) {
       # ===================== 6. CASE 2: correct but you may not want it =====================
       sec("6", "Case 2: correctly tracked, but you may not want it — an analytic choice", "case2"),
       tags$p(class = "wf-p",
-        "Here the tracker is right and the f0 is still hard to deal with. The folds really ",
-        "are producing that pattern, so it is not a bug to fix. How you handle it depends ",
-        "on the ", tags$strong("type of pattern"), ", your ",
-        tags$strong("analytical framework"), ", and your ",
-        tags$strong("statistical method"), ". The safe move is a consistent rule, not ",
-        "per-token editing."),
+        "In some cases, the tracker is right and the f0 is still hard to deal with. The ",
+        "folds really are producing that pattern, so it is not a bug to fix. How you handle ",
+        "it depends on the ", HTML("<strong>type of pattern</strong>,"), " your ",
+        HTML("<strong>analytical framework</strong>,"), " and your ",
+        HTML("<strong>statistical method</strong>."),
+        " For instance, a GAMM with by-token smooths can absorb a good deal of this ",
+        "variation, whereas a low-order polynomial fit may have its overall shape distorted ",
+        "by it. The safe move is a consistent rule, not per-token editing."),
 
       tags$div(class = "wf-real",
         tags$div(style = "font-weight:700; color:#2c5f4f; margin-bottom:4px;",
-          "Real speech: a creaky utterance edge (a Case 1 error and a Case 2 choice in one)"),
+          "Real speech, Example 1: a creaky utterance edge (a Case 1 error and a Case 2 choice in one)"),
         tags$p(class = "wf-p",
           "A real token from my 2025 Phonetica paper; voicing tails off into creak at the offset. The ",
           "tracker gets it wrong in a revealing way: it locks onto the formant ringing ",
@@ -367,7 +383,7 @@ waveform_guide_ui <- function(input, output, session) {
 
       tags$div(class = "wf-real",
         tags$div(style = "font-weight:700; color:#2c5f4f; margin-bottom:4px;",
-          "Real speech: a diplophonic voice with two defensible pitches"),
+          "Real speech, Example 2: a diplophonic voice with two defensible pitches"),
         tags$p(class = "wf-p",
           "In this token the voice is steady and clearly periodic, yet the glottal pulses ",
           "alternate ", tags$strong("strong and weak"), ". Zooming in shows why two pitches ",
