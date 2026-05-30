@@ -15,6 +15,7 @@ waveform_guide_ui <- function(input, output, session) {
   # two catalogue sections echo the Case 1 / Case 2 cards.
   sec <- function(n, title, cls = NULL) {
     tags$div(class = paste(c("wf-sec", cls), collapse = " "),
+      id = paste0("wf-s", n),
       tags$span(class = "wf-num", n),
       tags$span(class = "wf-sec-t", title))
   }
@@ -35,6 +36,17 @@ waveform_guide_ui <- function(input, output, session) {
 
   output$waveform_guide_content <- renderUI({
     tagList(
+      tags$nav(class = "wf-toc",
+        tags$div(class = "wf-toc-h", "On this page"),
+        tags$a(href = "#wf-s1", "1. Why correct f0?"),
+        tags$a(href = "#wf-s2", "2. Two kinds of correction"),
+        tags$a(href = "#wf-s3", "3. The glottal period"),
+        tags$a(href = "#wf-s4", "4. Voice qualities"),
+        tags$a(href = "#wf-s5", "5. Case 1: tracking errors"),
+        tags$a(href = "#wf-s6", "6. Case 2: analytic choice"),
+        tags$a(href = "#wf-listen", "Hear & see"),
+        tags$a(href = "#wf-refs", "References")),
+      tags$div(class = "wf-page",
       h2("How to identify and correct f0 artefacts: a guide to reading the waveform",
          class = "wf-title"),
       tags$p(class = "wf-lead",
@@ -43,27 +55,45 @@ waveform_guide_ui <- function(input, output, session) {
         "you can tell a genuine error from real-but-messy speech and decide what to do."),
 
       tags$style(HTML("
+        /* one centred reading column: title, text and figures share its width */
+        .wf-page { max-width: 720px; margin: 0 auto; }
+        /* floating table of contents, pinned in the left margin */
+        .wf-toc {
+          position: fixed; top: 138px; left: 16px; width: 168px;
+          font-size: 0.82rem; line-height: 1.5;
+          border-left: 2px solid #e6dec3; padding-left: 12px;
+          max-height: calc(100vh - 170px); overflow-y: auto;
+        }
+        .wf-toc-h {
+          font-weight: 700; color: #2c5f4f; font-size: 0.7rem;
+          text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px;
+        }
+        .wf-toc a {
+          display: block; color: #5a6b63; text-decoration: none; padding: 3px 0;
+        }
+        .wf-toc a:hover { color: #2c8a63; }
+        @media (max-width: 1100px) { .wf-toc { display: none; } }
         .wf-fig {
           width: 100%; height: auto; display: block;
           margin: 8px 0 4px 0;
           border: 1px solid #e6dec3; border-radius: 6px;
           background: #ffffff;
         }
-        .wf-fig.narrow { max-width: 720px; }
+        .wf-fig.narrow { max-width: 560px; }
         .wf-cap {
           font-size: 0.78rem; color: #777; margin: 0 0 14px 0;
-          font-style: italic; max-width: 80ch;
+          font-style: italic;
         }
         .wf-title { margin-bottom: 14px; }
         .wf-lead {
           margin: 0 0 22px 0; font-size: 0.95rem; color: #555;
-          max-width: 82ch; line-height: 1.5;
+          line-height: 1.5;
         }
         /* the six main sections are peers: numbered, green, top rule */
         .wf-sec {
           display: flex; align-items: center; gap: 11px;
           margin: 34px 0 6px 0; padding-top: 14px;
-          border-top: 1px solid #e6dec3;
+          border-top: 1px solid #e6dec3; scroll-margin-top: 80px;
         }
         .wf-sec .wf-num {
           flex: none; width: 27px; height: 27px;
@@ -84,9 +114,9 @@ waveform_guide_ui <- function(input, output, session) {
           color: #6b7a73; font-weight: 700; font-size: 0.86rem;
           text-transform: uppercase; letter-spacing: 0.05em;
           margin: 30px 0 4px 0; padding-top: 10px;
-          border-top: 1px dashed #e6dec3;
+          border-top: 1px dashed #e6dec3; scroll-margin-top: 80px;
         }
-        .wf-p { margin: 2px 0 0 0; font-size: 0.9rem; color: #444; max-width: 78ch; }
+        .wf-p { margin: 2px 0 0 0; font-size: 0.9rem; color: #444; }
         .vq-gallery {
           display: flex; gap: 12px; margin-top: 6px;
           overflow-x: auto; padding: 4px 2px 12px 2px;
@@ -115,7 +145,7 @@ waveform_guide_ui <- function(input, output, session) {
           text-transform: uppercase; letter-spacing: 0.02em;
         }
         .vq-fix .vq-lab { color: #2c5f4f; }
-        .wf-refs { font-size: 0.8rem; color: #555; line-height: 1.5; max-width: 90ch; }
+        .wf-refs { font-size: 0.8rem; color: #555; line-height: 1.5; }
         .wf-refs li { margin-bottom: 6px; }
         /* two-cases callout */
         .tc-grid {
@@ -178,7 +208,7 @@ waveform_guide_ui <- function(input, output, session) {
         " where it is real and let the statistical model handle it: random effects, ",
         "by-token curves and smooths are designed to absorb this. Hand-cleaning each ",
         "token bakes your expectations into the data and biases what you later “find”."),
-      tags$div(style = "background:#eef1f6; border-left:4px solid #6b7aa0; padding:8px 14px; border-radius:4px; font-size:0.85rem; color:#3a4660; max-width: 80ch;",
+      tags$div(style = "background:#eef1f6; border-left:4px solid #6b7aa0; padding:10px 14px; border-radius:4px; font-size:0.85rem; color:#3a4660; margin-top: 18px;",
         tags$strong("Rule of thumb: "),
         "edit the contour only when the waveform proves the tracker was wrong (Case 1). ",
         "If you find yourself deciding what the curve ", tags$em("ought"),
@@ -266,7 +296,7 @@ waveform_guide_ui <- function(input, output, session) {
         "Same pulse train read three ways. Reading the true period T gives the correct ",
         "f0; reading half a period reports double (fix with ÷ 2); reading two periods ",
         "reports half (fix with × 2)."),
-      tags$ul(style = "margin: 4px 0 4px 0; padding-left: 18px; font-size: 0.9rem; color: #444; max-width: 78ch;",
+      tags$ul(style = "margin: 4px 0 4px 0; padding-left: 18px; font-size: 0.9rem; color: #444;",
         tags$li(tags$strong("Doubling"),
           " : the tracker locks onto a harmonic (a secondary peak inside each period) ",
           "and reports ", tags$strong("2 × f0"), ", so the contour jumps up an octave. ",
@@ -370,12 +400,12 @@ waveform_guide_ui <- function(input, output, session) {
         "token."),
 
       # ===================== Listen =====================
-      tags$div(class = "wf-appx", "Hear (and see) the difference"),
+      tags$div(class = "wf-appx", id = "wf-listen", "Hear (and see) the difference"),
       tags$p(class = "wf-p",
         "Training your ear helps you trust your eyes. These open teaching collections let ",
         "you listen to each phonation type, and it is worth opening the recordings in Praat ",
         "or Audacity to study their waveform patterns alongside the sound (external sites):"),
-      tags$ul(style = "margin: 4px 0 0 0; padding-left: 18px; font-size: 0.88rem; color: #444; max-width: 80ch;",
+      tags$ul(style = "margin: 4px 0 0 0; padding-left: 18px; font-size: 0.88rem; color: #444;",
         tags$li(tags$a(href = "https://www.phonetik.uni-muenchen.de/studium/skripten/languagedemos/Demos/laver.html",
                        target = "_blank", rel = "noopener",
                        "LMU Munich — Laver voice-quality demos"),
@@ -386,7 +416,7 @@ waveform_guide_ui <- function(input, output, session) {
                 ": recordings from hundreds of languages, many with phonation contrasts.")),
 
       # ===================== References =====================
-      tags$div(class = "wf-appx", "References"),
+      tags$div(class = "wf-appx", id = "wf-refs", "References"),
       tags$ul(class = "wf-refs",
         tags$li("Laver, J. (1980). ", tags$em("The Phonetic Description of Voice Quality"),
                 ". Cambridge University Press. ",
@@ -420,9 +450,10 @@ waveform_guide_ui <- function(input, output, session) {
         tags$li("Background on reading waveforms and periodicity: Ladefoged & Johnson, ",
                 tags$em("A Course in Phonetics"), "; Johnson, ",
                 tags$em("Acoustic and Auditory Phonetics"), ".")),
-      tags$p(style = "margin: 8px 0 0 0; font-size: 0.76rem; color: #999; max-width: 80ch;",
+      tags$p(style = "margin: 8px 0 0 0; font-size: 0.76rem; color: #999;",
         "The voice-quality gallery uses idealised schematic waveforms; the period, octave, ",
         "and real-recording figures are generated from recordings in my 2025 Phonetica paper.")
+      )
     )
   })
 }
