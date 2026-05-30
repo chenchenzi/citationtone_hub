@@ -1630,13 +1630,15 @@ ui <- fluidPage(
              ),
              tabPanel("Data Collection",
                       icon = icon("clipboard-check"),
-                      tabsetPanel(id = "tabs_collection",
-                        tabPanel("Filename",
-                                 uiOutput("filename_guide_content")),
-                        tabPanel("Checklist",
-                                 uiOutput("checklist_content")),
-                        tabPanel("f0 artefacts",
-                                 uiOutput("waveform_guide_content"))
+                      div(style = "padding: 4px 32px 0 32px;",
+                        tabsetPanel(id = "tabs_collection",
+                          tabPanel("Filename",
+                                   uiOutput("filename_guide_content")),
+                          tabPanel("Checklist",
+                                   uiOutput("checklist_content")),
+                          tabPanel("Reading waveform",
+                                   uiOutput("waveform_guide_content"))
+                        )
                       )
              ),
   )

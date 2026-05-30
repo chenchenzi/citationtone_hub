@@ -1,18 +1,20 @@
 ###############################################
-# Data Collection -> "f0 artefacts" subtab
-# A guide to reading the waveform: why f0 correction is needed, the two
-# kinds of "correction" (genuine tracking error vs. analytic choice),
-# the glottal period, octave errors, voice-quality-related errors
-# (creaky utterance edges), and f0 patterns that are correctly tracked
-# but awkward to analyse. Lives under Data Collection so it has room;
-# F0 Correction links here.
+# Data Collection -> "Reading waveform" subtab
+# A guide to reading the waveform. Structure: (1) why correct f0, (2) the two
+# kinds of "correction" framework, (3) the glottal period, (4) a voice-quality
+# gallery, then the two kinds applied: (5) Case 1 = genuine tracking errors to
+# fix (octaves, spurious frames) and (6) Case 2 = correctly tracked but maybe
+# unwanted patterns that are an analytic choice (creaky utterance edges, diplophonia).
+# Lives under Data Collection so it has room; F0 Correction links here.
 ###############################################
 
 waveform_guide_ui <- function(input, output, session) {
 
   # Numbered green section heading (the six main sections are peers).
-  sec <- function(n, title) {
-    tags$div(class = "wf-sec",
+  # cls: optional modifier ("case1"/"case2") to tint the number badge so the
+  # two catalogue sections echo the Case 1 / Case 2 cards.
+  sec <- function(n, title, cls = NULL) {
+    tags$div(class = paste(c("wf-sec", cls), collapse = " "),
       tags$span(class = "wf-num", n),
       tags$span(class = "wf-sec-t", title))
   }
@@ -36,9 +38,9 @@ waveform_guide_ui <- function(input, output, session) {
       h2("How to identify and correct f0 artefacts: a guide to reading the waveform",
          class = "wf-title"),
       tags$p(class = "wf-lead",
-        "A pitch tracker turns sound into an f0 contour automatically, but it makes ",
-        "mistakes. This guide shows how to read the waveform underneath the contour so ",
-        "you can tell a real error from real-but-messy speech, and decide what to do."),
+        "Pitch trackers estimate an f0 contour from the audio automatically, and no tracker ",
+        "is infallible. This guide shows how to read the waveform underneath the contour, so ",
+        "you can tell a genuine error from real-but-messy speech and decide what to do."),
 
       tags$style(HTML("
         .wf-fig {
@@ -52,9 +54,9 @@ waveform_guide_ui <- function(input, output, session) {
           font-size: 0.78rem; color: #777; margin: 0 0 14px 0;
           font-style: italic; max-width: 80ch;
         }
-        .wf-title { margin-bottom: 6px; }
+        .wf-title { margin-bottom: 14px; }
         .wf-lead {
-          margin: 0 0 8px 0; font-size: 0.95rem; color: #555;
+          margin: 0 0 22px 0; font-size: 0.95rem; color: #555;
           max-width: 82ch; line-height: 1.5;
         }
         /* the six main sections are peers: numbered, green, top rule */
@@ -72,6 +74,11 @@ waveform_guide_ui <- function(input, output, session) {
         .wf-sec .wf-sec-t {
           color: #2c5f4f; font-weight: 700; font-size: 1.18rem;
         }
+        /* the two catalogue sections tint their badge to match the cards */
+        .wf-sec.case1 .wf-num { background: #2c8a63; border-color: #2c8a63; color: #fff; }
+        .wf-sec.case2 .wf-num { background: #d8902a; border-color: #d8902a; color: #fff; }
+        /* sub-topic label within a section */
+        .wf-sub { color: #2c5f4f; font-weight: 700; font-size: 1.0rem; margin: 18px 0 2px 0; }
         /* appendix sections are subordinate: muted, smaller, no number */
         .wf-appx {
           color: #6b7a73; font-weight: 700; font-size: 0.86rem;
@@ -81,11 +88,16 @@ waveform_guide_ui <- function(input, output, session) {
         }
         .wf-p { margin: 2px 0 0 0; font-size: 0.9rem; color: #444; max-width: 78ch; }
         .vq-gallery {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-          gap: 12px; margin-top: 10px;
+          display: flex; gap: 12px; margin-top: 6px;
+          overflow-x: auto; padding: 4px 2px 12px 2px;
+          scroll-snap-type: x proximity;
+          scrollbar-width: thin;
         }
+        .vq-gallery::-webkit-scrollbar { height: 8px; }
+        .vq-gallery::-webkit-scrollbar-thumb { background: #d8cfae; border-radius: 4px; }
+        .vq-scroll-hint { font-size: 0.74rem; color: #9a8a55; font-style: italic; margin: 6px 0 0 0; }
         .vq-card {
+          flex: 0 0 264px; scroll-snap-align: start;
           background: #ffffff; border: 1px solid #e6dec3;
           border-radius: 8px; padding: 12px 14px;
           font-size: 0.82rem; color: #444; line-height: 1.45;
@@ -108,8 +120,8 @@ waveform_guide_ui <- function(input, output, session) {
         /* two-cases callout */
         .tc-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-          gap: 14px; margin: 10px 0 4px 0;
+          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+          gap: 14px; margin: 10px 0 4px 0; max-width: 720px;
         }
         .tc-card { border-radius: 8px; padding: 14px 16px; font-size: 0.88rem; line-height: 1.5; }
         .tc-fix { background: #eef8f3; border: 1px solid #bfe3d4; border-left: 5px solid #2c8a63; }
@@ -134,7 +146,7 @@ waveform_guide_ui <- function(input, output, session) {
       # ===================== 2. Two kinds of correction =====================
       sec("2", "Two kinds of f0 “correction”"),
       tags$p(class = "wf-p",
-        "“Correction” means two quite different things. They look similar on screen ",
+        "“Correction” can mean two quite different things. They look similar on screen ",
         "but call for opposite habits, and confusing them is the fastest way to ",
         tags$strong("over-clean"), " your data."),
       tags$div(class = "tc-grid",
@@ -149,7 +161,7 @@ waveform_guide_ui <- function(input, output, session) {
             "Correct it with confidence.")),
         tags$div(class = "tc-card tc-keep",
           tags$div(class = "tc-tag", "Case 2"),
-          tags$div(class = "tc-head", "An analytic choice: do not necessarily “fix”"),
+          tags$div(class = "tc-head", "A genuine messy signal? Do not necessarily “fix”"),
           tags$p(style = "margin:0;",
             "The tracker is faithfully following the signal, but the signal itself is ",
             "messy or not what you want to model (creak at the phrase end, a breathy ",
@@ -159,13 +171,14 @@ waveform_guide_ui <- function(input, output, session) {
       tags$p(class = "wf-p", style = "margin-top: 10px;",
         tags$strong("For Case 2, prefer a principle over hand-editing."),
         " Decide a rule once and apply it to every token the same way (for example, ",
-        "analyse a fixed proportion of the vowel, or drop frames below a voicing or ",
-        "strength threshold) rather than tidying contours one at a time by eye. Better ",
-        "still, where the variation is real, ", tags$strong("keep it"),
-        " and let the statistical model handle it: random effects, by-token curves and ",
-        "smooths are designed to absorb this. Hand-cleaning each token bakes your ",
-        "expectations into the data and biases what you later “find”."),
-      tags$div(style = "background:#f0faf7; border-left:4px solid #78c2ad; padding:8px 14px; border-radius:4px; font-size:0.85rem; color:#3c5a4f; max-width: 80ch;",
+        "you are measuring only the modal-voiced portion of each vowel, analysing a ",
+        "fixed proportion of the rhyme, or dropping frames below a voicing or strength ",
+        "threshold) rather than tidying contours one at a time by eye. Sometimes it is ",
+        "better still to ", tags$strong("keep the variation"),
+        " where it is real and let the statistical model handle it: random effects, ",
+        "by-token curves and smooths are designed to absorb this. Hand-cleaning each ",
+        "token bakes your expectations into the data and biases what you later “find”."),
+      tags$div(style = "background:#eef1f6; border-left:4px solid #6b7aa0; padding:8px 14px; border-radius:4px; font-size:0.85rem; color:#3a4660; max-width: 80ch;",
         tags$strong("Rule of thumb: "),
         "edit the contour only when the waveform proves the tracker was wrong (Case 1). ",
         "If you find yourself deciding what the curve ", tags$em("ought"),
@@ -185,11 +198,61 @@ waveform_guide_ui <- function(input, output, session) {
                alt = "Modal vowel waveform with the glottal period T marked between two pulses",
                class = "wf-fig narrow"),
       tags$p(class = "wf-cap",
+        tags$strong("Figure 1. "),
         "A steady vowel from the sample set (~198 Hz). Orange markers sit one glottal ",
         "pulse apart; the spacing between them is T."),
 
-      # ===================== 4. Octave errors =====================
-      sec("4", "The commonest tracking error: octaves"),
+      # ===================== 4. Voice-quality gallery =====================
+      sec("4", "What different voice qualities look like"),
+      tags$p(class = "wf-p",
+        "Trackers are most fragile where voice quality departs from clean modal voicing. ",
+        "The regularity and shape of the glottal pulses tell you how far to trust a tracked ",
+        "value, and they also tell you ", tags$em("which"), " of the two cases you are in. ",
+        "These idealised shapes (after ",
+        tags$a(href = "https://www.phonetik.uni-muenchen.de/studium/skripten/languagedemos/Demos/laver.html",
+               target = "_blank", rel = "noopener", "Laver's"),
+        " phonation categories) are what to look for under the contour:"),
+      tags$div(class = "vq-gallery",
+        vq_card("vq_modal.png", "Modal voice",
+          "Regular, evenly spaced pulses; one clear peak per period.",
+          "Reliable.",
+          "Usually no correction needed."),
+        vq_card("vq_creaky.png", "Creaky voice / vocal fry",
+          "Low, irregular, widely spaced pulses, often with damped ringing; spacing and size vary pulse to pulse.",
+          "Drops out, halves, or reports erratic values.",
+          tagList(tags$code("× 2"), " if genuinely halved (Case 1); but if the creak is ",
+                  "real, whether to keep it is a Case 2 choice (see section 6).")),
+        vq_card("vq_breathy.png", "Breathy voice",
+          "Periodicity present but weak, with aspiration noise filling the gaps between pulses.",
+          "Jittery estimates and occasional dropout.",
+          tagList(tags$em("Smooth"), " (median) over the jittery stretch; ",
+                  tags$code("Delete"), " frames sitting in pure noise (Case 1).")),
+        vq_card("vq_falsetto.png", "Falsetto",
+          "High f0, near-sinusoidal, low amplitude; few harmonics.",
+          "Usually reliable but high; can slip at on/offsets.",
+          tagList("Rarely needs octave fixes; ", tags$em("interpolate"),
+                  " or ", tags$em("smooth"), " brief glitches.")),
+        vq_card("vq_diplophonia.png", "Diplophonia / period-doubling",
+          "Two interleaved pulse trains: pulses alternate strong/weak, so the period can be read as one pulse or two (subharmonics).",
+          "Commonly halves, or flips between octaves.",
+          tagList(tags$code("× 2"), " / ", tags$code("÷ 2"),
+                  " only if it is a clear error; otherwise this is the Case 2 example in section 6."))),
+      tags$p(class = "vq-scroll-hint", "← scroll sideways to see all phonation types →"),
+      tags$p(class = "wf-p", style = "margin-top: 8px;",
+        "Creak in particular is not a single thing: ",
+        tags$a(href = "https://idiom.ucsd.edu/~mgarellek/files/Keating_etal_2015_ICPhS.pdf",
+               target = "_blank", rel = "noopener", "Keating, Garellek & Kreiman (2015)"),
+        " distinguish several phonetically distinct kinds of creak, which is part of why ",
+        "creaky f0 is both hard to track and hard to interpret."),
+
+      # ===================== 5. CASE 1: genuine tracking errors =====================
+      sec("5", "Case 1: genuine tracking errors — fix them", "case1"),
+      tags$p(class = "wf-p",
+        "Here the voice has a clear period but the tracker reported the wrong number. ",
+        "The waveform shows what the f0 ", tags$em("should"), " have been, so fixing it ",
+        "recovers the true value. Correct these with confidence."),
+
+      tags$div(class = "wf-sub", "Octave errors (the commonest)"),
       tags$p(class = "wf-p",
         "The single most common mistake is reporting the pitch an octave off, and it ",
         "comes down to ", tags$em("which"), " distance the tracker measures between pulses. ",
@@ -199,6 +262,7 @@ waveform_guide_ui <- function(input, output, session) {
                alt = "One vowel period read three ways: T gives the correct f0, half T gives double, two T gives half",
                class = "wf-fig"),
       tags$p(class = "wf-cap",
+        tags$strong("Figure 2. "),
         "Same pulse train read three ways. Reading the true period T gives the correct ",
         "f0; reading half a period reports double (fix with ÷ 2); reading two periods ",
         "reports half (fix with × 2)."),
@@ -219,107 +283,98 @@ waveform_guide_ui <- function(input, output, session) {
         " in the sidebar usually include the correct octave; clicking one is often ",
         "quicker than halving or doubling by hand."),
 
-      # ===================== 5. Voice-quality-related errors =====================
-      sec("5", "Voice-quality-related errors: creak and utterance edges"),
+      tags$div(class = "wf-sub", "Spurious frames and dropout"),
       tags$p(class = "wf-p",
-        "Trackers are most fragile where voice quality departs from clean modal voicing, ",
-        "and that happens most reliably at the ", tags$strong("edges of an utterance"),
-        ". Voicing starts and stops gradually: the onset is often breathy or creaky while ",
-        "the folds settle, and the offset frequently tails off into creak. The regularity ",
-        "and shape of the pulses tell you how far to trust the tracker. These idealised ",
-        "shapes (after ",
-        tags$a(href = "https://www.phonetik.uni-muenchen.de/studium/skripten/languagedemos/Demos/laver.html",
-               target = "_blank", rel = "noopener", "Laver's"),
-        " phonation categories) are what to look for under the contour:"),
-      tags$div(class = "vq-gallery",
-        vq_card("vq_modal.png", "Modal voice",
-          "Regular, evenly spaced pulses; one clear peak per period.",
-          "Reliable.",
-          "Usually no correction needed."),
-        vq_card("vq_creaky.png", "Creaky voice / vocal fry",
-          "Low, irregular, widely spaced pulses, often with damped ringing; spacing and size vary pulse to pulse.",
-          "Drops out, halves, or reports erratic values.",
-          tagList(tags$code("× 2"), " if halved; ", tags$code("Delete"),
-                  " clearly spurious frames; ", tags$em("smooth"),
-                  " mild jitter. But if the creak is part of the tone, that is Case 2 (see below).")),
-        vq_card("vq_breathy.png", "Breathy voice",
-          "Periodicity present but weak, with aspiration noise filling the gaps between pulses.",
-          "Jittery estimates and occasional dropout.",
-          tagList(tags$em("Smooth"), " (median) over the jittery stretch; ",
-                  tags$code("Delete"), " frames sitting in pure noise.")),
-        vq_card("vq_falsetto.png", "Falsetto",
-          "High f0, near-sinusoidal, low amplitude; few harmonics.",
-          "Usually reliable but high; can slip at on/offsets.",
-          tagList("Rarely needs octave fixes; ", tags$em("interpolate"),
-                  " or ", tags$em("smooth"), " brief glitches.")),
-        vq_card("vq_diplophonia.png", "Diplophonia / period-doubling",
-          "Two interleaved pulse trains: pulses alternate strong/weak, so the period can be read as one pulse or two (subharmonics).",
-          "Commonly halves, or flips between octaves.",
-          tagList(tags$code("× 2"), " / ", tags$code("÷ 2"),
-                  " only if it is a clear error; otherwise this is the Case 2 example below."))),
+        "At the quiet edges of voicing the tracker can place f0 values in near-silence or ",
+        "jump to impossible numbers, and brief glitches can appear mid-vowel where breathy ",
+        "noise fills the gaps between pulses. When the waveform shows no real periodicity ",
+        "behind a value, it is an error: ", tags$code("Delete"),
+        " frames sitting in noise, and ", tags$em("smooth"),
+        " or ", tags$em("interpolate"), " brief isolated spikes."),
+
+      # ===================== 6. CASE 2: correct but you may not want it =====================
+      sec("6", "Case 2: correctly tracked, but you may not want it — an analytic choice", "case2"),
+      tags$p(class = "wf-p",
+        "Here the tracker is right and the f0 is still hard to deal with. The folds really ",
+        "are producing that pattern, so it is not a bug to fix. How you handle it depends ",
+        "on the ", tags$strong("type of pattern"), ", your ",
+        tags$strong("analytical framework"), ", and your ",
+        tags$strong("statistical method"), ". The safe move is a consistent rule, not ",
+        "per-token editing."),
+
       tags$div(class = "wf-real",
         tags$div(style = "font-weight:700; color:#2c5f4f; margin-bottom:4px;",
-          "Real speech: the beginning and end of an utterance"),
+          "Real speech: a creaky utterance edge (a Case 1 error and a Case 2 choice in one)"),
         tags$p(class = "wf-p",
-          "A real token from this project. The shaded edges are where f0 is least reliable, ",
-          "because the voice is just starting or trailing off."),
+          "A real token from my 2025 Phonetica paper; voicing tails off into creak at the offset. The ",
+          "tracker gets it wrong in a revealing way: it locks onto the formant ringing ",
+          "inside each creak burst and reports a spurious ", tags$strong("high"),
+          " f0 of about 300 Hz (the jump above the line in ", tags$strong("Figure 3"),
+          "), when the voice is actually very low. The glottal pulses here are only about ",
+          "10–20 ms apart, a true f0 of roughly ", tags$strong("50–90 Hz"),
+          ", far below the ~200 Hz modal body of the vowel. That high jump is a ",
+          tags$strong("Case 1 error"),
+          ", so fix it by lowering the pitch floor until the tracker follows the true low ",
+          "creaky f0, or delete those frames."),
         tags$img(src = "waveforms/edges.png",
-                 alt = "Waveform and f0 contour of one utterance, with onset and offset regions shaded; f0 is sparse and jumpy at the edges",
+                 alt = "Waveform and f0 contour of one utterance; the onset and offset regions are shaded, and at the offset the tracked f0 jumps spuriously high because creak pulses are mis-tracked",
                  class = "wf-fig"),
         tags$p(class = "wf-cap",
-          "Shaded: the onset and offset. Spurious or sparse frames sitting in near-silence ",
-          "are Case 1, so delete them. A real but irregular creak at the very end is Case 2: ",
-          "it may be the speaker's genuine phrase-final phonation, not an error to scrub."),
+          tags$strong("Figure 3. "),
+          "Onset and offset shaded. At the offset the tracked f0 jumps to ~300 Hz: the ",
+          "tracker is mis-reading the ringing inside each creak burst, not the true pitch, ",
+          "so this is a Case 1 error. The real glottal pulses are ~10–20 ms apart (~50–90 Hz); ",
+          "lowering the pitch floor recovers that low creaky f0."),
         tags$p(class = "wf-p", style = "font-size: 0.85rem;",
-          tags$strong("Decision: "),
-          "delete frames that sit in noise or jump to impossible values; keep (or ",
-          "interpolate, consistently) a real but messy edge if its timing falls inside ",
-          "your analysis window. Whatever you choose, do it the same way for every token.")),
+          tags$strong("Do we include it even when it is tracked correctly? "),
+          "Suppose you lower the floor and the creak is now tracked accurately, low and ",
+          "irregular. You might still leave it out. Phrase-final creak may add little to the ",
+          "shape of the tone, how listeners perceive pitch in non-modal (creaky, breathy) ",
+          "voice is not well understood, and creak itself comes in several distinct kinds ",
+          "(see section 4). If you do exclude it, make that an analytic choice applied by a ",
+          "consistent rule (a voicing or strength threshold, or a fixed analysis window), the ",
+          "same way for every token, rather than trimming each contour by eye.")),
 
-      # ===================== 6. Correct-but-awkward patterns =====================
-      sec("6", "Awkward f0 patterns that are (arguably) correct"),
-      tags$p(class = "wf-p",
-        "Sometimes the tracker is right and the f0 is still hard to deal with. Creak can ",
-        "be tracked perfectly accurately yet you may not want it in a model of tonal ",
-        "shape; and some voices are genuinely ", tags$strong("ambiguous by an octave"),
-        ". How you handle these is not a bug-fix; it depends on the ",
-        tags$strong("type of pattern"), ", your ", tags$strong("analytical framework"),
-        ", and your ", tags$strong("statistical method"), "."),
       tags$div(class = "wf-real",
         tags$div(style = "font-weight:700; color:#2c5f4f; margin-bottom:4px;",
           "Real speech: a diplophonic voice with two defensible pitches"),
         tags$p(class = "wf-p",
-          "In this token the voice is modal and steady, yet even in the ", tags$em("middle"),
-          " of the vowel it carries two periodicities at once. Zooming in and marking the ",
-          "glottal pulses shows why: the pulses recur every ~5 ms (200 Hz), but every ",
-          "second pulse is subtly stronger, so the pattern also repeats every ~10 ms (100 Hz)."),
+          "In this token the voice is steady and clearly periodic, yet the glottal pulses ",
+          "alternate ", tags$strong("strong and weak"), ". Zooming in shows why two pitches ",
+          "are defensible: the pulses recur about every 5 ms (~188 Hz), but because every ",
+          "second pulse is stronger, the pattern also repeats every 10 ms (~94 Hz)."),
         tags$img(src = "waveforms/diplophonia.png",
-                 alt = "Top: mid-vowel waveform with glottal pulses marked, bracketed as 200 Hz pulse-to-pulse and 100 Hz every other pulse. Bottom: autocorrelation with near-equal peaks at 5 ms and 10 ms.",
+                 alt = "Top: waveform slice with glottal pulses marked, alternating weak and strong, bracketed as ~188 Hz pulse-to-pulse and ~94 Hz every other pulse. Bottom: autocorrelation with near-equal peaks at 5 ms and 10 ms.",
                  class = "wf-fig"),
         tags$p(class = "wf-cap",
-          "Top: a mid-vowel slice with the glottal pulses marked (vertical lines). Bottom: ",
-          "the vowel's self-similarity (autocorrelation) peaks almost equally at 5 ms ",
-          "(200 Hz) and 10 ms (100 Hz). Because both lags are strong, different trackers ",
-          "land an octave apart: Praat's raw autocorrelation often reports ~100 Hz here, ",
-          "while other settings report ~200 Hz. Neither is simply “wrong”."),
+          tags$strong("Figure 4. "),
+          "Top: a slice of the vowel with the glottal pulses marked; they alternate ",
+          "weak / strong, so you can read the period as one pulse (~188 Hz) or two ",
+          "(~94 Hz). Bottom: the vowel's self-similarity (autocorrelation) peaks almost ",
+          "equally at 5 ms (188 Hz) and 10 ms (94 Hz). Because both lags are strong, ",
+          "different trackers land an octave apart. Praat's raw autocorrelation often ",
+          "reports the lower one. Neither is simply “wrong”."),
         tags$p(class = "wf-p", style = "font-size: 0.85rem;",
           tags$strong("Decision: "),
           "if you treat the vowel as one modal target, pick the octave consistently across ",
           "the dataset (and use ", tags$code("× 2"), " / ", tags$code("÷ 2"),
           " to enforce it). If the period-doubling is a real feature you care about, keep ",
           "it, or exclude the region by a fixed rule. What you must ", tags$em("not"),
-          " do is silently snap it to 200 Hz on some tokens and 100 Hz on others.")),
-      tags$p(class = "wf-p", style = "margin-top: 10px;",
-        "The same logic covers correctly tracked creak you would rather not model: exclude ",
-        "it by a consistent criterion (a voicing or strength threshold, a fixed analysis ",
-        "window), or keep it and let by-token random effects and smooths soak up the ",
-        "variation. Decide once, document it, and apply it to every token."),
+          " do is silently snap it to 188 Hz on some tokens and 94 Hz on others.")),
+
+      tags$p(class = "wf-p", style = "margin-top: 12px;",
+        tags$strong("In short: "),
+        "for Case 2 patterns, exclude them by a consistent criterion (a voicing or strength ",
+        "threshold, a fixed analysis window), or keep them and let by-token random effects ",
+        "and smooths soak up the variation. Decide once, document it, and apply it to every ",
+        "token."),
 
       # ===================== Listen =====================
-      tags$div(class = "wf-appx", "Hear the difference"),
+      tags$div(class = "wf-appx", "Hear (and see) the difference"),
       tags$p(class = "wf-p",
         "Training your ear helps you trust your eyes. These open teaching collections let ",
-        "you listen to each phonation type (external sites):"),
+        "you listen to each phonation type, and it is worth opening the recordings in Praat ",
+        "or Audacity to study their waveform patterns alongside the sound (external sites):"),
       tags$ul(style = "margin: 4px 0 0 0; padding-left: 18px; font-size: 0.88rem; color: #444; max-width: 80ch;",
         tags$li(tags$a(href = "https://www.phonetik.uni-muenchen.de/studium/skripten/languagedemos/Demos/laver.html",
                        target = "_blank", rel = "noopener",
@@ -331,7 +386,7 @@ waveform_guide_ui <- function(input, output, session) {
                 ": recordings from hundreds of languages, many with phonation contrasts.")),
 
       # ===================== References =====================
-      tags$div(class = "wf-appx", "Where this comes from"),
+      tags$div(class = "wf-appx", "References"),
       tags$ul(class = "wf-refs",
         tags$li("Laver, J. (1980). ", tags$em("The Phonetic Description of Voice Quality"),
                 ". Cambridge University Press. ",
@@ -367,7 +422,7 @@ waveform_guide_ui <- function(input, output, session) {
                 tags$em("Acoustic and Auditory Phonetics"), ".")),
       tags$p(style = "margin: 8px 0 0 0; font-size: 0.76rem; color: #999; max-width: 80ch;",
         "The voice-quality gallery uses idealised schematic waveforms; the period, octave, ",
-        "and real-recording figures are generated from this project's bundled sample recordings.")
+        "and real-recording figures are generated from recordings in my 2025 Phonetica paper.")
     )
   })
 }
