@@ -1634,7 +1634,9 @@ ui <- fluidPage(
                         tabPanel("Filename",
                                  uiOutput("filename_guide_content")),
                         tabPanel("Checklist",
-                                 uiOutput("checklist_content"))
+                                 uiOutput("checklist_content")),
+                        tabPanel("f0 artefacts",
+                                 uiOutput("waveform_guide_content"))
                       )
              ),
   )
