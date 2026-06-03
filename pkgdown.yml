@@ -3,7 +3,7 @@ pkgdown: 2.2.0
 pkgdown_sha: ~
 articles:
   shinytone: shinytone.html
-last_built: 2026-06-03T22:46Z
+last_built: 2026-06-03T23:24Z
 urls:
   reference: https://chenchenzi.github.io/citationtone_hub/reference
   article: https://chenchenzi.github.io/citationtone_hub/articles
