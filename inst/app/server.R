@@ -61,14 +61,38 @@ server <- function(input, output, session) {
   # The "Try with our sample data" button populates input$uploadfile via JS
   # (see the load_sample_csv handler), so the sample path goes through the
   # exact same code path as a manual upload.
-  dataset <- reactive({
+  # Raw uploaded CSV — the single source of truth before any optional,
+  # View-tab metadata is attached.
+  raw_dataset <- reactive({
     if (is.null(input$uploadfile)) return(NULL)
-    dat <- read.csv(input$uploadfile$datapath, stringsAsFactors = FALSE)
-    if (isTRUE(input$convert_to_factor)) {
-      dat <- dat %>%
-        dplyr::mutate(across(where(is.character), as.factor))
+    read.csv(input$uploadfile$datapath, stringsAsFactors = FALSE)
+  })
+
+  # Optional metadata attached in the Start tab, so users who already have an
+  # f0 dataframe (e.g. from Praat) can add speaker/tone/etc. columns without
+  # the audio-based F0 Extraction path. Stored as
+  #   list(key = <join column>, data = <df with key + new columns>).
+  # Reset whenever a new file is uploaded.
+  attached_metadata <- reactiveVal(NULL)
+  observeEvent(input$uploadfile, { attached_metadata(NULL) }, priority = 100)
+
+  # The dataset every F0 Analysis tab reads: the raw upload left-joined with
+  # any attached metadata (adding only columns the raw data lacks).
+  dataset <- reactive({
+    raw <- raw_dataset()
+    if (is.null(raw)) return(NULL)
+    m <- attached_metadata()
+    if (!is.null(m) && !is.null(m$data) && !is.null(m$key) &&
+        m$key %in% names(raw) && m$key %in% names(m$data)) {
+      new_cols <- setdiff(names(m$data), names(raw))
+      meta     <- m$data[, c(m$key, new_cols), drop = FALSE]
+      raw      <- tryCatch(dplyr::left_join(raw, meta, by = m$key),
+                           error = function(e) raw)
     }
-    return(dat)
+    if (isTRUE(input$convert_to_factor)) {
+      raw <- raw %>% dplyr::mutate(across(where(is.character), as.factor))
+    }
+    raw
   })
 
   # When the sample button is clicked, fire JS that fetches the bundled
@@ -119,7 +143,7 @@ server <- function(input, output, session) {
   fp_metadata         <- reactiveVal(NULL)   # optional user-uploaded metadata CSV (data.frame). Joined to fp_f0_data at download time on a filename column the user selects.
 
   # Call the Start tab UI and server logic (start_ui function)
-  start_ui(input, output, session, dataset)
+  start_ui(input, output, session, dataset, raw_dataset, attached_metadata)
   view_ui(input, output, session, dataset)
   normalised_ui(input, output, session, dataset, normalised_data)
   visualise_ui(input, output, session, dataset, normalised_data)

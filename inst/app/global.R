@@ -38,6 +38,15 @@ var_patterns <- list(
   duration = c("^duration$", "^dur")
 )
 
+# Normalise a join key so that e.g. "S01_T1.wav" and "s01_t1" match: optionally
+# strip a file extension, then lowercase and trim. Used by the metadata joins
+# in both the F0 Extraction tab and the Start tab.
+make_token_key <- function(x, strip_ext = TRUE) {
+  k <- as.character(x)
+  if (isTRUE(strip_ext)) k <- tools::file_path_sans_ext(k)
+  tolower(trimws(k))
+}
+
 # ---------------------------------------------------------------------------
 # Foldable guide box. Wraps a tab's explanatory guide in a native
 # <details>/<summary> element so the (often long) guide can be collapsed to
