@@ -58,35 +58,32 @@ server <- function(input, output, session) {
   # process; later sessions hit a warm process where these are no-ops.
   session$onFlushed(function() {
     # On a warm process (a later session) the packages are already attached,
-    # so there is nothing to load and no spinner to show.
+    # so there is nothing to load and no toast to show.
     if ("package:mgcv" %in% search()) return(invisible())
-    # Load one package per event-loop tick (via later) rather than all at
-    # once, so R yields between each and the UI stays responsive while they
-    # load. A spinner notification gives feedback. Ordered so the packages
-    # needed for browsing/plotting come first, modelling/audio last.
-    pkgs <- c("DT", "ggplot2", "plotly", "RColorBrewer", "gridExtra",
-              "lme4", "mgcv", "emmeans", "tuneR", "rPraat", "praatpicture",
-              "thematic")
+    # Show the toast, then run the (blocking) load one tick later so the toast
+    # reaches the browser before R becomes busy. The load blocks R for a few
+    # seconds; a navigation click during that simply waits, but the toast
+    # makes the wait visible. Removed when loading finishes.
     showNotification(
       tagList(icon("spinner", class = "fa-spin"),
-              " Loading analysis tools (one-time)…"),
-      id = "pkgload", duration = NULL, closeButton = FALSE)
-    load_step <- function(i) {
-      if (i > length(pkgs)) {
-        tryCatch({
+              " Loading analysis tools (one-time, a few seconds)…"),
+      id = "pkgload", duration = NULL, closeButton = FALSE, session = session)
+    # The later() callback runs outside Shiny's reactive context, so pass
+    # `session` explicitly to any Shiny call inside it (e.g. removeNotification).
+    later::later(function() {
+      tryCatch(
+        suppressWarnings(suppressPackageStartupMessages({
+          library(DT); library(ggplot2); library(plotly)
+          library(RColorBrewer); library(gridExtra)
+          library(lme4); library(emmeans); library(mgcv)
+          library(tuneR); library(rPraat); library(praatpicture)
+          library(thematic)
           thematic::thematic_shiny(font = "auto")
           ggplot2::theme_set(ggplot2::theme_bw(base_size = 16))
-        }, error = function(e) NULL)
-        removeNotification("pkgload")
-        return(invisible())
-      }
-      tryCatch(
-        suppressWarnings(suppressPackageStartupMessages(
-          library(pkgs[i], character.only = TRUE))),
+        })),
         error = function(e) NULL)
-      later::later(function() load_step(i + 1), delay = 0)
-    }
-    later::later(function() load_step(1), delay = 0)
+      removeNotification("pkgload", session = session)
+    }, delay = 0.25)
   }, once = TRUE)
 
   # Reactive dataset storage. Single source of truth: an uploaded CSV.
