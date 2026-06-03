@@ -110,7 +110,7 @@ fp_start_ui <- function(input, output, session, fp_audio_data) {
         tags$p(style = "margin: 0;",
                HTML(paste0(
                  "You can load it directly as a CSV (with ",
-                 "<code>token</code> / wav filename, <code>time</code>, <code>f0</code> ",
+                 "<code>token</code> / <code>filename</code>, <code>time</code>, <code>f0</code> ",
                  "columns) from the <strong>F0 Extraction</strong> tab to proceed to ",
                  "<strong>F0 Correction</strong>.")))
       ),
