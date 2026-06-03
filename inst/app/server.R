@@ -11,22 +11,15 @@
 #   
 # }
 
+# Eager: only what is needed to build the UI and render the landing (About)
+# page. The heavy analysis / plot / audio packages are loaded right after the
+# first render (see the `session$onFlushed` deferred loader inside server()),
+# so the landing page appears immediately and the rest load while the user
+# reads it. tidyr / purrr / stringr / readr are never used by bare name, so
+# dplyr (here) + ggplot2 (deferred) cover all former `tidyverse` usage.
 library(shiny)
 library(bslib)
-library(tidyverse)
-library(DT)
-library(RColorBrewer)
-library(lme4)
-library(emmeans)
-library(mgcv)
-library(thematic)
-library(gridExtra)
-library(plotly)
-# Audio / Praat ecosystem (f0 processing tab)
-library(tuneR)
-library(rPraat)
-library(praatpicture)
-#library(ragg)
+library(dplyr)
 
 source("ui/start_ui.R")
 source("ui/view_ui.R")
@@ -47,15 +40,40 @@ source("ui/fp_praat_script_ui.R")
 options(shiny.maxRequestSize = 100 * 1024^2)  # 100 MB cap for batch WAV uploads
 #options(shiny.useragg = TRUE)
 
-# Enable thematic
-thematic::thematic_shiny(font = "auto")
-theme_set(theme_bw(base_size = 16))
+# Plot theming (thematic auto-theming + the default ggplot2 theme) is set up
+# in the deferred loader inside server(), once ggplot2 has been loaded.
 
 # Note: shared helpers like guess_var() and var_patterns now live in
 # global.R, which Shiny sources into the global environment before any
 # session. They are reachable from every ui_*.R module from there.
 
 server <- function(input, output, session) {
+
+  # ---- Deferred package loading (faster first paint) ----------------------
+  # The landing page only needs shiny / bslib / dplyr. Everything heavy is
+  # loaded right after the first flush, so the About page renders immediately
+  # and the analysis / plot / audio packages load while the user reads it.
+  # R is single-threaded, so a click during loading simply waits until it
+  # finishes (the front page is already in the browser). Loaded once per
+  # process; later sessions hit a warm process where these are no-ops.
+  session$onFlushed(function() {
+    suppressPackageStartupMessages({
+      library(DT)
+      library(RColorBrewer)
+      library(ggplot2)
+      library(plotly)
+      library(lme4)
+      library(emmeans)
+      library(mgcv)
+      library(gridExtra)
+      library(tuneR)
+      library(rPraat)
+      library(praatpicture)
+      library(thematic)
+    })
+    thematic::thematic_shiny(font = "auto")
+    ggplot2::theme_set(ggplot2::theme_bw(base_size = 16))
+  }, once = TRUE)
 
   # Reactive dataset storage. Single source of truth: an uploaded CSV.
   # The "Try with our sample data" button populates input$uploadfile via JS
