@@ -179,4 +179,33 @@ server <- function(input, output, session) {
     }
   })
 
+  # ---- Deep links for the four top-level tabs (tab name only; never data) ----
+  # The URL carries only which workspace is open, e.g. ?tab=analysis. Uploaded
+  # data stays in session memory and is never placed in the URL, so this does
+  # not affect the app's privacy guarantees.
+  nav_slug2tab <- c("about"           = "About",
+                    "analysis"        = "F0 Analysis",
+                    "processing"      = "F0 Processing",
+                    "data-collection" = "Data Collection")
+  nav_tab2slug <- stats::setNames(names(nav_slug2tab), unname(nav_slug2tab))
+  nav_ready <- reactiveVal(FALSE)
+
+  # On load: open the tab named in ?tab=<slug> (if any), then start syncing.
+  observeEvent(session$clientData$url_search, {
+    slug <- parseQueryString(session$clientData$url_search)[["tab"]]
+    if (!is.null(slug) && slug %in% names(nav_slug2tab)) {
+      updateNavbarPage(session, "main_nav", selected = nav_slug2tab[[slug]])
+    }
+    nav_ready(TRUE)
+  }, once = TRUE, ignoreNULL = FALSE)
+
+  # Reflect the active top tab in the URL whenever it changes.
+  observeEvent(input$main_nav, {
+    if (!isTRUE(nav_ready())) return()
+    slug <- nav_tab2slug[[input$main_nav]]
+    if (!is.null(slug) && !is.na(slug)) {
+      updateQueryString(paste0("?tab=", slug), mode = "push")
+    }
+  })
+
 }
