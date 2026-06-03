@@ -57,22 +57,36 @@ server <- function(input, output, session) {
   # finishes (the front page is already in the browser). Loaded once per
   # process; later sessions hit a warm process where these are no-ops.
   session$onFlushed(function() {
-    suppressPackageStartupMessages({
-      library(DT)
-      library(RColorBrewer)
-      library(ggplot2)
-      library(plotly)
-      library(lme4)
-      library(emmeans)
-      library(mgcv)
-      library(gridExtra)
-      library(tuneR)
-      library(rPraat)
-      library(praatpicture)
-      library(thematic)
-    })
-    thematic::thematic_shiny(font = "auto")
-    ggplot2::theme_set(ggplot2::theme_bw(base_size = 16))
+    # On a warm process (a later session) the packages are already attached,
+    # so there is nothing to load and no spinner to show.
+    if ("package:mgcv" %in% search()) return(invisible())
+    # Load one package per event-loop tick (via later) rather than all at
+    # once, so R yields between each and the UI stays responsive while they
+    # load. A spinner notification gives feedback. Ordered so the packages
+    # needed for browsing/plotting come first, modelling/audio last.
+    pkgs <- c("DT", "ggplot2", "plotly", "RColorBrewer", "gridExtra",
+              "lme4", "mgcv", "emmeans", "tuneR", "rPraat", "praatpicture",
+              "thematic")
+    showNotification(
+      tagList(icon("spinner", class = "fa-spin"),
+              " Loading analysis tools (one-time)…"),
+      id = "pkgload", duration = NULL, closeButton = FALSE)
+    load_step <- function(i) {
+      if (i > length(pkgs)) {
+        tryCatch({
+          thematic::thematic_shiny(font = "auto")
+          ggplot2::theme_set(ggplot2::theme_bw(base_size = 16))
+        }, error = function(e) NULL)
+        removeNotification("pkgload")
+        return(invisible())
+      }
+      tryCatch(
+        suppressWarnings(suppressPackageStartupMessages(
+          library(pkgs[i], character.only = TRUE))),
+        error = function(e) NULL)
+      later::later(function() load_step(i + 1), delay = 0)
+    }
+    later::later(function() load_step(1), delay = 0)
   }, once = TRUE)
 
   # Reactive dataset storage. Single source of truth: an uploaded CSV.
