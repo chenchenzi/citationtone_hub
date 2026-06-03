@@ -81,7 +81,7 @@ if method$ = "filtered ac" or method$ = "filtered cc"
     real: "Silence threshold", 0.09
     real: "Voicing threshold", 0.50
     real: "Octave cost", 0.055
-    real: "Octave-jump cost", 0.35
+    real: "Octave jump cost", 0.35
     real: "Voiced unvoiced cost", 0.14
   clicked = endPause: "Cancel", "OK", 2, 1
   if clicked = 1
@@ -95,7 +95,7 @@ elsif method$ = "ac" or method$ = "cc" or method$ = "raw ac" or method$ = "raw c
     real: "Silence threshold", 0.03
     real: "Voicing threshold", 0.45
     real: "Octave cost", 0.01
-    real: "Octave-jump cost", 0.35
+    real: "Octave jump cost", 0.35
     real: "Voiced unvoiced cost", 0.14
   clicked = endPause: "Cancel", "OK", 2, 1
   if clicked = 1
