@@ -1370,7 +1370,7 @@ ui <- fluidPage(
                             tags$p("Yes. Voice recordings count as personal data under GDPR (which classifies them as biometric data), CCPA, and most institutional ethics frameworks, especially when paired with speaker IDs or demographic metadata. Shinytone processes audio in temporary server memory only and never writes it to persistent storage, but the data still passes through Posit and AWS infrastructure during your session."),
                             tags$p("Before uploading audio:"),
                             tags$ul(style = "margin-top: -4px;",
-                              tags$li("Ideally, check whether your participant consent or ethics approval allows web-based processing on third-party cloud services. If it does not, the local option below keeps your audio entirely on your own machine."),
+                              tags$li("We recommend having your participant consent or ethics approval cover web-based processing on third-party cloud services."),
                               tags$li("For sensitive recordings (children, clinical participants, endangered-language speakers, or any identifiable individuals), running Shinytone locally is strongly recommended. Install the package and run ", tags$code("shinytone::run_app()"), " (no need to clone the repo); your audio never leaves your machine."),
                               tags$li("If in doubt, consult your IRB or ethics committee.")
                             )
