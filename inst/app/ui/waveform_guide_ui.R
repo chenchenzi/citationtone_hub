@@ -352,7 +352,7 @@ waveform_guide_ui <- function(input, output, session) {
         tags$div(style = "font-weight:700; color:#2c5f4f; margin-bottom:4px;",
           "Real speech, Example 1: a creaky utterance edge (a Case 1 error and a Case 2 choice in one)"),
         tags$p(class = "wf-p",
-          "A real token from my 2025 Phonetica paper; voicing tails off into creak at the offset. The ",
+          "A real token from Xu (2025); voicing tails off into creak at the offset. The ",
           "tracker gets it wrong in a revealing way: it locks onto the formant ringing ",
           "inside each creak burst and reports a spurious ", tags$strong("high"),
           " f0 of about 300 Hz (the jump above the line in ", tags$strong("Figure 3"),
@@ -434,6 +434,11 @@ waveform_guide_ui <- function(input, output, session) {
       # ===================== References =====================
       tags$div(class = "wf-appx", id = "wf-refs", "References"),
       tags$ul(class = "wf-refs",
+        tags$li("Xu, C. (2025). Plastic Mandarin tones: regional identity in prosody. ",
+                tags$em("Phonetica"), ", 82(5), 331–362. ",
+                tags$a(href = "https://doi.org/10.1515/phon-2025-0001",
+                       target = "_blank", rel = "noopener", "doi:10.1515/phon-2025-0001"),
+                tags$span(style = "color:#888;", " — source of the real-speech examples in this guide.")),
         tags$li("Laver, J. (1980). ", tags$em("The Phonetic Description of Voice Quality"),
                 ". Cambridge University Press. ",
                 tags$span(style = "color:#888;", "— the standard taxonomy of phonation types.")),
@@ -468,7 +473,7 @@ waveform_guide_ui <- function(input, output, session) {
                 tags$em("Acoustic and Auditory Phonetics"), ".")),
       tags$p(style = "margin: 8px 0 0 0; font-size: 0.76rem; color: #999;",
         "The voice-quality gallery uses idealised schematic waveforms; the period, octave, ",
-        "and real-recording figures are generated from recordings in my 2025 Phonetica paper.")
+        "and real-recording figures are generated from recordings in Xu (2025).")
       )
     )
   })

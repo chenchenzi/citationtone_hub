@@ -209,21 +209,52 @@ server <- function(input, output, session) {
   })
 
   # ---- Deep links for the four top-level tabs (tab name only; never data) ----
-  # The URL carries only which workspace is open, e.g. ?tab=analysis. Uploaded
-  # data stays in session memory and is never placed in the URL, so this does
-  # not affect the app's privacy guarantees.
+  # The URL carries only which workspace is open, e.g. ?tab=analysis. For the
+  # Data Collection tab only, the active sub-tab is also encoded as a URL hash,
+  # e.g. ?tab=data-collection#reading-waveform. Uploaded data stays in session
+  # memory and is never placed in the URL, so this does not affect the app's
+  # privacy guarantees.
   nav_slug2tab <- c("about"           = "About",
                     "analysis"        = "F0 Analysis",
                     "processing"      = "F0 Processing",
                     "data-collection" = "Data Collection")
   nav_tab2slug <- stats::setNames(names(nav_slug2tab), unname(nav_slug2tab))
+
+  # Sub-tabs of Data Collection only (slug <-> tab title), used for the hash.
+  collection_slug2tab <- c("filename"         = "Filename",
+                           "checklist"        = "Checklist",
+                           "reading-waveform" = "Reading waveform")
+  collection_tab2slug <- stats::setNames(names(collection_slug2tab),
+                                         unname(collection_slug2tab))
   nav_ready <- reactiveVal(FALSE)
 
-  # On load: open the tab named in ?tab=<slug> (if any), then start syncing.
+  # Build the URL for the current navigation state: ?tab=<slug>, plus a
+  # #<sub-slug> hash only while the Data Collection tab is the open workspace.
+  nav_current_url <- function() {
+    slug <- nav_tab2slug[[input$main_nav]]
+    if (is.null(slug) || is.na(slug)) return(NULL)
+    url <- paste0("?tab=", slug)
+    if (identical(input$main_nav, "Data Collection")) {
+      sub <- collection_tab2slug[[input$tabs_collection]]
+      if (!is.null(sub) && !is.na(sub)) url <- paste0(url, "#", sub)
+    }
+    url
+  }
+
+  # On load: open the tab named in ?tab=<slug> (if any) and, for Data
+  # Collection, the sub-tab named in the #<hash>; then start syncing.
   observeEvent(session$clientData$url_search, {
     slug <- parseQueryString(session$clientData$url_search)[["tab"]]
     if (!is.null(slug) && slug %in% names(nav_slug2tab)) {
       updateNavbarPage(session, "main_nav", selected = nav_slug2tab[[slug]])
+      if (identical(nav_slug2tab[[slug]], "Data Collection")) {
+        hash <- session$clientData$url_hash
+        hash <- if (is.null(hash)) "" else sub("^#", "", hash)
+        if (nzchar(hash) && hash %in% names(collection_slug2tab)) {
+          updateTabsetPanel(session, "tabs_collection",
+                            selected = collection_slug2tab[[hash]])
+        }
+      }
     }
     nav_ready(TRUE)
   }, once = TRUE, ignoreNULL = FALSE)
@@ -231,10 +262,17 @@ server <- function(input, output, session) {
   # Reflect the active top tab in the URL whenever it changes.
   observeEvent(input$main_nav, {
     if (!isTRUE(nav_ready())) return()
-    slug <- nav_tab2slug[[input$main_nav]]
-    if (!is.null(slug) && !is.na(slug)) {
-      updateQueryString(paste0("?tab=", slug), mode = "push")
-    }
+    url <- nav_current_url()
+    if (!is.null(url)) updateQueryString(url, mode = "push")
+  })
+
+  # Reflect the active Data Collection sub-tab as a URL hash when it changes
+  # (only while Data Collection is the open workspace).
+  observeEvent(input$tabs_collection, {
+    if (!isTRUE(nav_ready())) return()
+    if (!identical(input$main_nav, "Data Collection")) return()
+    url <- nav_current_url()
+    if (!is.null(url)) updateQueryString(url, mode = "push")
   })
 
 }
