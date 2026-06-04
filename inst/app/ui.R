@@ -1370,14 +1370,14 @@ ui <- fluidPage(
                             tags$p("Yes. Voice recordings count as personal data under GDPR (which classifies them as biometric data), CCPA, and most institutional ethics frameworks, especially when paired with speaker IDs or demographic metadata. Shinytone processes audio in temporary server memory only and never writes it to persistent storage, but the data still passes through Posit and AWS infrastructure during your session."),
                             tags$p("Before uploading audio:"),
                             tags$ul(style = "margin-top: -4px;",
-                              tags$li("Confirm that your participant consent covers web-based processing on third-party infrastructure (Posit, AWS)."),
+                              tags$li("Ideally, check whether your participant consent or ethics approval allows web-based processing on third-party cloud services. If it does not, the local option below keeps your audio entirely on your own machine."),
                               tags$li("For sensitive recordings (children, clinical participants, endangered-language speakers, or any identifiable individuals), running Shinytone locally is strongly recommended. Install the package and run ", tags$code("shinytone::run_app()"), " (no need to clone the repo); your audio never leaves your machine."),
                               tags$li("If in doubt, consult your IRB or ethics committee.")
                             )
                           ),
                           tags$div(class = "faq-item",
                             tags$p(tags$strong("Should I upload sensitive or personal data?")),
-                            tags$p("This app is designed for linguistic research data (acoustic measurements, tone labels, and field recordings). Do not upload personally identifiable information beyond the voice and metadata your participants have consented to share. For sensitive recordings (children, clinical populations, etc.), use the local installation. The developer accepts no liability for data uploaded in violation of applicable privacy regulations or ethics approvals.")
+                            tags$p("Users should exercise appropriate caution and comply with their organisation's data-governance and privacy requirements. Although the app is designed so that uploaded session data is not accessible to the developer and connections are encrypted, the service still runs on third-party cloud infrastructure. We therefore recommend that you do not upload highly sensitive, confidential, or regulated information unless necessary. The developer accepts no liability for data uploaded in violation of applicable privacy regulations or ethics approvals.")
                           )
                         ),
 
