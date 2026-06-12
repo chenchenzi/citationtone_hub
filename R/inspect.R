@@ -287,6 +287,92 @@ flag_level_outliers <- function(data,
 }
 
 
+#' Flag low-intensity f0 samples within tokens
+#'
+#' @description
+#' Detects f0 samples that fall in a low-energy region of their token, where
+#' pitch estimates are least reliable --- voicing onsets and offsets,
+#' devoiced or breathy segments, and creaky utterance-final tails. Intensity
+#' is an *independent* cue from f0: a smoothly drifting mis-tracked tail at a
+#' vowel edge need not trip the rate-of-change check in [flag_pitch_jumps()],
+#' but it will sit in an intensity dip. The flag is therefore most useful
+#' (a) on its own, to surface unreliable edge frames, and (b) alongside a
+#' jump flag, where co-occurring low intensity raises confidence that the
+#' jump is a tracking error rather than a real pitch event.
+#'
+#' @details
+#' For each token the function takes the **peak intensity across that token's
+#' voiced samples** and flags every voiced sample whose intensity is more
+#' than `intensity_drop` dB below that peak. The comparison is
+#' relative-to-peak (not an absolute dB threshold), so it transfers across
+#' recordings regardless of microphone distance or gain. Unvoiced samples
+#' (`f0` is `NA` or `0`) and samples with missing intensity are never
+#' flagged, and tokens with no voiced sample are left unflagged.
+#'
+#' Low intensity does not by itself mean the f0 is wrong --- a softly but
+#' modally produced frame tracks fine --- so this is an advisory,
+#' inspect-don't-delete signal, consistent with the rest of the Inspect tab.
+#'
+#' @param data A long-format data frame with one row per f0 sample.
+#' @param f0 Column name of f0 in Hz. Default `"f0"`.
+#' @param token Column name of token ID. Default `"token"`.
+#' @param intensity Column name of intensity in dB. Default `"intensity"`.
+#' @param intensity_drop Flag voiced samples whose intensity is more than
+#'   this many dB below the token's peak intensity. Default `15`.
+#'
+#' @return The input data frame with one appended logical column,
+#'   `flag_low_intensity`, `TRUE` for low-energy voiced samples.
+#'
+#' @seealso
+#' * [flag_pitch_jumps()] for the sample-level jump / octave / carryover check.
+#' * [inspect_f0()] for the wrapper that runs every check.
+#'
+#' @examples
+#' df <- data.frame(
+#'   token     = rep("t1", 5),
+#'   f0        = c(120, 122, 121, 119, 118),
+#'   intensity = c(40, 62, 64, 63, 41)   # quiet at the edges
+#' )
+#' flag_low_intensity(df, intensity_drop = 15)$flag_low_intensity
+#'
+#' @export
+#' @importFrom dplyr group_by mutate ungroup select
+#' @importFrom rlang .data
+flag_low_intensity <- function(data,
+                               f0             = "f0",
+                               token          = "token",
+                               intensity      = "intensity",
+                               intensity_drop = 15) {
+  required <- c(f0, token, intensity)
+  missing_cols <- setdiff(required, names(data))
+  if (length(missing_cols) > 0) {
+    stop("Column(s) not found in data: ",
+         paste(missing_cols, collapse = ", "), call. = FALSE)
+  }
+  if (!is.numeric(data[[intensity]])) {
+    stop("Column '", intensity, "' must be numeric (intensity in dB).",
+         call. = FALSE)
+  }
+
+  data |>
+    dplyr::group_by(.data[[token]]) |>
+    dplyr::mutate(
+      .peak_intensity = {
+        voiced <- !is.na(.data[[f0]]) & .data[[f0]] != 0 &
+                  !is.na(.data[[intensity]])
+        if (any(voiced)) max(.data[[intensity]][voiced]) else NA_real_
+      },
+      flag_low_intensity =
+        !is.na(.data[[intensity]]) &
+        !is.na(.data[[f0]]) & .data[[f0]] != 0 &
+        !is.na(.data$.peak_intensity) &
+        .data[[intensity]] < (.data$.peak_intensity - intensity_drop)
+    ) |>
+    dplyr::ungroup() |>
+    dplyr::select(-".peak_intensity")
+}
+
+
 # -----------------------------------------------------------------------------
 # Internal per-token artefact detector.
 #
@@ -586,6 +672,12 @@ flag_pitch_jumps <- function(data,
 #' @inheritParams flag_level_outliers
 #' @param time Column name of time. Default `"time"`.
 #' @param tone Column name of tone category. Default `"tone"`.
+#' @param intensity Optional column name of intensity in dB. When supplied,
+#'   the sample-level low-intensity check ([flag_low_intensity()]) is run and
+#'   its results are added (see Value). `NULL` (default) skips the check.
+#' @param intensity_drop Flag voiced samples whose intensity is more than this
+#'   many dB below the token's peak intensity. Default `15`. Ignored when
+#'   `intensity` is `NULL`.
 #'
 #' @return A long-format data frame containing the original `token`,
 #'   `time`, `f0`, `speaker`, `tone` columns plus:
@@ -596,7 +688,12 @@ flag_pitch_jumps <- function(data,
 #'   any sample-level jump, or an unusual overall level for its tone.
 #' * `flag_notes`: human-readable concatenation of the reasons a sample
 #'   was flagged (e.g. `"max too high"`, `"jump (rise)"`,
-#'   `"level too high"`).
+#'   `"level too high"`, `"low intensity"`).
+#'
+#' When `intensity` is supplied, the result additionally carries the
+#' `intensity` column and a sample-level `flag_low_intensity` logical. The
+#' low-intensity flag is advisory: it appears in `flag_notes` but does not by
+#' itself set `flagged_token`.
 #'
 #' @seealso
 #' * [flag_outliers()], [flag_pitch_jumps()], and [flag_level_outliers()],
@@ -646,6 +743,8 @@ inspect_f0 <- function(data,
                        carryover_mult  = 1.5,
                        level_threshold = 3.5,
                        min_tokens      = 5,
+                       intensity       = NULL,
+                       intensity_drop  = 15,
                        time_unit       = c("s", "ms")) {
   time_unit <- match.arg(time_unit)
 
@@ -723,11 +822,35 @@ inspect_f0 <- function(data,
                       .data$has_jump_in_token
     )
 
+  # Optional intensity check (sample-level, advisory). When an intensity
+  # column is supplied, flag voiced samples sitting in a low-energy region of
+  # their token and note them. Intensity does not change flagged_token: a
+  # quiet-but-modal frame can track fine, so this is an inspect-don't-delete
+  # cue, most useful where it co-occurs with a jump.
+  if (!is.null(intensity)) {
+    result <- flag_low_intensity(result, f0 = f0, token = token,
+                                 intensity = intensity,
+                                 intensity_drop = intensity_drop)
+    result <- result |>
+      dplyr::mutate(
+        flag_notes = ifelse(
+          .data$flag_low_intensity,
+          ifelse(nchar(.data$flag_notes) > 0,
+                 paste0(.data$flag_notes, "; low intensity"),
+                 "low intensity"),
+          .data$flag_notes)
+      )
+  }
+
   # Final selected columns, matching what the Shiny Inspect tab expects.
+  # The intensity column and its flag are included only when requested.
+  keep <- c(token, time, f0)
+  if (!is.null(intensity)) keep <- c(keep, intensity)
+  keep <- c(keep, speaker, tone,
+            "f0_token_max", "f0_token_min", "f0_token_mean", "f0_token_sd",
+            "flagged_token", "flagged_jump", "flag_notes")
+  if (!is.null(intensity)) keep <- c(keep, "flag_low_intensity")
+
   result |>
-    dplyr::select(
-      dplyr::all_of(c(token, time, f0, speaker, tone)),
-      "f0_token_max", "f0_token_min", "f0_token_mean", "f0_token_sd",
-      "flagged_token", "flagged_jump", "flag_notes"
-    )
+    dplyr::select(dplyr::all_of(keep))
 }

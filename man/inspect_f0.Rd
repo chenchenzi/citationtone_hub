@@ -18,6 +18,8 @@ inspect_f0(
   carryover_mult = 1.5,
   level_threshold = 3.5,
   min_tokens = 5,
+  intensity = NULL,
+  intensity_drop = 15,
   time_unit = c("s", "ms")
 )
 }
@@ -56,6 +58,14 @@ level is flagged. Default \code{3.5} (Iglewicz & Hoaglin 1993).}
 required to run the check for a group. Default \code{5}. More tokens give a
 more reliable estimate of the group's spread.}
 
+\item{intensity}{Optional column name of intensity in dB. When supplied,
+the sample-level low-intensity check (\code{\link[=flag_low_intensity]{flag_low_intensity()}}) is run and
+its results are added (see Value). \code{NULL} (default) skips the check.}
+
+\item{intensity_drop}{Flag voiced samples whose intensity is more than this
+many dB below the token's peak intensity. Default \code{15}. Ignored when
+\code{intensity} is \code{NULL}.}
+
 \item{time_unit}{One of \code{"s"} or \code{"ms"}. Default \code{"s"}. Inspection is
 meant to run on real-time data; a normalised-time option was removed
 because the physiological rate thresholds below lose their meaning once
@@ -72,8 +82,13 @@ per-token summary statistics.
 any sample-level jump, or an unusual overall level for its tone.
 \item \code{flag_notes}: human-readable concatenation of the reasons a sample
 was flagged (e.g. \code{"max too high"}, \code{"jump (rise)"},
-\code{"level too high"}).
+\code{"level too high"}, \code{"low intensity"}).
 }
+
+When \code{intensity} is supplied, the result additionally carries the
+\code{intensity} column and a sample-level \code{flag_low_intensity} logical. The
+low-intensity flag is advisory: it appears in \code{flag_notes} but does not by
+itself set \code{flagged_token}.
 }
 \description{
 One-call convenience wrapper that runs both \code{\link[=flag_outliers]{flag_outliers()}} and

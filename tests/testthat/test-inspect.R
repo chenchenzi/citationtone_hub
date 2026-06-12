@@ -266,3 +266,89 @@ test_that("inspect_f0 catches a smooth, within-speaker-normal token that is off 
   expect_true(any(grepl("level too high", bad$flag_notes)))  # caught by level
   expect_false(any(grepl("max too high",  bad$flag_notes)))  # not by pooled max
 })
+
+
+# ---------- flag_low_intensity -----------------------------------------------
+
+test_that("flag_low_intensity flags quiet edge frames, not the loud core", {
+  df <- data.frame(
+    token     = rep("t1", 5),
+    f0        = c(120, 122, 121, 119, 118),
+    intensity = c(45, 62, 64, 63, 46)   # peak 64; the two edges sit ~18 dB down
+  )
+  out <- flag_low_intensity(df, intensity_drop = 15)
+  expect_equal(out$flag_low_intensity, c(TRUE, FALSE, FALSE, FALSE, TRUE))
+})
+
+test_that("flag_low_intensity ignores unvoiced and missing-intensity frames", {
+  df <- data.frame(
+    token     = rep("t1", 5),
+    f0        = c(0, 122, NA, 119, 118),   # frames 1, 3 unvoiced
+    intensity = c(20, 62, 64, NA, 40)      # frame 4 intensity missing
+  )
+  # Peak over voiced + intensity-present frames (2 and 5) is 62; only the
+  # quiet voiced frame 5 (40 < 62 - 15) is flagged.
+  out <- flag_low_intensity(df, intensity_drop = 15)
+  expect_equal(out$flag_low_intensity, c(FALSE, FALSE, FALSE, FALSE, TRUE))
+})
+
+test_that("flag_low_intensity leaves a token with no voiced sample unflagged", {
+  df <- data.frame(
+    token     = rep("t1", 3),
+    f0        = c(0, NA, 0),
+    intensity = c(30, 31, 29)
+  )
+  out <- flag_low_intensity(df)
+  expect_false(any(out$flag_low_intensity))
+})
+
+test_that("flag_low_intensity errors on a non-numeric intensity column", {
+  df <- data.frame(token = "t1", f0 = 120, intensity = "loud")
+  expect_error(flag_low_intensity(df), "must be numeric")
+})
+
+
+# ---------- inspect_f0: intensity layer --------------------------------------
+
+test_that("inspect_f0 adds intensity columns and note only when intensity is supplied", {
+  mk <- function(tok, base, int) data.frame(
+    token = tok, time = seq(0, 0.04, by = 0.01),
+    f0 = base + c(0, 1, 0, -1, 0),
+    speaker = "S01", tone = "T1",
+    intensity = int)
+  df <- do.call(rbind, list(
+    mk("a1", 150, c(60, 62, 63, 62, 61)),
+    mk("a2", 151, c(60, 62, 63, 62, 61)),
+    mk("a3", 150, c(60, 62, 63, 62, 61)),
+    mk("a4", 152, c(60, 62, 63, 62, 61)),
+    mk("a5", 149, c(60, 62, 63, 62, 43))   # last frame ~20 dB below the peak
+  ))
+
+  with_int <- inspect_f0(df, intensity = "intensity", intensity_drop = 15)
+  expect_true(all(c("intensity", "flag_low_intensity") %in% names(with_int)))
+  a5_last <- with_int[with_int$token == "a5" & with_int$time == 0.04, ]
+  expect_true(a5_last$flag_low_intensity)
+  expect_match(a5_last$flag_notes, "low intensity")
+
+  without_int <- inspect_f0(df)
+  expect_false(any(c("intensity", "flag_low_intensity") %in% names(without_int)))
+})
+
+test_that("inspect_f0 low-intensity flag is advisory (does not set flagged_token)", {
+  mk <- function(tok, base, int) data.frame(
+    token = tok, time = seq(0, 0.04, by = 0.01),
+    f0 = base + c(0, 1, 0, -1, 0),         # smooth: no jumps
+    speaker = "S01", tone = "T1",
+    intensity = int)
+  df <- do.call(rbind, list(
+    mk("a1", 150, c(60, 62, 63, 62, 61)),
+    mk("a2", 151, c(60, 62, 63, 62, 61)),
+    mk("a3", 150, c(60, 62, 63, 62, 61)),
+    mk("a4", 152, c(60, 62, 63, 62, 61)),
+    mk("a5", 150, c(60, 62, 63, 62, 43))   # only a quiet tail, normal level
+  ))
+  out <- inspect_f0(df, intensity = "intensity", intensity_drop = 15)
+  a5 <- out[out$token == "a5", ]
+  expect_true(any(a5$flag_low_intensity))   # the quiet frame is flagged
+  expect_false(any(a5$flagged_token))        # but the token itself is not
+})

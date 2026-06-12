@@ -12,7 +12,8 @@ inspect_ui <- function(input, output, session, dataset) {
           tags$li(tags$strong("Token ID:"), " A unique identifier for each token/syllable (groups rows belonging to the same contour)."),
           tags$li(tags$strong("Time:"), " The time variable that orders f0 samples within each token."),
           tags$li(tags$strong("Speaker:"), " A speaker ID for by-speaker z-score computation."),
-          tags$li(tags$strong("Tone category:"), " The column labelling tone types.")
+          tags$li(tags$strong("Tone category:"), " The column labelling tone types."),
+          tags$li(tags$strong("Intensity (dB, optional):"), " A per-frame intensity column (e.g. from the Praat script or in-app wrassp extraction). Enables the low-intensity check; leave as ", tags$em("— none —"), " if your data has no intensity.")
         ),
         tags$strong("Three complementary checks:"),
         tags$ul(style = "margin: 4px 0 8px 0; padding-left: 18px;",
@@ -43,13 +44,15 @@ inspect_ui <- function(input, output, session, dataset) {
           tags$li(tags$strong("Token-level (speaker × tone):"), " Computes each token's median f0 in semitones, then a ", tags$em("modified z-score"), " (median/MAD-based; Iglewicz & Hoaglin, 1993) against other tokens of the same speaker and tone. Tokens beyond the threshold are flagged ", tags$code(style = "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;", "level too high"), " or ", tags$code(style = "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;", "level too low"), ". This catches smoothly shifted contours that the other checks miss. The median (not mean) is used so a few jump-flagged frames don't shift a token's apparent level; groups with fewer than the minimum number of tokens are skipped."),
           tags$li(tags$strong("Jump detection:"), " Computes sample-to-sample semitone differences within each token. Flags where the change exceeds a rise or fall threshold, labelled ", tags$code(style = "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;", "jump (rise)"), " or ", tags$code(style = "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;", "jump (fall)"), ". When a jump is detected, the side ", tags$em("farther from the token median"), " is flagged, so artefacts at the start of a token are caught correctly. Adapted from Steffman & Cole (2022)."),
           tags$li(tags$strong("Octave jumps:"), " Flags samples where the Hz ratio to the previous sample is < 0.49 or > 1.99 (pitch halving/doubling), labelled ", tags$code(style = "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;", "octave jump"), "."),
-          tags$li(tags$strong("Carryover:"), " Samples ", tags$em("around"), " a detected artefact (forward and backward) that stay within ", tags$em("mult"), "\u00d7 the rise/fall threshold (in semitones) of the artefact\u2019s f0. These may still be erroneous even if their own step is small, labelled ", tags$code(style = "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;", "carryover"), ". The band is direction-specific: ", tags$code("rise_threshold \u00d7 mult"), " when the trend is rising, ", tags$code("fall_threshold \u00d7 mult"), " when falling (adapted from Steffman & Cole, 2022). The multiplier defaults to ", tags$strong("1.5"), " (paper\u2019s value) and is configurable in the sidebar (set to 0 to disable).")
+          tags$li(tags$strong("Carryover:"), " Samples ", tags$em("around"), " a detected artefact (forward and backward) that stay within ", tags$em("mult"), "\u00d7 the rise/fall threshold (in semitones) of the artefact\u2019s f0. These may still be erroneous even if their own step is small, labelled ", tags$code(style = "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;", "carryover"), ". The band is direction-specific: ", tags$code("rise_threshold \u00d7 mult"), " when the trend is rising, ", tags$code("fall_threshold \u00d7 mult"), " when falling (adapted from Steffman & Cole, 2022). The multiplier defaults to ", tags$strong("1.5"), " (paper\u2019s value) and is configurable in the sidebar (set to 0 to disable)."),
+          tags$li(tags$strong("Low intensity (optional):"), " When an intensity column is selected, flags voiced samples sitting more than the dB threshold below their token\u2019s ", tags$em("peak"), " intensity \u2014 typically voicing onsets/offsets and devoiced or creaky tails, where f0 is least reliable. Labelled ", tags$code(style = "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;", "low intensity"), ". This check is ", tags$strong("advisory"), ": it is noted in ", tags$code("flag_notes"), " and counted in the summary, but does not on its own set ", tags$code("flagged_token"), " (a quiet but modal frame can track fine). It is most valuable where it co-occurs with a jump, corroborating that the jump is a tracking error.")
         ),
         tags$strong("Default thresholds:"),
         tags$ul(style = "margin-bottom: 0; padding-left: 18px;",
           tags$li(tags$strong("Extreme-value (z-score) = 3:"), " A standard convention for outlier detection (\u00b13 SD covers 99.7% of a normal distribution)."),
           tags$li(tags$strong("Rise = 1.263 ST, Fall = 1.714 ST per 10ms:"), " Based on the maximum rate of f0 change in human speech production (Sundberg, 1973). Changes exceeding these rates are physiologically implausible and likely tracking errors."),
-          tags$li(tags$strong("Token-level (modified z) = 3.5:"), " The cutoff recommended by Iglewicz & Hoaglin (1993) for the median/MAD modified z-score, the robust analogue of the \u00b13 SD rule. Requires at least 5 same-speaker-same-tone tokens (more is more reliable).")
+          tags$li(tags$strong("Token-level (modified z) = 3.5:"), " The cutoff recommended by Iglewicz & Hoaglin (1993) for the median/MAD modified z-score, the robust analogue of the \u00b13 SD rule. Requires at least 5 same-speaker-same-tone tokens (more is more reliable)."),
+          tags$li(tags$strong("Low-intensity drop = 15 dB:"), " Voiced frames more than 15 dB below the token\u2019s peak intensity are flagged. The comparison is relative-to-peak (not an absolute dB level), so it transfers across recordings regardless of microphone distance or gain.")
         )
     )
   })
@@ -80,6 +83,15 @@ inspect_ui <- function(input, output, session, dataset) {
         selectInput("inspect_tone_var", "Select Tone category variable:",
                     choices = setNames(vars, var_types),
                     selected = guess_var(vars, var_patterns$tone, 5)),
+        selectInput("inspect_intensity_var",
+                    "Select Intensity (dB) variable (optional):",
+                    choices  = c("— none —" = "",
+                                 setNames(vars, var_types)),
+                    selected = {
+                      hit <- vars[grepl("intens|rms|energy|\\bdb\\b",
+                                        vars, ignore.case = TRUE)]
+                      if (length(hit)) hit[1] else ""
+                    }),
         tags$hr(),
         radioButtons("inspect_time_unit", "Time unit:",
                      choices = list("Milliseconds" = "ms",
@@ -99,6 +111,9 @@ inspect_ui <- function(input, output, session, dataset) {
         numericInput("inspect_level_thresh",
                      "Token-level threshold (modified z):",
                      value = 3.5, min = 1, max = 8, step = 0.5),
+        numericInput("inspect_intensity_drop",
+                     "Low-intensity drop below peak (dB):",
+                     value = 15, min = 1, max = 50, step = 1),
         tags$hr(),
         actionButton("inspect_button", "Run Inspection"),
         tags$hr(),
@@ -132,6 +147,22 @@ inspect_ui <- function(input, output, session, dataset) {
     level_thresh <- as.numeric(input$inspect_level_thresh)
     if (is.na(level_thresh) || level_thresh <= 0) level_thresh <- 3.5
 
+    intensity_drop <- as.numeric(input$inspect_intensity_drop)
+    if (is.na(intensity_drop) || intensity_drop <= 0) intensity_drop <- 15
+
+    # Optional intensity check. Only run it when the user has picked a column
+    # that exists and is numeric; otherwise fall back to NULL (skip).
+    intensity_var <- input$inspect_intensity_var
+    if (is.null(intensity_var) || !nzchar(intensity_var) ||
+        !(intensity_var %in% names(dataset()))) {
+      intensity_var <- NULL
+    } else if (!is.numeric(dataset()[[intensity_var]])) {
+      showNotification(
+        "Intensity column is not numeric; skipping the low-intensity check.",
+        type = "warning", duration = 5)
+      intensity_var <- NULL
+    }
+
     result <- inspect_f0(
       dataset(),
       f0              = input$inspect_f0_var,
@@ -144,6 +175,8 @@ inspect_ui <- function(input, output, session, dataset) {
       fall_threshold  = input$inspect_fall_thresh,
       carryover_mult  = carry_mult,
       level_threshold = level_thresh,
+      intensity       = intensity_var,
+      intensity_drop  = intensity_drop,
       time_unit       = input$inspect_time_unit
     )
 
@@ -165,6 +198,11 @@ inspect_ui <- function(input, output, session, dataset) {
     n_flagged_tokens <- sum(token_level$flagged_token, na.rm = TRUE)
     n_samples <- nrow(result)
     n_flagged_samples <- sum(result$flagged_jump, na.rm = TRUE)
+
+    # Low-intensity samples (only present when an intensity column was used).
+    has_intensity    <- "flag_low_intensity" %in% names(result)
+    n_lowint_samples <- if (has_intensity)
+                          sum(result$flag_low_intensity, na.rm = TRUE) else 0
 
     # Which check(s) fired, per token (derived from flag_notes / flagged_jump;
     # the checks can overlap, so these need not sum to the flagged total).
@@ -221,7 +259,10 @@ inspect_ui <- function(input, output, session, dataset) {
             )
           ),
           tags$li(paste0("Samples with potential jumps: ", n_flagged_samples, " / ", n_samples,
-                         " (", round(100 * n_flagged_samples / max(n_samples, 1), 1), "%)"))
+                         " (", round(100 * n_flagged_samples / max(n_samples, 1), 1), "%)")),
+          if (has_intensity) tags$li(paste0(
+            "Low-intensity samples (advisory): ", n_lowint_samples, " / ", n_samples,
+            " (", round(100 * n_lowint_samples / max(n_samples, 1), 1), "%)"))
         ),
         if (n_level_skipped > 0) {
           tags$p(style = "margin: 4px 0 6px 0; font-size: 0.82rem; color: #8a6d00;",
@@ -248,7 +289,7 @@ inspect_ui <- function(input, output, session, dataset) {
     req(inspect_result())
     result <- inspect_result()
 
-    DT::datatable(
+    dt <- DT::datatable(
       result,
       rownames = FALSE,
       filter = "top",
@@ -265,6 +306,20 @@ inspect_ui <- function(input, output, session, dataset) {
       DT::formatStyle("flagged_jump",
         backgroundColor = DT::styleEqual(c(TRUE, FALSE), c("#fff3cd", "white"))) %>%
       DT::formatRound(c("f0_token_max", "f0_token_min", "f0_token_mean", "f0_token_sd"), 2)
+
+    # Style the low-intensity flag and round the intensity column, both only
+    # present when an intensity variable was selected.
+    if ("flag_low_intensity" %in% names(result)) {
+      dt <- dt %>%
+        DT::formatStyle("flag_low_intensity",
+          backgroundColor = DT::styleEqual(c(TRUE, FALSE), c("#e7f0ff", "white")))
+    }
+    intensity_var <- input$inspect_intensity_var
+    if (!is.null(intensity_var) && nzchar(intensity_var) &&
+        intensity_var %in% names(result) && is.numeric(result[[intensity_var]])) {
+      dt <- dt %>% DT::formatRound(intensity_var, 1)
+    }
+    dt
   })
 
   # Download handler - all data

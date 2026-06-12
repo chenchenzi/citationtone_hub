@@ -20,7 +20,8 @@ fp_praat_script_ui <- function(input, output, session) {
 # the chosen algorithm, saves a binary `.Pitch` file per recording (which
 # preserves all pitch candidates so Shinytone\'s F0 Correction tab can
 # show the top-3 candidate markers on the plot), and writes a combined
-# long-format CSV (one row per frame per token).
+# long-format CSV (one row per frame per token; columns: token, time,
+# f0, intensity).
 #
 # Usage:
 #   1. Open Praat. From the menu: Praat > Open Praat script...
@@ -127,7 +128,7 @@ createFolder: output_folder$
 
 # Open (overwrite) the combined CSV with a header row
 csv_path$ = output_folder$ + "/" + output_csv$
-writeFileLine: csv_path$, "token,time,f0"
+writeFileLine: csv_path$, "token,time,f0,intensity"
 
 # Enumerate .wav files
 file_list = Create Strings as file list: "wavs", input_folder$ + "/*.wav"
@@ -167,9 +168,19 @@ for i to n_files
   selectObject: pitch
   Save as binary file: output_folder$ + "/" + basename$ + ".Pitch"
 
-  # Append every frame to the combined CSV.
+  # Intensity (dB) over the same recording. Shinytone\'s Inspect tab uses
+  # this to flag low-energy frames, where f0 estimates are unreliable
+  # (voicing onsets/offsets, devoiced or creaky tails). Minimum pitch =
+  # f0_min sets the analysis window (~3.2 / f0_min seconds).
+  selectObject: sound
+  intensity = noprogress To Intensity: f0_min, time_step, "yes"
+
+  # Append every frame to the combined CSV. f0 comes from the Pitch frame;
+  # intensity is sampled from the Intensity object at that frame\'s time.
+  selectObject: pitch
   n_frames = Get number of frames
   for f to n_frames
+    selectObject: pitch
     t      = Get time from frame: f
     f0_val = Get value in frame: f, "Hertz"
     if f0_val = undefined
@@ -177,11 +188,18 @@ for i to n_files
     else
       f0_val$ = fixed$(f0_val, 4)
     endif
-    appendFileLine: csv_path$, basename$ + "," + fixed$(t, 4) + "," + f0_val$
+    selectObject: intensity
+    int_val = Get value at time: t, "cubic"
+    if int_val = undefined
+      int_val$ = "NA"
+    else
+      int_val$ = fixed$(int_val, 2)
+    endif
+    appendFileLine: csv_path$, basename$ + "," + fixed$(t, 4) + "," + f0_val$ + "," + int_val$
   endfor
 
   # Tidy up so the Object list does not balloon over thousands of files.
-  selectObject: sound, pitch
+  selectObject: sound, pitch, intensity
   Remove
 endfor
 
@@ -273,8 +291,11 @@ appendInfoLine: "  Combined CSV: ", csv_path$
         tags$li("Saves a binary ", tags$code("<basename>.Pitch"),
                 " file per recording into the output folder."),
         tags$li("Writes a single ", tags$code("f0_long.csv"),
-                " with columns ", tags$code("token, time, f0"),
-                " (long format), one row per frame per token.")
+                " with columns ", tags$code("token, time, f0, intensity"),
+                " (long format), one row per frame per token. The ",
+                tags$code("intensity"), " column (dB) lets the ",
+                tags$strong("Inspect"),
+                " tab flag low-energy frames where f0 is unreliable.")
       ),
 
       h4("The script"),

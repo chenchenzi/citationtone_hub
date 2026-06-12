@@ -5,6 +5,10 @@
 #   (2) Parse uploaded Praat .Pitch / .PitchTier via rPraat
 # Both populate fp_f0_data with a long-format data frame:
 #   token (basename), time (s), f0 (Hz, NA on unvoiced frames).
+#   The wrassp backend additionally adds an intensity (dB) column (short-term
+#   RMS), used by the Inspect tab's low-intensity check. The Praat .Pitch
+#   backend has no intensity source, so it omits the column; use the offline
+#   Praat script (F0 Processing > Praat script) if you want Praat intensity.
 ###############################################
 
 fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
@@ -277,7 +281,9 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         tags$ul(style = "margin-bottom: 0; padding-left: 18px;",
           tags$li(HTML(paste0(
             "<strong>wrassp</strong> runs the ksvF0 algorithm in R, with no external dependencies, ",
-            "and deploys cleanly on shinyapps.io. (",
+            "and deploys cleanly on shinyapps.io. It also computes a per-frame ",
+            "<strong>intensity</strong> (dB) track (short-term RMS) for the Inspect tab's ",
+            "low-intensity check. (",
             "<a href='https://cran.r-project.org/package=wrassp' target='_blank'>CRAN</a> &middot; ",
             "<a href='https://github.com/IPS-LMU/wrassp' target='_blank'>GitHub</a>",
             "; algorithm: Sch&auml;fer-Vincent, 1983.)"))),
@@ -319,8 +325,26 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     t         <- seq(t0, by = 1 / sr, length.out = n_frames)
     f0        <- as.vector(obj$F0)
     f0[f0 == 0] <- NA_real_
+
+    # Intensity (dB) via short-term RMS, sampled at the f0 frame times so the
+    # two tracks line up one-to-one. Matching windowShift keeps the frame
+    # grids close; approx() with rule = 2 fills the ends without adding NA.
+    intensity <- tryCatch({
+      rms_obj <- wrassp::rmsana(wav_path, toFile = FALSE,
+                                windowShift = step_ms, verbose = FALSE)
+      rms_v  <- as.vector(rms_obj$rms)
+      rms_sr <- attr(rms_obj, "sampleRate")
+      rms_t0 <- attr(rms_obj, "startTime")
+      rms_t  <- seq(rms_t0, by = 1 / rms_sr, length.out = length(rms_v))
+      stats::approx(rms_t, rms_v, xout = t, rule = 2)$y
+    }, error = function(e) {
+      warning("rmsana failed for ", basename, ": ", e$message)
+      rep(NA_real_, length(t))
+    })
+
     list(
       df = data.frame(token = basename, time = t, f0 = f0,
+                      intensity = intensity,
                       stringsAsFactors = FALSE),
       candidates = NULL
     )
@@ -473,6 +497,13 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       f0    = suppressWarnings(as.numeric(df[[fcol]])),
       stringsAsFactors = FALSE
     )
+    # Carry an intensity column through if the CSV has one (auto-detected by
+    # name) so the Inspect tab's low-intensity check can use it downstream.
+    icol <- names(df)[tolower(names(df)) %in%
+                        c("intensity", "intensity_db", "rms", "energy")]
+    if (length(icol) > 0) {
+      out$intensity <- suppressWarnings(as.numeric(df[[icol[1]]]))
+    }
     # Resume-from-previous-session metadata. If the uploaded CSV is a
     # shinytone all_correctedf0.csv from an earlier session, it carries
     # `f0_corrected` and `edited` columns. Keep them so the Correction
@@ -773,6 +804,16 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         duration_s = round(max(time) - min(time), 3),
         .groups    = "drop"
       )
+    # Append mean intensity (dB) per token when an intensity column is present.
+    if ("intensity" %in% names(df)) {
+      mi <- df |>
+        dplyr::group_by(token) |>
+        dplyr::summarise(
+          mean_intensity = round(mean(intensity, na.rm = TRUE), 1),
+          .groups = "drop"
+        )
+      summary_df <- dplyr::left_join(summary_df, mi, by = "token")
+    }
     DT::datatable(
       summary_df,
       rownames = FALSE, filter = "top",
