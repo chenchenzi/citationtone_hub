@@ -303,6 +303,9 @@ ui <- fluidPage(
                               style = "margin-top: -16px; margin-bottom: -16px;"),
              id = "main_nav",
              windowTitle = "Shinytone",
+             # Collapse the top nav into a hamburger toggle on narrow screens
+             # instead of letting the items stack onto multiple rows.
+             collapsible = TRUE,
              theme = bs_theme(version = 5, bootswatch = "minty",
                               heading_font = font_google("Open Sans"),
                               base_font = font_google("Open Sans"),
