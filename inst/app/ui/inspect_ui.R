@@ -45,7 +45,16 @@ inspect_ui <- function(input, output, session, dataset) {
           tags$li(tags$strong("Jump detection:"), " Computes sample-to-sample semitone differences within each token. Flags where the change exceeds a rise or fall threshold, labelled ", tags$code(style = "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;", "jump (rise)"), " or ", tags$code(style = "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;", "jump (fall)"), ". When a jump is detected, the side ", tags$em("farther from the token median"), " is flagged, so artefacts at the start of a token are caught correctly. Adapted from Steffman & Cole (2022)."),
           tags$li(tags$strong("Octave jumps:"), " Flags samples where the Hz ratio to the previous sample is < 0.49 or > 1.99 (pitch halving/doubling), labelled ", tags$code(style = "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;", "octave jump"), "."),
           tags$li(tags$strong("Carryover:"), " Samples ", tags$em("around"), " a detected artefact (forward and backward) that stay within ", tags$em("mult"), "\u00d7 the rise/fall threshold (in semitones) of the artefact\u2019s f0. These may still be erroneous even if their own step is small, labelled ", tags$code(style = "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;", "carryover"), ". The band is direction-specific: ", tags$code("rise_threshold \u00d7 mult"), " when the trend is rising, ", tags$code("fall_threshold \u00d7 mult"), " when falling (adapted from Steffman & Cole, 2022). The multiplier defaults to ", tags$strong("1.5"), " (paper\u2019s value) and is configurable in the sidebar (set to 0 to disable)."),
-          tags$li(tags$strong("Low intensity (optional):"), " When an intensity column is selected, flags voiced samples sitting more than the dB threshold below their token\u2019s ", tags$em("peak"), " intensity \u2014 typically voicing onsets/offsets and devoiced or creaky tails, where f0 is least reliable. Labelled ", tags$code(style = "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;", "low intensity"), ". This check is ", tags$strong("advisory"), ": it is noted in ", tags$code("flag_notes"), " and counted in the summary, but does not on its own set ", tags$code("flagged_token"), " (a quiet but modal frame can track fine). It is most valuable where it co-occurs with a jump, corroborating that the jump is a tracking error.")
+          tags$li(HTML(paste0(
+            "<strong>Low intensity (optional):</strong> When an intensity column is selected, ",
+            "flags voiced samples sitting more than the dB threshold below their token&rsquo;s ",
+            "<em>peak</em> intensity, typically at voicing onsets/offsets and devoiced or creaky ",
+            "tails, where f0 is least reliable. Labelled ",
+            "<code style='color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;'>",
+            "low intensity</code>. This check is <strong>advisory</strong>: it is noted in ",
+            "<code>flag_notes</code> and counted in the summary, but does not on its own set ",
+            "<code>flagged_token</code> (a quiet but modal frame can track fine). It is most ",
+            "valuable where it co-occurs with a jump, corroborating that the jump is a tracking error.")))
         ),
         tags$strong("Default thresholds:"),
         tags$ul(style = "margin-bottom: 0; padding-left: 18px;",
