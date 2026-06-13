@@ -26,7 +26,7 @@ run_app <- function(...) {
   # offer to install them if not.
   app_deps <- c("bslib", "DT", "emmeans", "ggplot2", "gridExtra",
                 "lme4", "mgcv", "plotly", "praatpicture", "RColorBrewer",
-                "rPraat", "thematic", "tuneR")
+                "rPraat", "thematic", "tuneR", "wrassp")
   missing_deps <- app_deps[!vapply(app_deps, requireNamespace,
                                     logical(1), quietly = TRUE)]
   if (length(missing_deps) > 0) {
