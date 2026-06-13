@@ -106,8 +106,9 @@ follows Steffman & Cole (2022).
 }
 }
 \references{
-Steffman, J., & Cole, J. (2022). Pitch tracking artefacts and the
-detection of voicing errors in spontaneous speech.
+Steffman, J., & Cole, J. (2022). An automated method for detecting f0
+measurement jumps based on sample-to-sample differences. \emph{JASA
+Express Letters}, 2(11), 115201. \doi{10.1121/10.0015045}
 
 Sundberg, J. (1973). The acoustics of the singing voice.
 \emph{Scientific American}, 229(3), 82–91.
