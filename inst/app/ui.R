@@ -23,6 +23,49 @@ ui <- fluidPage(
       gtag('config', 'G-5RG08QWPPG');
     ")),
     tags$link(rel = "stylesheet", href = "https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;700&display=swap"),
+    # IBM Plex Serif powers the animated wordmark in the landing-page logo.
+    tags$link(rel = "stylesheet", href = "https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:ital,wght@0,400;0,500;1,400&display=swap"),
+    # Brand-styled mobile menu toggle. The top navbar collapses into this
+    # button on narrow screens; recolor to the Shinytone teal, add a "Menu"
+    # label for discoverability, and fold the bars into an X when open.
+    # Markup: button.navbar-toggle > span.sr-only + three span.icon-bar.
+    tags$style(HTML("
+      .navbar-default .navbar-toggle {
+        position: relative;
+        border: 1px solid #cfe3db !important;
+        border-radius: 8px !important;
+        padding: 9px 56px 9px 12px !important;
+        background-color: #ffffff !important;
+        transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease;
+      }
+      .navbar-default .navbar-toggle:hover,
+      .navbar-default .navbar-toggle:focus {
+        background-color: #e8f5f0 !important;
+        border-color: #78c2ad !important;
+        box-shadow: 0 2px 7px rgba(44, 95, 79, .12);
+      }
+      .navbar-default .navbar-toggle:focus-visible {
+        outline: 2px solid #78c2ad; outline-offset: 2px;
+      }
+      .navbar-default .navbar-toggle .icon-bar {
+        display: block;
+        width: 22px; height: 2.5px;
+        border-radius: 2px;
+        background-color: #2c5f4f !important;
+        transition: transform .22s ease, opacity .18s ease, background-color .15s ease;
+      }
+      .navbar-default .navbar-toggle .icon-bar + .icon-bar { margin-top: 5px; }
+      .navbar-default .navbar-toggle::after {
+        content: 'Menu';
+        position: absolute; right: 13px; top: 50%;
+        transform: translateY(-50%);
+        color: #2c5f4f; font-weight: 500; font-size: 0.82rem; line-height: 1;
+      }
+      /* BootStrap removes .collapsed on the toggle while the menu is open. */
+      .navbar-default .navbar-toggle:not(.collapsed) .icon-bar:nth-child(2) { transform: translateY(7.5px) rotate(45deg); }
+      .navbar-default .navbar-toggle:not(.collapsed) .icon-bar:nth-child(3) { opacity: 0; }
+      .navbar-default .navbar-toggle:not(.collapsed) .icon-bar:nth-child(4) { transform: translateY(-7.5px) rotate(-45deg); }
+    ")),
     tags$link(rel = "stylesheet", href = "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"),
     tags$script(src = "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"),
     tags$script(src = "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/r.min.js"),
@@ -315,8 +358,76 @@ ui <- fluidPage(
                       icon = icon("house"),
                       # --- Hero: logo + tagline + author/source ---
                       tags$div(style = "text-align: center; padding: 32px 15px 16px 15px;",
-                        tags$img(src = "shinytone.svg", height = "110px", alt = "Shinytone",
-                                 style = "margin-bottom: 16px;"),
+                        # Animated logo (v3: rising/falling draw-on entrance,
+                        # eye pop, wordmark rise, then a bold idle swim).
+                        # CSS is scoped to #hero-logo and all classes/keyframes
+                        # are htl-* prefixed so nothing leaks into the rest of
+                        # the UI. The navbar logo stays the static shinytone.svg.
+                        tags$style(HTML("
+                          #hero-logo { height: 110px; width: auto; overflow: visible;
+                                       margin-bottom: 16px; display: inline-block; }
+                          #hero-logo .htl-draw-teal, #hero-logo .htl-draw-coral {
+                            stroke-dasharray: 100; stroke-dashoffset: 0; }
+                          #hero-logo .htl-draw-teal  { animation: htl-draw .75s cubic-bezier(.25,.6,.2,1) 0s   both; }
+                          #hero-logo .htl-draw-coral { animation: htl-draw .78s cubic-bezier(.25,.6,.2,1) .12s both; }
+                          @keyframes htl-draw { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
+                          #hero-logo .htl-mark { transform-box: fill-box; transform-origin: 18% 50%;
+                            animation: htl-swim 1.85s ease-in-out 1.45s infinite; }
+                          @keyframes htl-swim {
+                            0%   { transform: translateX(0)   translateY(0)   rotate(0deg);   }
+                            15%  { transform: translateX(4px) translateY(-2px) rotate(11deg);  }
+                            40%  { transform: translateX(1px) translateY(1px)  rotate(-12deg); }
+                            65%  { transform: translateX(5px) translateY(-2px) rotate(9deg);   }
+                            85%  { transform: translateX(2px) translateY(0)    rotate(-6deg);  }
+                            100% { transform: translateX(0)   translateY(0)    rotate(0deg);   } }
+                          #hero-logo .htl-eye-pop { transform-box: fill-box; transform-origin: center;
+                            animation: htl-pop .42s cubic-bezier(.2,1.5,.4,1) .95s both; }
+                          @keyframes htl-pop { from { transform: scale(0); } to { transform: scale(1); } }
+                          #hero-logo .htl-eye { transform-box: fill-box; transform-origin: center;
+                            animation: htl-blink 5s ease-in-out 2.9s infinite; }
+                          @keyframes htl-blink { 0%,92%,100% { transform: scaleY(1); } 96% { transform: scaleY(.12); } }
+                          #hero-logo .htl-wordmark { animation: htl-rise .6s ease-out 1s both; }
+                          @keyframes htl-rise { from { transform: translateY(8px); opacity: 0; }
+                                                to   { transform: translateY(0);   opacity: 1; } }
+                          #hero-logo .htl-glint { fill: #ffffff; animation: htl-sweep 5s ease-in-out 2.1s infinite; }
+                          @keyframes htl-sweep {
+                            0%   { transform: translateX(58px)  skewX(-18deg); opacity: 0;   }
+                            6%   { opacity: .55; }
+                            15%  { transform: translateX(300px) skewX(-18deg); opacity: .55; }
+                            18%  { opacity: 0; }
+                            100% { transform: translateX(300px) skewX(-18deg); opacity: 0;   } }
+                          @media (prefers-reduced-motion: reduce) {
+                            #hero-logo .htl-draw-teal, #hero-logo .htl-draw-coral, #hero-logo .htl-mark,
+                            #hero-logo .htl-eye-pop, #hero-logo .htl-eye, #hero-logo .htl-wordmark {
+                              animation: none !important; }
+                            #hero-logo .htl-glint { display: none; } }
+                        ")),
+                        HTML(r"[<svg id="hero-logo" viewBox="0 0 320 90" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Shinytone">
+  <title>Shinytone</title>
+  <desc>Animated Shinytone logo: the two strokes draw on along their rising and falling curves, the eye appears, the wordmark rises, and the fish gently swims.</desc>
+  <defs>
+    <clipPath id="htlWordclip">
+      <text x="82" y="56" font-family="'IBM Plex Serif', Georgia, serif" font-size="38" font-weight="500" letter-spacing="-0.5">Shiny<tspan font-style="italic" font-weight="400">tone</tspan></text>
+    </clipPath>
+    <mask id="htlDrawTeal" maskUnits="userSpaceOnUse" x="-45" y="-40" width="90" height="80">
+      <path class="htl-draw-teal" d="M -22 12.5 Q 0 14 22 -10" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round" pathLength="100"/>
+    </mask>
+    <mask id="htlDrawCoral" maskUnits="userSpaceOnUse" x="-45" y="-40" width="90" height="80">
+      <path class="htl-draw-coral" d="M -22 -10.5 Q 0 -14 22 12" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round" pathLength="100"/>
+    </mask>
+  </defs>
+  <g transform="translate(42,45)">
+    <g class="htl-mark">
+      <path d="M -22 12 Q 0 10 22 -10 Q 0 18 -22 13 Z" fill="#5cb89a" mask="url(#htlDrawTeal)"/>
+      <path d="M -22 -10 Q 0 -10 22 12 Q 0 -18 -22 -11 Z" fill="#e8927d" mask="url(#htlDrawCoral)"/>
+      <g class="htl-eye-pop"><circle class="htl-eye" cx="-14" cy="0" r="2.6" fill="#2c5f4f"/></g>
+    </g>
+  </g>
+  <text class="htl-wordmark" x="82" y="56" font-family="'IBM Plex Serif', Georgia, serif" font-size="38" font-weight="500" fill="#2c5f4f" letter-spacing="-0.5">Shiny<tspan font-style="italic" font-weight="400" fill="#c66b56">tone</tspan></text>
+  <g clip-path="url(#htlWordclip)">
+    <rect class="htl-glint" x="0" y="16" width="22" height="58"/>
+  </g>
+</svg>]"),
                         tags$p(style = "color: #555; font-size: 1.02rem; max-width: 820px; margin: 0 auto 14px auto; line-height: 1.55;",
                           "An open-source tool for citation tone research across tone languages. ",
                           "It integrates the full citation tone analysis workflow into an interactive tool. ",
