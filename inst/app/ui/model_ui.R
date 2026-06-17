@@ -2,7 +2,7 @@
 # Model: Polynomials tab — Legendre polynomial fitting per token
 ###############################################
 
-model_ui <- function(input, output, session, dataset, normalised_data) {
+model_ui <- function(input, output, session, dataset, normalised_data, curated_data = NULL) {
 
   # --- Guide text ---
   output$model_guide <- renderUI({
@@ -40,8 +40,11 @@ model_ui <- function(input, output, session, dataset, normalised_data) {
   # --- Helper: get active dataset based on selector ---
   active_data <- reactive({
     has_norm <- !is.null(normalised_data())
+    has_cur  <- !is.null(curated_data) && !is.null(curated_data())
     sel <- input$model_dataset
-    if (!is.null(sel) && sel == "normalised" && has_norm) {
+    if (!is.null(sel) && sel == "curated" && has_cur) {
+      curated_data()
+    } else if (!is.null(sel) && sel == "normalised" && has_norm) {
       normalised_data()
     } else {
       dataset()
@@ -51,11 +54,15 @@ model_ui <- function(input, output, session, dataset, normalised_data) {
   # --- Sidebar controls ---
   output$ui_model <- renderUI({
     has_norm <- !is.null(normalised_data())
+    has_cur  <- !is.null(curated_data) && !is.null(curated_data())
 
     # Dataset choices
     ds_choices <- c("Uploaded data" = "uploaded")
     if (has_norm) {
       ds_choices <- c(ds_choices, "Normalised data" = "normalised")
+    }
+    if (has_cur) {
+      ds_choices <- c(ds_choices, "Curated data" = "curated")
     }
     # Preserve current selection
     ds_selected <- if (!is.null(input$model_dataset) && input$model_dataset %in% ds_choices) {

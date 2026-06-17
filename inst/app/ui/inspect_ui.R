@@ -2,7 +2,7 @@
 # Inspect tab: F0 outlier & artefact detection
 ###############################################
 
-inspect_ui <- function(input, output, session, dataset) {
+inspect_ui <- function(input, output, session, dataset, inspect_result = reactiveVal(NULL)) {
 
   # Guide text for the Inspect tab
   output$inspect_guide <- renderUI({
@@ -139,8 +139,9 @@ inspect_ui <- function(input, output, session, dataset) {
     )
   })
 
-  # Store inspection result as reactiveVal
-  inspect_result <- reactiveVal(NULL)
+  # Inspection result is stored in the shared `inspect_result` reactiveVal
+  # (passed in), so the Curate tab can offer "use Inspect flags" as a way to
+  # find re-label candidates. Defaults to a private reactiveVal if not shared.
 
   # Run inspection when button is clicked.
   # The detection logic lives in the package function inspect_f0()

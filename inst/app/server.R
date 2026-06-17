@@ -26,6 +26,7 @@ source("ui/view_ui.R")
 source("ui/visualise_ui.R")
 source("ui/normalise_ui.R")
 source("ui/inspect_ui.R")
+source("ui/curate_ui.R")
 source("ui/model_ui.R")
 source("ui/gca_ui.R")
 source("ui/gamm_ui.R")
@@ -161,6 +162,15 @@ server <- function(input, output, session) {
   # Shared storage for normalised dataset (written by Normalise tab, read by Model tab)
   normalised_data <- reactiveVal(NULL)
 
+  # Shared storage for curated dataset (written by Curate tab: relabels applied
+  # to the tone column, excluded tokens dropped; offered as a "Curated data"
+  # source in the modelling and summarise tabs). NULL until the user curates.
+  curated_data <- reactiveVal(NULL)
+
+  # Shared inspection result (written by Inspect tab, read by Curate tab so the
+  # actual Inspect flags can seed re-label candidates). NULL until Inspect runs.
+  inspect_result <- reactiveVal(NULL)
+
   # Shared storage for model prediction data (written by GCA/GAMM, read by Summarise)
   gca_pred_data <- reactiveVal(NULL)
   gamm_pred_data <- reactiveVal(NULL)
@@ -176,14 +186,15 @@ server <- function(input, output, session) {
   view_ui(input, output, session, dataset)
   normalised_ui(input, output, session, dataset, normalised_data)
   visualise_ui(input, output, session, dataset, normalised_data)
-  inspect_ui(input, output, session, dataset)
-  model_ui(input, output, session, dataset, normalised_data)
-  gca_ui(input, output, session, dataset, normalised_data, gca_pred_data)
-  gamm_ui(input, output, session, dataset, normalised_data, gamm_pred_data)
+  inspect_ui(input, output, session, dataset, inspect_result)
+  curate_ui(input, output, session, dataset, curated_data, inspect_result)
+  model_ui(input, output, session, dataset, normalised_data, curated_data)
+  gca_ui(input, output, session, dataset, normalised_data, gca_pred_data, curated_data)
+  gamm_ui(input, output, session, dataset, normalised_data, gamm_pred_data, curated_data)
   checklist_ui(input, output, session)
   filename_guide_ui(input, output, session)
   waveform_guide_ui(input, output, session)
-  summarise_ui(input, output, session, dataset, normalised_data, gca_pred_data, gamm_pred_data)
+  summarise_ui(input, output, session, dataset, normalised_data, gca_pred_data, gamm_pred_data, curated_data)
 
   # f0 processing tab modules
   fp_start_ui(input, output, session, fp_audio_data)

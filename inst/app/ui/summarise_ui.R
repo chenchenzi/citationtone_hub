@@ -2,7 +2,7 @@
 # Summarise tab — Chao Tone Digit Conversion
 ###############################################
 
-summarise_ui <- function(input, output, session, dataset, normalised_data, gca_pred_data, gamm_pred_data) {
+summarise_ui <- function(input, output, session, dataset, normalised_data, gca_pred_data, gamm_pred_data, curated_data = NULL) {
 
   # classify_contour() and compute_mean_contour() are now package-level
   # functions (R/chao.R), available in the global namespace via global.R.
@@ -87,10 +87,12 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
     has_gamm <- !is.null(gamm_pred_data())
     has_data <- !is.null(dataset())
     has_norm <- !is.null(normalised_data())
+    has_cur  <- !is.null(curated_data) && !is.null(curated_data())
 
     # Build source choices dynamically
     src_choices <- c()
     if (has_data) src_choices <- c(src_choices, "Raw f0 (Hz)" = "raw_hz")
+    if (has_cur)  src_choices <- c(src_choices, "Curated f0" = "curated")
     if (has_norm) src_choices <- c(src_choices, "Normalised f0" = "normalised")
     if (has_gca)  src_choices <- c(src_choices, "GCA predictions" = "gca")
     if (has_gamm) src_choices <- c(src_choices, "GAMM predictions" = "gamm")
@@ -225,6 +227,21 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
         raw_data_for_robust,
         token = raw_token, f0 = raw_f0,
         time  = input$sum_raw_time_var, tone = raw_tone
+      )
+    } else if (src == "curated") {
+      # Curated data is structurally identical to the raw dataset (tone column
+      # holds the relabels, excluded tokens dropped); resolve columns by name.
+      raw_data_for_robust <- curated_data()
+      req(raw_data_for_robust)
+      cv <- names(raw_data_for_robust)
+      raw_token <- guess_var(cv, c("^token", "^item", "^segment", "^id"), 1)
+      raw_f0    <- guess_var(cv, c("^f0$", "^f0_", "^pitch", "^F0"), 2)
+      raw_tone  <- guess_var(cv, c("^tone", "^category", "^tonecat"), 4)
+      contour_data <- compute_mean_contour(
+        raw_data_for_robust,
+        token = raw_token, f0 = raw_f0,
+        time  = guess_var(cv, c("^time", "^t$", "^timepoint", "^measurement"), 3),
+        tone  = raw_tone
       )
     } else if (src == "normalised") {
       raw_data_for_robust <- normalised_data()
@@ -369,6 +386,7 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
 
     src_label <- switch(params$source,
       "raw_hz" = "Raw f0 (Hz)",
+      "curated" = "Curated f0",
       "normalised" = "Normalised f0",
       "gca" = "GCA predictions",
       "gamm" = "GAMM predictions"

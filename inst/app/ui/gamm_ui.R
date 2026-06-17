@@ -2,7 +2,7 @@
 # Model: GAMM tab — Generalised Additive Mixed Model using mgcv
 ###############################################
 
-gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_data = NULL) {
+gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_data = NULL, curated_data = NULL) {
 
   # --- Guide text ---
   output$gamm_guide <- renderUI({
@@ -62,8 +62,11 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
   # --- Helper: get active dataset based on selector ---
   active_data <- reactive({
     has_norm <- !is.null(normalised_data())
+    has_cur  <- !is.null(curated_data) && !is.null(curated_data())
     sel <- input$gamm_dataset
-    if (!is.null(sel) && sel == "normalised" && has_norm) {
+    if (!is.null(sel) && sel == "curated" && has_cur) {
+      curated_data()
+    } else if (!is.null(sel) && sel == "normalised" && has_norm) {
       normalised_data()
     } else {
       dataset()
@@ -73,11 +76,15 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
   # --- Sidebar controls ---
   output$ui_gamm <- renderUI({
     has_norm <- !is.null(normalised_data())
+    has_cur  <- !is.null(curated_data) && !is.null(curated_data())
 
     # Dataset choices
     ds_choices <- c("Uploaded data" = "uploaded")
     if (has_norm) {
       ds_choices <- c(ds_choices, "Normalised data" = "normalised")
+    }
+    if (has_cur) {
+      ds_choices <- c(ds_choices, "Curated data" = "curated")
     }
     ds_selected <- if (!is.null(input$gamm_dataset) && input$gamm_dataset %in% ds_choices) {
       input$gamm_dataset

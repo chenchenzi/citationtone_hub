@@ -2,7 +2,7 @@
 # Model: GCA tab — Growth Curve Analysis using lme4
 ###############################################
 
-gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_data = NULL) {
+gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_data = NULL, curated_data = NULL) {
 
   # --- Guide text ---
   output$gca_guide <- renderUI({
@@ -47,8 +47,11 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
   # --- Helper: get active dataset based on selector ---
   active_data <- reactive({
     has_norm <- !is.null(normalised_data())
+    has_cur  <- !is.null(curated_data) && !is.null(curated_data())
     sel <- input$gca_dataset
-    if (!is.null(sel) && sel == "normalised" && has_norm) {
+    if (!is.null(sel) && sel == "curated" && has_cur) {
+      curated_data()
+    } else if (!is.null(sel) && sel == "normalised" && has_norm) {
       normalised_data()
     } else {
       dataset()
@@ -58,11 +61,15 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
   # --- Sidebar controls ---
   output$ui_gca <- renderUI({
     has_norm <- !is.null(normalised_data())
+    has_cur  <- !is.null(curated_data) && !is.null(curated_data())
 
     # Dataset choices
     ds_choices <- c("Uploaded data" = "uploaded")
     if (has_norm) {
       ds_choices <- c(ds_choices, "Normalised data" = "normalised")
+    }
+    if (has_cur) {
+      ds_choices <- c(ds_choices, "Curated data" = "curated")
     }
     ds_selected <- if (!is.null(input$gca_dataset) && input$gca_dataset %in% ds_choices) {
       input$gca_dataset
