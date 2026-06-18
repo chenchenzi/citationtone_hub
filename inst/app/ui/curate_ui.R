@@ -86,7 +86,7 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
     guide_box("Curate guide",
       tags$p(style = "margin: 4px 0 8px 0;", HTML(
         "Re-label tokens whose tone category needs revising, or mark tokens to exclude.",
-        "Use this for genuine <em>linguistic variation</em>: tone splits or mergers, variant",
+        "Use this for genuine <strong>linguistic variation</strong>: tone splits or mergers, variant",
         "readings (colloquial vs. literary, 文白异读), sandhi or sociolinguistic variants, or",
         "mis-elicited tokens. It is <strong>not</strong> for pitch-tracking errors, which are",
         "handled in <strong>Inspect</strong> and <strong>F0 Correction</strong>.",
