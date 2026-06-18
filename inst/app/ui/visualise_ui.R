@@ -102,7 +102,7 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
                     color = .data[[input$tone_var]])) +
       geom_point(alpha = 0.75) +
       scale_color_brewer(palette = "Set3") +
-      labs(x = input$x_var, y = input$y_var, color = input$tone_var)
+      labs(x = input$x_var, y = f0_axis_label(input$y_var), color = input$tone_var)
 
     facet_mode <- input$plot_facet
     if (is.null(facet_mode)) facet_mode <- "none"
@@ -207,7 +207,7 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
       paste0('p <- ggplot(dat, aes(x = ', input$x_var, ', y = ', input$y_var, ', color = ', input$tone_var, ')) +'),
       "  geom_point(alpha = 0.75) +",
       '  scale_color_brewer(palette = "Set3") +',
-      paste0('  labs(x = "', input$x_var, '", y = "', input$y_var, '", color = "', input$tone_var, '")')
+      paste0('  labs(x = "', input$x_var, '", y = "', f0_axis_label(input$y_var), '", color = "', input$tone_var, '")')
     )
 
     facet_mode <- input$plot_facet

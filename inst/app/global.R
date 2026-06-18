@@ -48,6 +48,26 @@ make_token_key <- function(x, strip_ext = TRUE) {
 }
 
 # ---------------------------------------------------------------------------
+# Pretty y-axis label for an f0 column. Maps the column *name* to a typeset
+# label with a subscript zero (f0 -> f₀):
+#   *_hz / raw f0 -> "f₀ (Hz)"        *_st / semitone -> "f₀ (semitone)"
+#   *_zscore       -> "normalised f₀"  other *_norm    -> "normalised f₀"
+# Anything unrecognised falls back to the column name unchanged, so a custom
+# column still gets a sensible axis title. Shared by the Visualise and Curate
+# plots so both label the f0 axis consistently.
+# ---------------------------------------------------------------------------
+f0_axis_label <- function(col) {
+  if (is.null(col) || !nzchar(col)) return("f₀")
+  c0 <- tolower(col)
+  if (grepl("zscore|z[._-]?score", c0))    return("normalised f₀")
+  if (grepl("semitone|_st$|_st[._]", c0))  return("f₀ (semitone)")
+  if (grepl("hz", c0))                     return("f₀ (Hz)")
+  if (grepl("norm", c0))                   return("normalised f₀")
+  if (grepl("^f_?0$|^pitch", c0))          return("f₀ (Hz)")
+  col
+}
+
+# ---------------------------------------------------------------------------
 # Foldable guide box. Wraps a tab's explanatory guide in a native
 # <details>/<summary> element so the (often long) guide can be collapsed to
 # free up room for plots and output. Open by default. The visual styling

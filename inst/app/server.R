@@ -187,7 +187,7 @@ server <- function(input, output, session) {
   normalised_ui(input, output, session, dataset, normalised_data)
   visualise_ui(input, output, session, dataset, normalised_data)
   inspect_ui(input, output, session, dataset, inspect_result)
-  curate_ui(input, output, session, dataset, curated_data, inspect_result)
+  curate_ui(input, output, session, dataset, normalised_data, curated_data, inspect_result)
   model_ui(input, output, session, dataset, normalised_data, curated_data)
   gca_ui(input, output, session, dataset, normalised_data, gca_pred_data, curated_data)
   gamm_ui(input, output, session, dataset, normalised_data, gamm_pred_data, curated_data)
