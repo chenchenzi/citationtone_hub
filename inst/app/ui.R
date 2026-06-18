@@ -80,7 +80,7 @@ ui <- fluidPage(
         font-size: 0.88rem; color: #555;
       }
       details.guide-box > summary.guide-summary {
-        cursor: pointer; font-weight: 900; color: #3a3a3a;
+        cursor: pointer; font-weight: 700; color: #3a3a3a;
         list-style: none; outline: none; user-select: none;
         display: flex; align-items: center; gap: 6px; padding: 2px 0;
       }
@@ -1063,9 +1063,11 @@ ui <- fluidPage(
                             tags$span(class = "tab-ref-chip", "F0 Analysis tab")
                           ),
                           tags$div(class = "workflow-desc",
-                            "Fit polynomial / GCA / GAMM models and convert contours into Chao tone numerals."),
+                            "Optionally relabel tone-category variants or exclude tokens (Curate), then fit polynomial / GCA / GAMM models and convert contours into Chao tone numerals."),
                           tags$div(class = "workflow-flow",
                             tags$span(class = "wf-step wf-data", `data-flow-in` = "cleaned-f0", HTML("&#128202; clean f0 .csv")),
+                            tags$span(class = "wf-arrow", HTML("&#10132;")),
+                            tags$span(class = "wf-step wf-app wf-opt", "Curate (optional)"),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
                             tags$span(class = "wf-step wf-app", "Normalise"),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),

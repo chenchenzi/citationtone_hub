@@ -76,6 +76,11 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   fp_flagged_tokens <- reactiveVal(NULL)
   fp_flagged_frames <- reactiveVal(NULL)
 
+  # Remembers the user's x-axis zoom/pan, keyed by token, so a selection-driven
+  # re-render does not discard a keyboard pan. uirevision keeps mouse zoom (a
+  # "user edit") but not programmatic Plotly.relayout from the keyboard handler.
+  fp_xrange <- reactiveVal(NULL)   # list(token = ..., range = c(lo, hi))
+
   # Current token's TextGrid (if available), parsed via rPraat::tg.read.
   # Returns a list of tiers (each with $name, $type, intervals/points), or NULL.
   current_textgrid <- reactive({
@@ -1014,7 +1019,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       point_sizes [flagged_in_plot] <- 10L
     }
     if (length(sel_in_plot) > 0) {
-      point_colors[sel_in_plot] <- "#e0712d"       # orange — selected (overrides flag)
+      point_colors[sel_in_plot] <- "#1f6feb"       # blue — selected (distinct from red flags)
       point_sizes [sel_in_plot] <- 12L
     }
 
@@ -1296,6 +1301,10 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       bottom_margin <- 40
     }
 
+    # Restore a remembered zoom/pan for this token (survives selection re-renders).
+    xr <- isolate(fp_xrange())
+    if (!is.null(xr) && identical(xr$token, tok)) xaxis_def$range <- xr$range
+
     layout_args <- list(
       xaxis = xaxis_def,
       yaxis = list(title = "f0 (Hz)", domain = f0_dom, fixedrange = TRUE),
@@ -1319,8 +1328,21 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     # receives clicks without the per-session "event not registered" warning.
     p <- plotly::event_register(p, "plotly_click")
     p <- plotly::event_register(p, "plotly_selected")
+    p <- plotly::event_register(p, "plotly_relayout")
     plotly::config(p, displaylogo = FALSE, scrollZoom = TRUE)
   })
+
+  # Preserve the x-axis zoom/pan (including keyboard pan, which is programmatic
+  # and so not kept by uirevision) across selection-driven re-renders.
+  observeEvent(plotly::event_data("plotly_relayout", source = "fp_corr_plot"), {
+    ev <- plotly::event_data("plotly_relayout", source = "fp_corr_plot")
+    if (is.null(ev)) return()
+    tok <- isolate(input$fp_corr_token)
+    if (isTRUE(ev[["xaxis.autorange"]])) { fp_xrange(NULL); return() }
+    lo <- ev[["xaxis.range[0]"]]; hi <- ev[["xaxis.range[1]"]]
+    if (!is.null(lo) && !is.null(hi))
+      fp_xrange(list(token = tok, range = c(as.numeric(lo), as.numeric(hi))))
+  }, ignoreNULL = TRUE)
 
   # ---- Main panel layout ----
   # The guide is rendered unconditionally so users can read it
@@ -1393,13 +1415,16 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
               default:
                 prevent = false; return;
             }
-            if (prevent) e.preventDefault();
+            // stopPropagation (in capture phase, see addEventListener below)
+            // keeps the focused tab's Bootstrap arrow-key navigation from
+            // swallowing Left/Right and switching sub-tabs instead of panning.
+            if (prevent) { e.preventDefault(); e.stopPropagation(); }
             if (reset)  Plotly.relayout(gd, {'xaxis.autorange': true});
             else        Plotly.relayout(gd, {'xaxis.range': newRange});
-          });
+          }, true);
         })();
       ")),
-      guide_box("F0 Correction",
+      guide_box("F0 Correction guide",
         tags$p(style = "margin: 6px 0 6px 0;",
           "Work on one token at a time — pick one in the sidebar, or step through with ",
           HTML("&#9664;"), " / ", HTML("&#9654;"), ". ",
@@ -1483,15 +1508,15 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           background: #fffaf0;
           border: 1px solid #f0e2bf;
           border-radius: 8px;
-          padding: 12px 18px 16px 18px;
-          margin-bottom: 12px;
+          padding: 7px 18px 9px 18px;
+          margin-bottom: 8px;
         }
         .resume-wrap > summary {
           cursor: pointer;
           font-weight: 700;
           color: #6b4d10;
           font-size: 0.95rem;
-          padding: 4px 0;
+          padding: 1px 0;
           list-style: none;
         }
         .resume-wrap > summary::before {

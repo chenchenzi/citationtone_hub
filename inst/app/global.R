@@ -58,7 +58,7 @@ guide_box <- function(title, ..., open = TRUE) {
   tags$details(
     class = "guide-box",
     open  = if (isTRUE(open)) NA else NULL,
-    tags$summary(class = "guide-summary", title),
+    tags$summary(class = "guide-summary", style = "font-weight: 700;", title),
     tags$div(class = "guide-body", ...)
   )
 }
