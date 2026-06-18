@@ -1680,6 +1680,8 @@ ui <- fluidPage(
                                                uiOutput("curate_guide"),
                                                uiOutput("curate_prep"),
                                                uiOutput("curate_discovery"),
+                                               uiOutput("curate_resume_help"),
+                                               uiOutput("curate_empty_msg"),
                                                uiOutput("curate_log_block")),
                                       tabPanel("Model: Polynomials",
                                                uiOutput("model_guide"),

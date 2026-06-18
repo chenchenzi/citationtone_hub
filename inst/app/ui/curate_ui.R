@@ -255,10 +255,18 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
         tags$hr(),
         actionButton("curate_reset", "Reset all curation", class = "btn-outline-secondary"),
         tags$hr(),
-        h5("Download"),
+        h5("Save & resume"),
         downloadButton("curate_dl_curated", "Curated CSV (analysis-ready)"),
         div(style = "margin-top: 4px;",
-            downloadButton("curate_dl_annot", "Annotated CSV (all rows)"))
+            downloadButton("curate_dl_annot", "Annotated CSV (all rows)")),
+        tags$div(style = "color: #888; font-size: 0.72rem; margin-top: 4px;",
+                 "Download the ", tags$strong("Annotated CSV"),
+                 " to save your curation, then re-upload it below to continue later."),
+        tags$div(style = "margin-top: 10px;",
+          fileInput("curate_resume_file", "Resume from a saved Annotated CSV:",
+                    accept = c(".csv", "text/csv"), width = "100%")),
+        tags$div(style = "color: #888; font-size: 0.72rem; margin-top: -6px;",
+                 "Load the same dataset first; matching tokens get their relabels, exclusions and notes back.")
       )
     )
   })
@@ -281,12 +289,11 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
   })
 
   # ---- main panel: find -> select (plot) -> log ----
+  # When no dataset is loaded the discovery area is empty; the "upload to begin"
+  # prompt is shown by curate_empty_msg, placed below the resume illustration.
   output$curate_discovery <- renderUI({
     d <- dataset()
-    if (is.null(d)) {
-      return(tags$div(style = "color: #888; font-style: italic; margin: 8px 0;",
-                      "Upload a dataset in the Start tab to begin curating."))
-    }
+    if (is.null(d)) return(NULL)
     v <- cvar(); req(v$tone %in% names(d))
     tones <- sort(unique(as.character(d[[v$tone]])))
     speakers <- if (v$speaker %in% names(d)) sort(unique(as.character(d[[v$speaker]]))) else character(0)
@@ -298,8 +305,8 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
     tagList(
       tags$h4("Identify and select tokens to curate"),
       tags$div(style = "display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 4px;",
-        selectInput("curate_view_tone", "Tone (one at a time):",
-                    choices = tones, selected = tones[1], width = "130px"),
+        selectInput("curate_view_tone", "Tone:",
+                    choices = tones, selected = tones[1], width = "110px"),
         selectInput("curate_view_speaker", "Speaker:",
                     choices = c("All speakers" = "__all__", stats::setNames(speakers, speakers)),
                     selected = "__all__", width = "150px"),
@@ -307,7 +314,7 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
                     choices = facet_choices, selected = "__none__", width = "160px")
       ),
       tags$div(style = "display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 4px;",
-        tags$span(style = "font-size: 0.8rem; color: #777;", "Select (current view):"),
+        tags$span(style = "font-size: 0.95rem; font-weight: 700; color: #444;", "Select (current view):"),
         if (has_inspect)
           actionButton("curate_sel_flagged", "Flagged", class = "btn-sm", icon = icon("flag")),
         actionButton("curate_sel_all", "All", class = "btn-sm"),
@@ -546,6 +553,45 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
     curated_data(ar)
   })
 
+  # ---- per-token curation state ----------------------------------------
+  # Relabel and exclude are independent: a token can be relabelled to "4" AND
+  # marked excluded. So the log shows one row per curated token with both a
+  # "relabelled to" value and an "excluded" boolean, and a combined action.
+  # The date is the most recent action for that token (from rv_log).
+  curation_state_df <- reactive({
+    d <- dataset(); rel <- rv_relabel(); exc <- rv_exclude(); nt <- rv_note()
+    toks <- unique(c(names(rel), exc, names(nt)))
+    empty <- data.frame(date = character(0), token = character(0), speaker = character(0),
+                        `original tone` = character(0), action = character(0),
+                        `relabelled to` = character(0), excluded = logical(0),
+                        note = character(0), check.names = FALSE, stringsAsFactors = FALSE)
+    if (is.null(d) || length(toks) == 0) return(empty)
+    v <- cvar(); req(v$token %in% names(d))
+    key <- as.character(d[[v$token]])
+    look <- function(col, tk) {
+      if (!(col %in% names(d))) return(NA_character_)
+      i <- match(tk, key); if (is.na(i)) NA_character_ else as.character(d[[col]][i]) }
+    lg <- rv_log()
+    date_of <- function(tk) {
+      if (nrow(lg) == 0) return("")
+      r <- which(lg$token == tk); if (length(r)) lg$date[max(r)] else "" }
+    relabelled <- toks %in% names(rel)
+    excluded   <- toks %in% exc
+    act <- ifelse(relabelled & excluded, "relabel + exclude",
+            ifelse(relabelled, "relabel", ifelse(excluded, "exclude", "note")))
+    out <- data.frame(
+      date          = vapply(toks, date_of, character(1)),
+      token         = toks,
+      speaker       = vapply(toks, function(tk) look(v$speaker, tk), character(1)),
+      `original tone` = vapply(toks, function(tk) look(v$tone, tk), character(1)),
+      action        = act,
+      `relabelled to` = ifelse(relabelled, unname(rel[toks]), ""),
+      excluded      = excluded,
+      note          = ifelse(toks %in% names(nt), unname(nt[toks]), ""),
+      check.names = FALSE, stringsAsFactors = FALSE)
+    out[order(out$date, decreasing = TRUE), , drop = FALSE]
+  })
+
   # ---- curation log (yellow summary right under the heading) ----
   output$curate_log_block <- renderUI({
     tagList(
@@ -553,9 +599,8 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
       uiOutput("curate_summary"),
       tags$div(style = "display: flex; align-items: center; gap: 12px; margin-bottom: 6px;",
         downloadButton("curate_log_download", "Download curation log (CSV)", icon = icon("download")),
-        actionButton("curate_log_clear", "Clear log", icon = icon("eraser"), class = "btn-sm"),
         tags$span(style = "color: #888; font-size: 0.8rem; font-style: italic;",
-                  "Chronological record of every relabel / exclusion this session.")),
+                  "One row per token you have relabelled or excluded (the two are independent). Use Reset all curation to clear.")),
       DT::dataTableOutput("curate_log_table")
     )
   })
@@ -571,32 +616,22 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
   })
 
   output$curate_log_table <- DT::renderDataTable({
-    df <- rv_log()
-    if (nrow(df) == 0) {
-      return(DT::datatable(
-        data.frame(date = character(0), token = character(0), speaker = character(0),
-                   tone = character(0), action = character(0), to = character(0),
-                   note = character(0), stringsAsFactors = FALSE),
-        rownames = FALSE, options = list(pageLength = 10, dom = "tip",
-                       language = list(emptyTable = "No curation yet."))))
-    }
-    df_show <- df[seq.int(nrow(df), 1L), , drop = FALSE]
-    names(df_show) <- c("date", "token", "speaker", "original tone", "action", "relabelled to", "note")
+    df_show <- curation_state_df()
     DT::datatable(df_show, rownames = FALSE,
       options = list(pageLength = 10, dom = "tip", scrollX = TRUE,
-                     columnDefs = list(list(className = "dt-center", targets = c(0, 4)))))
+                     language = list(emptyTable = "No curation yet."),
+                     columnDefs = list(list(className = "dt-center", targets = c(0, 4, 6)))))
   })
 
   output$curate_log_download <- downloadHandler(
     filename = function() sprintf("curation_log_%s.csv", format(Sys.time(), "%Y%m%d_%H%M%S")),
     content = function(file) {
-      df <- rv_log()
-      if (nrow(df) == 0) { writeLines("# Shinytone: curation log is empty.", file)
-        showNotification("Curation log is empty.", type = "warning", duration = 4); return() }
+      df <- curation_state_df()
+      if (nrow(df) == 0) { writeLines("# Shinytone: no curation yet.", file)
+        showNotification("No curation yet.", type = "warning", duration = 4); return() }
       utils::write.csv(df, file, row.names = FALSE)
     }
   )
-  observeEvent(input$curate_log_clear, { if (nrow(rv_log()) > 0) rv_log(rv_log()[0, , drop = FALSE]) })
 
   # ---- dataset downloads ----
   output$curate_dl_annot <- downloadHandler(
@@ -616,4 +651,181 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
       utils::write.csv(cd, file, row.names = FALSE)
     }
   )
+
+  # ---- resume: restore curation state from a previously-saved Annotated CSV ----
+  # The Annotated CSV carries the original tone plus tone_relabelled / excluded /
+  # curate_note, so it is a complete save file. We re-derive rv_relabel /
+  # rv_exclude / rv_note (token-level), rebuild the log, and let the publish
+  # observe() above regenerate curated_data(). Robust to long-format rows,
+  # numeric-vs-character tone, partial columns, and token mismatches.
+  observeEvent(input$curate_resume_file, {
+    fi <- input$curate_resume_file; req(fi)
+    d <- dataset()
+    if (is.null(d)) {
+      showNotification("Load a dataset in the Start tab first, then resume.",
+                       type = "error", duration = 6); return() }
+    v <- cvar()
+    if (!(v$token %in% names(d)) || !(v$tone %in% names(d))) {
+      showNotification("Set the Token and Tone columns first, then resume.",
+                       type = "error", duration = 6); return() }
+
+    # Read the same way the dataset was read in Start (so token strings match).
+    df <- tryCatch(utils::read.csv(fi$datapath, stringsAsFactors = FALSE),
+                   error = function(e) NULL)
+    if (is.null(df) || !nrow(df)) {
+      showNotification("Could not read that CSV.", type = "error", duration = 6); return() }
+
+    # Reject the *Curated* CSV (tone already overwritten; original moved aside).
+    if (paste0(v$tone, "_original") %in% names(df)) {
+      showNotification(sprintf("That looks like the Curated CSV (it has %s_original). Upload the Annotated CSV instead.", v$tone),
+                       type = "error", duration = 10); return() }
+
+    tcol <- if (v$token %in% names(df)) v$token else guess_var(names(df), var_patterns$token, 1)
+    if (is.null(tcol) || !(tcol %in% names(df))) {
+      showNotification("No token column found in that CSV - cannot resume.",
+                       type = "error", duration = 8); return() }
+
+    has_rel  <- "tone_relabelled" %in% names(df)
+    has_exc  <- "excluded"        %in% names(df)
+    has_note <- "curate_note"     %in% names(df)
+    if (!has_rel && !has_exc && !has_note) {
+      showNotification("This CSV has no curation columns (tone_relabelled / excluded / curate_note) - nothing to resume.",
+                       type = "error", duration = 10); return() }
+
+    skipped <- character(0)
+    df[[tcol]] <- trimws(as.character(df[[tcol]]))
+    dd <- df[!duplicated(df[[tcol]]), , drop = FALSE]   # one annotation per token
+
+    cur_key <- trimws(as.character(d[[v$token]]))
+    in_data <- dd[[tcol]] %in% cur_key
+    n_up <- nrow(dd); n_match <- sum(in_data)
+    if (n_match == 0) {
+      showNotification(sprintf("None of the %d tokens in that CSV match the current dataset. Did you load the same dataset and pick the same Token column?", n_up),
+                       type = "error", duration = 12); return() }
+    dd <- dd[in_data, , drop = FALSE]; tok <- dd[[tcol]]
+
+    # relabel: tone_relabelled differs from the ORIGINAL tone (compare as character)
+    rel <- stats::setNames(character(0), character(0))
+    if (has_rel) {
+      newlab <- trimws(as.character(dd$tone_relabelled))
+      orig <- if (v$tone %in% names(dd)) trimws(as.character(dd[[v$tone]])) else {
+        skipped <- c(skipped, "no original tone column, so every tone_relabelled was treated as a relabel")
+        rep(NA_character_, length(newlab)) }
+      is_rel <- !is.na(newlab) & nzchar(newlab) & (is.na(orig) | newlab != orig)
+      rel <- stats::setNames(newlab[is_rel], tok[is_rel])
+    } else skipped <- c(skipped, "no tone_relabelled column (relabels skipped)")
+
+    # exclude: truthy excluded
+    exc <- character(0)
+    if (has_exc) {
+      ex <- dd$excluded
+      ex_lgl <- if (is.logical(ex)) ex else as.logical(trimws(as.character(ex)))
+      exc <- tok[ex_lgl %in% TRUE]
+    } else skipped <- c(skipped, "no excluded column (exclusions skipped)")
+
+    # notes: non-empty, non-"NA"
+    nt <- stats::setNames(character(0), character(0))
+    if (has_note) {
+      raw <- trimws(as.character(dd$curate_note))
+      keep <- !is.na(raw) & nzchar(raw) & raw != "NA"
+      nt <- stats::setNames(raw[keep], tok[keep])
+    } else skipped <- c(skipped, "no curate_note column (notes skipped)")
+
+    # set all three in one flush so the publish observe regenerates once
+    rv_relabel(rel); rv_exclude(exc); rv_note(nt)
+
+    # rebuild a synthetic log (the CSV has no per-action history / timestamps)
+    rv_log(rv_log()[0, , drop = FALSE])
+    if (length(rel))
+      log_curate("relabel (restored)", names(rel), to = unname(rel),
+                 note = ifelse(names(rel) %in% names(nt), nt[names(rel)], ""))
+    only_exc <- setdiff(exc, names(rel))
+    if (length(only_exc))
+      log_curate("exclude (restored)", only_exc,
+                 note = ifelse(only_exc %in% names(nt), nt[only_exc], ""))
+
+    msg <- sprintf("Restored %d relabel(s), %d exclusion(s), %d note(s); %d of %d tokens matched.",
+                   length(rel), length(exc), length(nt), n_match, n_up)
+    if (length(skipped)) msg <- paste0(msg, " Note: ", paste(skipped, collapse = "; "), ".")
+    showNotification(msg, type = if (length(skipped)) "warning" else "message", duration = 10)
+  }, ignoreInit = TRUE)
+
+  # ---- "continue across sessions" illustration (main panel, collapsed) ----
+  output$curate_resume_help <- renderUI({
+    tagList(
+      tags$style(HTML("
+        details.curate-resume { background:#f3f8fc; border:1px solid #cfe2f1; border-radius:8px;
+          padding:7px 14px 10px 14px; margin:0 0 12px 0; }
+        .curate-resume > summary { cursor:pointer; font-weight:700; color:#2c5d80;
+          font-size:0.9rem; list-style:none; padding:1px 0; }
+        .curate-resume > summary::-webkit-details-marker { display:none; }
+        .curate-resume > summary::before { content:'\\25B8'; color:#5b9bd5;
+          display:inline-block; margin-right:8px; transition:transform .15s ease; }
+        .curate-resume[open] > summary::before { transform:rotate(90deg); }
+        .curate-resume .cr-hint { color:#7aa6cc; font-weight:400; font-size:0.8rem; margin-left:4px; }
+        .curate-resume[open] .cr-hint { display:none; }
+        .curate-resume p { color:#3f5a72; font-size:0.84rem; margin:10px 0 0 0; }
+        .cr-flow { display:flex; align-items:stretch; gap:10px; margin-top:12px; flex-wrap:wrap; }
+        .cr-card { flex:1 1 240px; background:#fff; border:1px solid #d6e6f2; border-radius:8px; padding:10px 14px; }
+        .cr-card-title { color:#2c5d80; font-weight:700; font-size:0.88rem;
+          display:flex; align-items:center; gap:7px; margin-bottom:6px; }
+        .cr-steps { list-style:none; padding-left:0; margin:0; counter-reset:cstep; }
+        .cr-steps > li { counter-increment:cstep; position:relative; padding-left:28px;
+          margin-bottom:8px; font-size:0.82rem; color:#4a5b67; line-height:1.45; }
+        .cr-steps > li::before { content:counter(cstep); position:absolute; left:0; top:0;
+          width:20px; height:20px; background:#5b9bd5; color:#fff; border-radius:50%;
+          text-align:center; font-size:0.72rem; font-weight:700; line-height:20px; }
+        .cr-arrow { display:flex; flex-direction:column; align-items:center; justify-content:center;
+          min-width:120px; padding:6px 0; }
+        .cr-arrow-svg { font-size:1.7rem; color:#5b9bd5; line-height:1; margin-bottom:6px; }
+        .cr-file { background:#eef5fb; border:1px solid #9cc4e4; border-radius:6px; padding:3px 9px;
+          font-size:0.74rem; color:#22506e; font-family:'SFMono-Regular',Menlo,Consolas,monospace; white-space:nowrap; }
+        .cr-file-note { font-size:0.7rem; color:#8aa0b2; margin-top:5px; text-align:center; max-width:150px; }
+        .cr-chip { display:inline-block; background:#e6f0f8; color:#22506e; padding:1px 8px;
+          border-radius:10px; font-size:0.72rem; font-weight:600;
+          font-family:'SFMono-Regular',Menlo,Consolas,monospace; white-space:nowrap; }
+        .cr-btn { display:inline-block; background:#fff; border:1px solid #c2d4e2; color:#22506e;
+          padding:1px 7px; border-radius:4px; font-size:0.74rem; font-weight:600; white-space:nowrap; }
+        @media (max-width:760px){ .cr-arrow{ min-width:auto; flex-direction:row; gap:10px; } .cr-arrow-svg{ margin:0; } }
+      ")),
+      tags$details(class = "curate-resume",
+        tags$summary(icon("rotate"), " Curating a big dataset? Continue across sessions ",
+                     tags$span(class = "cr-hint", "(click to expand)")),
+        tags$p(tags$strong("Curation lives in this browser session only."),
+          " Before you close the app, download the ",
+          tags$span(class = "cr-btn", icon("download"), " Annotated CSV (all rows)"),
+          " from the sidebar. That file is your save file: re-upload it under ",
+          tags$span(class = "cr-chip", "Save & resume"),
+          " next time and your relabels, exclusions and notes come back."),
+        tags$div(class = "cr-flow",
+          tags$div(class = "cr-card",
+            tags$div(class = "cr-card-title", icon("pen-to-square"), " Session 1: curate + save"),
+            tags$ol(class = "cr-steps",
+              tags$li("In the ", tags$span(class = "cr-chip", "Curate"),
+                      " tab, relabel tone categories and mark tokens to exclude."),
+              tags$li("Click ", tags$span(class = "cr-btn", icon("download"), " Annotated CSV (all rows)"),
+                      " and keep the ", tags$code("<data>_annotated.csv"), " file somewhere safe."),
+              tags$li("Close the app whenever."))),
+          tags$div(class = "cr-arrow",
+            tags$div(class = "cr-arrow-svg", HTML("&#10142;")),
+            tags$div(class = "cr-file", icon("file-csv"), " annotated.csv"),
+            tags$div(class = "cr-file-note", HTML("carries <code>tone_relabelled</code> + <code>excluded</code> + <code>curate_note</code>"))),
+          tags$div(class = "cr-card",
+            tags$div(class = "cr-card-title", icon("play"), " Session 2: resume"),
+            tags$ol(class = "cr-steps",
+              tags$li("In the ", tags$span(class = "cr-chip", "Start"),
+                      " tab, re-load the ", tags$strong("same dataset"), " you curated."),
+              tags$li("Under the ", tags$span(class = "cr-chip", "Save & resume"),
+                      " section, upload the ", tags$code("_annotated.csv"), " file you saved."),
+              tags$li("A message confirms what was restored and your curation log comes back, so you keep going where you left off.")))))
+    )
+  })
+
+  # "Upload to begin" prompt, shown below the resume illustration when there is
+  # no dataset yet (the discovery area itself stays empty until data loads).
+  output$curate_empty_msg <- renderUI({
+    if (!is.null(dataset())) return(NULL)
+    tags$div(style = "color: #888; font-style: italic; margin: 10px 0;",
+             "Upload a dataset in the Start tab to begin curating.")
+  })
 }
