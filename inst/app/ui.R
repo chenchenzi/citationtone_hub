@@ -218,9 +218,30 @@ ui <- fluidPage(
         border-radius: 4px;
         box-shadow: 0 1px 6px rgba(0,0,0,0.08);
       }
+      .showcase-cards-col {
+        display: flex; flex-direction: column; gap: 8px;
+        max-height: 500px;
+        align-self: start;
+        min-height: 0;
+      }
       .showcase-cards {
         display: flex; flex-direction: column; gap: 8px;
+        flex: 1 1 auto;
+        overflow-y: auto;
+        min-height: 0;
+        padding-right: 6px;
       }
+      .showcase-dots {
+        display: flex; gap: 7px; justify-content: center; align-items: center;
+        flex: 0 0 auto; margin-bottom: 2px;
+      }
+      .showcase-dot {
+        width: 9px; height: 9px; border-radius: 50%;
+        background: #cfdcd6; cursor: pointer;
+        transition: background 0.15s, transform 0.15s;
+      }
+      .showcase-dot:hover { background: #a9c3b8; }
+      .showcase-dot.active { background: #78c2ad; transform: scale(1.3); }
       .showcase-card {
         background: #ffffff;
         border: 1px solid #d6e7df;
@@ -817,6 +838,9 @@ ui <- fluidPage(
                             document.querySelectorAll('.showcase-card[data-section=\"' + section + '\"]').forEach(function(c){
                               c.classList.toggle('active', c.dataset.file === file);
                             });
+                            document.querySelectorAll('.showcase-dot[data-section=\"' + section + '\"]').forEach(function(d){
+                              d.classList.toggle('active', d.dataset.file === file);
+                            });
                           };
                         ")),
                         local({
@@ -829,6 +853,20 @@ ui <- fluidPage(
                               tags$div(class = "showcase-card-title",
                                 HTML(paste0("<span class='showcase-card-icon'>", emoji, "</span>", name))),
                               tags$div(class = "showcase-card-desc", desc)
+                            )
+                          }
+                          # Dot indicator above the cards (one dot per card, in order).
+                          # Clicking a dot is a shortcut to that card; the active dot
+                          # is kept in sync by shinytoneShowcase().
+                          showcase_dots <- function(section, files, active_idx = 1) {
+                            tags$div(class = "showcase-dots",
+                              lapply(seq_along(files), function(i) {
+                                cls <- if (i == active_idx) "showcase-dot active" else "showcase-dot"
+                                tags$span(class = cls, `data-section` = section,
+                                  `data-file` = files[i], title = sub("\\.png$", "", files[i]),
+                                  onclick = sprintf("shinytoneShowcase('%s', '%s'); return false;",
+                                                    section, files[i]))
+                              })
                             )
                           }
                           section_cta <- function(main, label) {
@@ -855,16 +893,22 @@ ui <- fluidPage(
                                            src = "screenshots/visualise.png",
                                            alt = "F0 Analysis screenshot")
                                 ),
-                                tags$div(class = "showcase-cards",
-                                  showcase_card("analysis", "\U0001F3A8", "Visualise", "visualise.png",
-                                    "Plot f0 contours coloured by tone, with optional speaker faceting and normalisation (z-score or semitone). Export the plots and the underlying R code.",
-                                    active = TRUE),
-                                  showcase_card("analysis", "\U0001F50E", "Inspect", "inspect.png",
-                                    "Flag likely f0 artefacts such as octave jumps, out-of-range outliers, and tracking errors, using by-speaker z-scores and sample-to-sample jump detection."),
-                                  showcase_card("analysis", "\U0001F4CA", "Model", "model.png",
-                                    "Three modelling approaches: per-token Legendre polynomials, Growth Curve Analysis (GCA) with mixed effects, and Generalised Additive Mixed Models (GAMM)."),
-                                  showcase_card("analysis", "\U0001F4CB", "Summarise", "summarise.png",
-                                    "Convert tone contours into Chao tone numerals (1–5 scale) for cross-language comparison. Compare reference-line and interval-based methods.")
+                                tags$div(class = "showcase-cards-col",
+                                  showcase_dots("analysis",
+                                    c("visualise.png", "inspect.png", "curate.png", "model.png", "summarise.png")),
+                                  tags$div(class = "showcase-cards",
+                                    showcase_card("analysis", "\U0001F3A8", "Visualise", "visualise.png",
+                                      "Plot f0 contours coloured by tone, with optional speaker faceting and normalisation (z-score or semitone). Export the plots and the underlying R code.",
+                                      active = TRUE),
+                                    showcase_card("analysis", "\U0001F50E", "Inspect", "inspect.png",
+                                      "Flag likely f0 artefacts such as octave jumps, out-of-range outliers, and tracking errors, using by-speaker z-scores and sample-to-sample jump detection."),
+                                    showcase_card("analysis", "\U0001F3F7", "Curate", "curate.png",
+                                      "Re-label tone-category variants for linguistic variation (tone splits or mergers, colloquial vs. literary readings, sandhi or sociolinguistic forms) or exclude mis-elicited tokens."),
+                                    showcase_card("analysis", "\U0001F4CA", "Model", "model.png",
+                                      "Three modelling approaches: per-token Legendre polynomials, Growth Curve Analysis (GCA) with mixed effects, and Generalised Additive Mixed Models (GAMM)."),
+                                    showcase_card("analysis", "\U0001F4CB", "Summarise", "summarise.png",
+                                      "Convert tone contours into Chao tone numerals (1–5 scale) for cross-language comparison. Compare reference-line and interval-based methods.")
+                                  )
                                 )
                               ),
                               section_cta("F0 Analysis", "Get started →")
@@ -883,12 +927,15 @@ ui <- fluidPage(
                                            src = "screenshots/extraction.png",
                                            alt = "F0 Processing screenshot")
                                 ),
-                                tags$div(class = "showcase-cards",
-                                  showcase_card("processing", "\U0001F30A", "Extract", "extraction.png",
-                                    "Extract f0 contours from .wav files using the wrassp R package, or import pre-computed Praat .Pitch and .PitchTier files.",
-                                    active = TRUE),
-                                  showcase_card("processing", "\U0001F527", "Correct", "correction.png",
-                                    "Review and correct extraction artefacts by listening to the audio, inspecting the waveform, and editing individual frames (halve, double, interpolate, smooth, manual entry, etc.).")
+                                tags$div(class = "showcase-cards-col",
+                                  showcase_dots("processing", c("extraction.png", "correction.png")),
+                                  tags$div(class = "showcase-cards",
+                                    showcase_card("processing", "\U0001F30A", "Extract", "extraction.png",
+                                      "Extract f0 contours from .wav files using the wrassp R package, or import pre-computed Praat .Pitch and .PitchTier files.",
+                                      active = TRUE),
+                                    showcase_card("processing", "\U0001F527", "Correct", "correction.png",
+                                      "Review and correct extraction artefacts by listening to the audio, inspecting the waveform, and editing individual frames (halve, double, interpolate, smooth, manual entry, etc.).")
+                                  )
                                 )
                               ),
                               section_cta("F0 Processing", "Get started →")

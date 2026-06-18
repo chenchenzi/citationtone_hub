@@ -335,7 +335,8 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
             "can miss patterns too."))),
       tags$p(style = "color: #888; font-size: 0.8rem; margin: 2px 0 6px 0;",
         "Drag a ", tags$strong("box"), " (or pick the ", tags$strong("lasso"),
-        " in the plot toolbar) around a cluster to select it; selections accumulate, then relabel or exclude on the left."),
+        " in the plot toolbar) around a cluster, or ", tags$strong("click"),
+        " a single line to toggle it (click it again to deselect); selections accumulate, then relabel or exclude on the left."),
       uiOutput("curate_plot_holder")
     )
   })
