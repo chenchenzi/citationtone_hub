@@ -28,6 +28,15 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
     lab <- unname(.method_label[m]); if (length(lab) != 1 || is.na(lab)) m else lab
   }
 
+  # Y-axis label reflecting the chosen f0 variable's scale (f with subscript 0).
+  f0_axis_label <- function(v) {
+    v <- tolower(v %||% "")
+    if (grepl("semitone|_st$|_st[^a-z]", v))        "mean f₀ (semitone)"
+    else if (grepl("zscore|z[._-]?score|norm", v))  "mean f₀ (normalised)"
+    else if (grepl("(^|[^a-z])hz", v))              "mean f₀ (Hz)"
+    else                                            "mean f₀"
+  }
+
   # Shared larger-type theme so ticks / titles on the result plots are legible.
   cluster_plot_theme <- function(base = 14)
     ggplot2::theme_minimal(base_size = base) +
@@ -76,27 +85,28 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
         "Don't know how many tones a language has? Group tokens by the",
         "<strong>shape</strong> of their f0 contour and let the data suggest the number",
         "of categories. This is a <strong>hypothesis generator</strong> (after Kaland, 2023a),",
-        "not a verdict: clusters can reflect speaker, vowel or recording effects as well as",
-        "tone, so confirm the result with linguistic analysis."))),
+        "not a verdict: clusters can reflect speaker, syllable structure, or recording effects",
+        "as well as tone, so confirm the result with linguistic analysis."))),
+      tags$p(style = "margin: 4px 0 2px 0; font-size:0.85rem; color:#444; font-weight:700;",
+             "What you do here"),
       tags$ul(style = "margin-bottom: 8px; padding-left: 18px;",
         tags$li(HTML("<strong>Normalise first (important).</strong> Cluster speaker-normalised f0 (semitone or z-score, from the Normalise tab). On raw Hz, clusters tend to separate <em>speakers</em> by pitch range rather than tones.")),
-        tags$li(tags$strong("Feature space."), " Cluster the resampled contour points, compact ", tags$em("Legendre"), " / ", tags$em("DCT"), " coefficients, or the ", tags$em("derivative"), " (rate of change: clusters by movement and discards height; Kaland, 2023a)."),
-        tags$li(tags$strong("Register vs shape."), " Keep height so high and low level tones separate, or centre each contour to cluster on shape alone."),
-        tags$li(tags$strong("How many tones?"), " The diagnostics (elbow, silhouette, gap, GMM/BIC) rarely agree exactly, so read off a plausible ", tags$em("range"), ", then inspect the cluster-mean contours."),
-        tags$li(tags$strong("Validate / reuse."), " If you have provisional labels, check agreement (adjusted Rand index). Send the clusters on as candidate tone labels for Curate / Model.")
+        tags$li(HTML("<strong>Choose a feature space.</strong> Each contour is summarised as resampled <em>points</em>, compact <em>Legendre</em> / <em>DCT</em> coefficients, or its <em>derivative</em> (movement, discarding height; Kaland, 2023a): this is what gets clustered. Keep the <em>register</em> so high and low level tones separate, or cluster on <em>shape</em> alone.")),
+        tags$li(HTML("<strong>Cluster without labels.</strong> An <em>unsupervised</em> algorithm (k-means, hierarchical, or Gaussian mixture) groups tokens purely by contour shape, with no tone labels needed.")),
+        tags$li(HTML("<strong>Decide how many groups.</strong> The diagnostics (elbow, silhouette, gap, GMM/BIC, MDL) rarely agree exactly, so read off a plausible <em>range</em>, <em>compare</em> candidate solutions side by side, then set the number of groups with the slider.")),
+        tags$li(HTML("<strong>Inspect, validate, reuse.</strong> Read the candidate-mean contours, the dendrogram and the token map; if you have provisional labels, check agreement (adjusted Rand index); then send the clusters on as candidate tone labels for Curate / Model."))
       ),
-      tags$details(style = "margin-top: 4px;",
+      tags$p(style = "font-size:0.85rem; color:#444; margin:10px 0 2px 0; font-weight:700;", "Methods"),
+      tags$ul(style = "margin: 0; padding-left: 18px; font-size: 0.8rem; color:#555;",
+        tags$li(HTML("<strong>Contour features.</strong> Each contour is time-normalised and resampled to a fixed number of points; the <em>derivative</em> (rate-of-change) representation discards height and clusters by movement (Kaland, 2023a), which best matches perceived contour similarity (Kaland, 2023b). <em>Legendre</em> and <em>DCT</em> coefficients are compact orthogonal-basis summaries of contour shape.")),
+        tags$li(HTML("<strong>Clustering algorithms.</strong> k-means (Hartigan &amp; Wong, 1979), hierarchical agglomerative clustering with Ward linkage (Ward, 1963), and Gaussian mixture models selected by BIC (Scrucca et al., 2016).")),
+        tags$li(HTML("<strong>Number of groups.</strong> The silhouette (Rousseeuw, 1987), gap statistic (Tibshirani et al., 2001) and a minimum-description-length information cost (Kaland &amp; Ellison, 2023) each suggest a value of k.")),
+        tags$li(HTML("<strong>Token map.</strong> Tokens are projected to two dimensions with PCA (Jolliffe, 2002) or UMAP (McInnes et al., 2018)."))
+      ),
+      tags$details(style = "margin-top: 6px;",
         tags$summary(style = "cursor:pointer; font-size:0.82rem; color:#4a7868; font-weight:600;",
-                     "Methods & references"),
-        tags$p(style = "font-size:0.8rem; color:#555; margin:8px 0 2px 0; font-weight:700;", "Methods"),
-        tags$ul(style = "margin: 0 0 0 0; padding-left: 18px; font-size: 0.8rem; color:#555;",
-          tags$li(HTML("<strong>Contour features.</strong> Each contour is time-normalised and resampled to a fixed number of points; the <em>derivative</em> (rate-of-change) representation discards height and clusters by movement (Kaland, 2023a), which best matches perceived contour similarity (Kaland, 2023b). <em>Legendre</em> and <em>DCT</em> coefficients are compact orthogonal-basis summaries of contour shape.")),
-          tags$li(HTML("<strong>Clustering algorithms.</strong> k-means (Hartigan &amp; Wong, 1979), hierarchical agglomerative clustering with Ward linkage (Ward, 1963), and Gaussian mixture models selected by BIC (Scrucca et al., 2016).")),
-          tags$li(HTML("<strong>Number of groups.</strong> The silhouette (Rousseeuw, 1987), gap statistic (Tibshirani et al., 2001) and a minimum-description-length information cost (Kaland &amp; Ellison, 2023) each suggest a value of k.")),
-          tags$li(HTML("<strong>Token map.</strong> Tokens are projected to two dimensions with PCA (Jolliffe, 2002) or UMAP (McInnes et al., 2018)."))
-        ),
-        tags$p(style = "font-size:0.8rem; color:#555; margin:10px 0 2px 0; font-weight:700;", "References"),
-        tags$ol(style = "margin: 0; padding-left: 20px; font-size: 0.76rem; color:#666; line-height:1.55;",
+                     "References"),
+        tags$ol(style = "margin: 6px 0 0 0; padding-left: 20px; font-size: 0.76rem; color:#666; line-height:1.55;",
           tags$li(HTML("Hartigan, J. A., &amp; Wong, M. A. (1979). Algorithm AS 136: A k-means clustering algorithm. <em>Journal of the Royal Statistical Society: Series C (Applied Statistics)</em>, 28(1), 100&ndash;108.")),
           tags$li(HTML("Jolliffe, I. T. (2002). <em>Principal Component Analysis</em> (2nd ed.). Springer.")),
           tags$li(HTML("Kaland, C. (2023a). Contour clustering: A field-data-driven approach for documenting and analysing prototypical f0 contours. <em>Journal of the International Phonetic Association</em>, 53(1), 159&ndash;188.")),
@@ -353,7 +363,7 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
                                        colour = .data$cluster, group = .data$cluster)) +
       ggplot2::geom_line(linewidth = 1.2) +
       cluster_colour_scale(name = NULL, labels = labs) +
-      ggplot2::labs(x = "normalised time", y = "mean f0 (normalised)",
+      ggplot2::labs(x = "normalised time", y = f0_axis_label(input$cluster_f0_var),
                     title = sprintf("%d candidate tone contours (%s)", k, method_label(res$method))) +
       cluster_plot_theme(14)
   })
@@ -389,7 +399,7 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
       ggplot2::facet_wrap(~ k, nrow = 1) +
       ggplot2::scale_x_continuous(breaks = c(0, 0.5, 1)) +
       cluster_colour_scale(guide = "none") +
-      ggplot2::labs(x = "normalised time", y = "mean f0",
+      ggplot2::labs(x = "normalised time", y = f0_axis_label(input$cluster_f0_var),
                     subtitle = sprintf("%s solution per number of tones (drag the compare slider to change)",
                                        method_label(meth))) +
       cluster_plot_theme(13)
@@ -527,7 +537,7 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
       ...)
     dlbtn <- function(id) tags$div(style = "margin-top:8px;",
       downloadButton(id, "Download plot (PNG)", class = "btn-sm", icon = icon("download"),
-                     style = "font-size:0.78rem; padding:3px 12px; color:#2c5f4f; border-color:#cfe0d8;"))
+                     style = "font-size:0.78rem; padding:3px 12px;"))
     tagList(
       uiOutput("cluster_norm_nudge"),
       uiOutput("cluster_suggest"),
