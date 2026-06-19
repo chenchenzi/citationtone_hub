@@ -448,7 +448,10 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
       g <- if (!is.na(ga) && !is.na(gb) && ga == gb) ga else NA_integer_
       node_x[m] <- (xa + xb) / 2; node_g[m] <- g; node_sz[m] <- csz(a) + csz(b)
       h <- ht[m]; key <- if (is.na(g)) "trunk" else as.character(g)
-      addseg(key, xa, ya, xa, h); addseg(key, xb, yb, xb, h); addseg(key, xa, h, xb, h)
+      # Plot on a square-root height scale so the dense low merges (where the
+      # cluster structure lives) are not crushed under the few very tall merges.
+      addseg(key, xa, sqrt(ya), xa, sqrt(h)); addseg(key, xb, sqrt(yb), xb, sqrt(h))
+      addseg(key, xa, sqrt(h), xb, sqrt(h))
     }
     p <- plotly::plot_ly()
     for (key in names(segx)) {
@@ -461,15 +464,21 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
                            marker = list(size = 5, color = vapply(grp, colf, character(1))),
                            text = sprintf("%s (cluster %d)", tokens, grp),
                            hoverinfo = "text", showlegend = FALSE)
-    p <- plotly::add_trace(p, x = node_x, y = ht, type = "scatter", mode = "markers",
+    p <- plotly::add_trace(p, x = node_x, y = sqrt(ht), type = "scatter", mode = "markers",
                            marker = list(size = 4, color = "rgba(90,107,120,0.30)"),
                            text = sprintf("%d tokens below (merge height %.2f)", node_sz, ht),
                            hoverinfo = "text", showlegend = FALSE)
+    # Tick marks are placed at sqrt() positions but labelled with the real
+    # merge heights, so the axis still reads in normal units.
+    ycand <- c(0, 10, 25, 50, 100, 200, 400, 800, 1600, 3200)
+    yt <- sort(unique(c(ycand[ycand <= max(ht)], round(max(ht)))))
     plotly::layout(p,
       title = list(text = sprintf("Hierarchical merge tree (%s linkage), cut into %d groups",
                                   r$linkage %||% "ward.D2", k), font = list(size = 15)),
       xaxis = list(title = "", showticklabels = FALSE, zeroline = FALSE, showgrid = FALSE),
-      yaxis = list(title = "merge height"), margin = list(t = 42))
+      yaxis = list(title = "merge height (square-root scale)", zeroline = FALSE,
+                   tickmode = "array", tickvals = sqrt(yt), ticktext = as.character(yt)),
+      margin = list(t = 42))
   })
 
   # --- name the clusters (one text box per cluster) ---
@@ -569,7 +578,7 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
       conditionalPanel("input.cluster_method == 'hclust'",
         sec("Dendrogram (hierarchical merge tree)", "sitemap",
           tags$p(style = "color:#666; font-size:0.82rem; margin:0 0 6px 0;",
-            "Interactive merge tree over all tokens (leaf labels hidden). Tall vertical gaps suggest natural cut points; coloured branches are the current groups. Hover a leaf to see its token and cluster, or a node to see how many tokens sit below it. Use the camera icon in the plot toolbar to download."),
+            "Interactive merge tree over all tokens (leaf labels hidden). Tall vertical gaps suggest natural cut points; coloured branches are the current groups. The merge-height axis uses a square-root scale so the dense low merges stay legible. Hover a leaf to see its token and cluster, or a node to see how many tokens sit below it. Use the camera icon in the plot toolbar to download."),
           plotly::plotlyOutput("cluster_dendro_plot", height = "520px"))),
       sec("Compare candidate solutions", "layer-group",
         tags$p(style = "color:#666; font-size:0.85rem; margin:0 0 8px 0;",
