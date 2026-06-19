@@ -11,6 +11,16 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
 
   has_mclust <- requireNamespace("mclust", quietly = TRUE)
 
+  # Cluster colour palette: ColorBrewer "Set3" (the same set the Visualise tab
+  # uses, so the tabs feel consistent). Hard-coded here (rather than via
+  # RColorBrewer::brewer.pal) so it is available regardless of package load
+  # order. 12 colours = the maximum number of groups the slider allows.
+  .cluster_pal <- c("#8DD3C7", "#FFED6F", "#BEBADA", "#FB8072", "#80B1D3",
+                    "#FDB462", "#B3DE69", "#FCCDE5", "#BC80BD", "#CCEBC5",
+                    "#D9D9D9", "#FFFFB3")
+  cluster_colour_scale <- function(...)
+    ggplot2::scale_colour_manual(values = .cluster_pal, na.value = "#9aa5ad", ...)
+
   # --- active dataset (uploaded / normalised / curated) ---
   active_data <- reactive({
     has_norm <- !is.null(normalised_data())
@@ -293,15 +303,16 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
   output$cluster_mean_plot <- renderPlot({
     res <- final_res(); k <- final_k(); cm <- res$cluster_means
     np <- ncol(cm); xs <- seq(0, 1, length.out = np)
+    # Colour by cluster number so a cluster keeps the same colour here and in
+    # the token map; the legend is relabelled with the cluster size.
+    labs <- sprintf("Cluster %d (n=%d)", seq_len(nrow(cm)), res$sizes)
     long <- do.call(rbind, lapply(seq_len(nrow(cm)), function(i)
       data.frame(x = xs, f0 = cm[i, ],
-                 cluster = factor(i, levels = seq_len(nrow(cm))),
-                 size = res$sizes[i])))
-    long$lab <- sprintf("Cluster %s (n=%d)", long$cluster, long$size)
+                 cluster = factor(i, levels = seq_len(nrow(cm))))))
     ggplot2::ggplot(long, ggplot2::aes(x = .data$x, y = .data$f0,
-                                       colour = .data$lab, group = .data$lab)) +
+                                       colour = .data$cluster, group = .data$cluster)) +
       ggplot2::geom_line(linewidth = 1.2) +
-      ggplot2::scale_colour_hue(name = NULL) +
+      cluster_colour_scale(name = NULL, labels = labs) +
       ggplot2::labs(x = "normalised time", y = "mean f0 (normalised)",
                     title = sprintf("%d candidate tone contours (%s)", k, res$method)) +
       ggplot2::theme_minimal(base_size = 13)
@@ -335,7 +346,7 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
                                      colour = .data$cluster, group = .data$cluster)) +
       ggplot2::geom_line(linewidth = 0.9) +
       ggplot2::facet_wrap(~ k, nrow = 1) +
-      ggplot2::scale_colour_hue(guide = "none") +
+      cluster_colour_scale(guide = "none") +
       ggplot2::labs(x = "normalised time", y = "mean f0",
                     subtitle = sprintf("%s solution per number of tones (drag the compare slider to change)", mlab)) +
       ggplot2::theme_minimal(base_size = 12)
@@ -386,7 +397,7 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
     p <- ggplot2::ggplot(df, ggplot2::aes(x = .data$D1, y = .data$D2,
                                           colour = .data$cluster, customdata = .data$token)) +
       ggplot2::geom_point(alpha = 0.7, size = 1.6) +
-      ggplot2::scale_colour_hue(name = "cluster") +
+      cluster_colour_scale(name = "cluster") +
       ggplot2::labs(x = e$xl, y = e$yl) +
       ggplot2::theme_minimal(base_size = 13)
     plotly::ggplotly(p, tooltip = "customdata")
