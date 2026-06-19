@@ -150,11 +150,12 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
       items <- c(items, list(tags$span(class = paste("cr-tag", tag_cls), tag_txt)))
       tags$div(class = "cr-task", items)
     }
-    routebox <- function(sum_ic, sum_txt, intro, flow, task) {
+    routebox <- function(sum_ic, sum_txt, intro, flow, task, note = NULL) {
       tags$details(class = "curate-route",
         tags$summary(icon(sum_ic), " ", sum_txt, tags$span(class = "cr-hint", "(click to expand)")),
         tags$p(class = "cr-intro", intro),
         tags$div(class = "curate-route-flow", flow),
+        note,
         task)
     }
 
@@ -182,7 +183,10 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
         step(3, "Curate", NULL, "You are here. Verify the clusters, then merge or exclude.", FALSE, here = TRUE)),
       taskstrip("object-group", "Over-split clusters",
         list(chip("table-cells", "All-tones view"), chip("tag", "Relabel to an existing tone")),
-        "merge", "m"))
+        "merge", "m"),
+      note = tags$div(class = "cr-note",
+        icon("circle-info"),
+        HTML(" To load what Cluster produced, set <strong>Data source</strong> to <strong>Clustered data</strong> in the sidebar. The <strong>Tone category variable</strong> is then filled from your cluster labels automatically.")))
 
     tagList(
       tags$style(HTML("
@@ -197,6 +201,9 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
         .curate-route .cr-hint { color:#7aa6cc; font-weight:400; font-size:0.78rem; margin-left:6px; }
         .curate-route[open] .cr-hint { display:none; }
         .cr-intro { color:#3f5a72; font-size:0.83rem; line-height:1.5; margin:9px 0 0; }
+        .cr-note { font-size:0.78rem; color:#33536f; background:#eaf3fb; border:1px solid #d3e6f5;
+          border-radius:6px; padding:6px 11px; margin-top:11px; line-height:1.5; }
+        .cr-note .fa, .cr-note svg { color:#5b9bd5; margin-right:3px; }
         .curate-route-flow { display:flex; align-items:stretch; gap:9px; margin-top:11px; flex-wrap:wrap; }
         .cp-step { flex:1 1 185px; background:#fff; border:1px solid #e1e9f2; border-radius:7px; padding:8px 12px; }
         .cp-step.cp-here { border-color:#78c2ad; box-shadow:0 0 0 2px rgba(120,194,173,0.18); }
@@ -362,6 +369,33 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
         selectInput("curate_facet_by", "Facet by:",
                     choices = facet_choices, selected = "__none__", width = "160px")
       ),
+      # In the all-tones view each panel is already one tone, so a further
+      # speaker/item facet would be a grid-of-grids. Rather than spell that out,
+      # lock "Facet by" to (none) and grey it out whenever All tones is picked,
+      # and re-enable it for a single-tone view.
+      tags$script(HTML("
+        (function(){
+          function syncFacetLock(){
+            var t = document.getElementById('curate_view_tone');
+            var f = document.getElementById('curate_facet_by');
+            if(!t || !f || !f.selectize) return;
+            var tv = t.selectize ? t.selectize.getValue() : t.value;
+            if(tv === '__all__'){
+              if(f.selectize.getValue() !== '__none__') f.selectize.setValue('__none__', false);
+              f.selectize.disable();
+            } else {
+              f.selectize.enable();
+            }
+          }
+          if(!window.__curateFacetLock){
+            window.__curateFacetLock = true;
+            $(document).on('shiny:inputchanged', function(e){
+              if(e.name === 'curate_view_tone') setTimeout(syncFacetLock, 0);
+            });
+          }
+          setTimeout(syncFacetLock, 250);
+        })();
+      ")),
       tags$div(style = "display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 4px;",
         tags$span(style = "font-size: 0.95rem; font-weight: 700; color: #444;", "Select (current view):"),
         if (has_inspect)
@@ -452,21 +486,35 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
       ggplot2::scale_colour_manual(values = pal, drop = FALSE, name = NULL) +
       ggplot2::labs(x = xlab, y = f0_axis_label(v$f0))
 
+    faceted <- FALSE
     if (all_tones) {
       # one panel per tone so every cluster is visible at once; box/lasso-select
       # works in any panel exactly as for a single tone.
       p <- p + ggplot2::facet_wrap(ggplot2::vars(.data[[v$tone]]), scales = "free_y", ncol = 3)
+      faceted <- TRUE
     } else {
       fc <- facet_col()
       if (!is.null(fc) && fc %in% names(sub)) {
         p <- p + ggplot2::facet_wrap(ggplot2::vars(.data[[fc]]), scales = "free_y", ncol = 3)
+        faceted <- TRUE
       }
     }
 
     gg <- plotly::ggplotly(p, tooltip = "customdata")
-    gg <- plotly::layout(gg, dragmode = "select",
-                         legend = list(orientation = "h", x = 0, y = 1.02,
-                                       xanchor = "left", yanchor = "bottom"))
+    # A horizontal legend at the top sits exactly where facet-strip labels are
+    # drawn, hiding the first row of panel headings. When faceted, drop the
+    # legend below the plot so the strip row stays readable; keep it top-left
+    # for the single (unfaceted) view where there is no strip to collide with.
+    if (faceted) {
+      gg <- plotly::layout(gg, dragmode = "select",
+                           margin = list(b = 90),
+                           legend = list(orientation = "h", x = 0.5, y = -0.12,
+                                         xanchor = "center", yanchor = "top"))
+    } else {
+      gg <- plotly::layout(gg, dragmode = "select",
+                           legend = list(orientation = "h", x = 0, y = 1.02,
+                                         xanchor = "left", yanchor = "bottom"))
+    }
     gg <- plotly::config(gg, displayModeBar = TRUE,
                          modeBarButtonsToAdd = list("select2d", "lasso2d"))
     gg$x$source <- "curate_plot"
