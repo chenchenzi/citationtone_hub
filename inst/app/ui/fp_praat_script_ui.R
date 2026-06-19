@@ -143,64 +143,105 @@ for i to n_files
   appendInfoLine: "[", i, "/", n_files, "] ", basename$
 
   sound = Read from file: input_folder$ + "/" + filename$
-
-  # Run the chosen pitch-extraction method.
-  # Parameter values come from the second dialog (or its defaults).
-  if method$ = "filtered ac"
-    pitch = noprogress To Pitch (filtered ac): time_step, f0_min, f0_max, maximum_number_of_candidates, very_accurate$, attenuation_at_top, silence_threshold, voicing_threshold, octave_cost, octave_jump_cost, voiced_unvoiced_cost
-  elsif method$ = "filtered cc"
-    pitch = noprogress To Pitch (filtered cc): time_step, f0_min, f0_max, maximum_number_of_candidates, very_accurate$, attenuation_at_top, silence_threshold, voicing_threshold, octave_cost, octave_jump_cost, voiced_unvoiced_cost
-  elsif method$ = "ac"
-    pitch = noprogress To Pitch (ac): time_step, f0_min, maximum_number_of_candidates, very_accurate$, silence_threshold, voicing_threshold, octave_cost, octave_jump_cost, voiced_unvoiced_cost, f0_max
-  elsif method$ = "cc"
-    pitch = noprogress To Pitch (cc): time_step, f0_min, maximum_number_of_candidates, very_accurate$, silence_threshold, voicing_threshold, octave_cost, octave_jump_cost, voiced_unvoiced_cost, f0_max
-  elsif method$ = "raw ac"
-    pitch = noprogress To Pitch (raw ac): time_step, f0_min, f0_max, maximum_number_of_candidates, very_accurate$, silence_threshold, voicing_threshold, octave_cost, octave_jump_cost, voiced_unvoiced_cost
-  elsif method$ = "raw cc"
-    pitch = noprogress To Pitch (raw cc): time_step, f0_min, f0_max, maximum_number_of_candidates, very_accurate$, silence_threshold, voicing_threshold, octave_cost, octave_jump_cost, voiced_unvoiced_cost
-  elsif method$ = "shs"
-    pitch = noprogress To Pitch (shs): time_step, f0_min, maximum_number_of_candidates, maximum_frequency, maximum_subharmonics, compression_factor, f0_max, number_of_points_per_octave
-  else
-    exitScript: "Unknown method: \'", method$, "\'. See the script header for valid values."
-  endif
-
-  # Save the binary .Pitch (preserves all candidates).
-  selectObject: pitch
-  Save as binary file: output_folder$ + "/" + basename$ + ".Pitch"
-
-  # Intensity (dB) over the same recording. Shinytone\'s Inspect tab uses
-  # this to flag low-energy frames, where f0 estimates are unreliable
-  # (voicing onsets/offsets, devoiced or creaky tails). Minimum pitch =
-  # f0_min sets the analysis window (~3.2 / f0_min seconds).
   selectObject: sound
-  intensity = noprogress To Intensity: f0_min, time_step, "yes"
+  sound_dur = Get total duration
 
-  # Append every frame to the combined CSV. f0 comes from the Pitch frame;
-  # intensity is sampled from the Intensity object at that frame\'s time.
-  selectObject: pitch
-  n_frames = Get number of frames
-  for f to n_frames
+  # Robustness guard. Praat\'s pitch analysis needs the sound to last at least
+  # periodsPerWindow / f0_min seconds (3 periods for the ac / filtered ac / raw
+  # ac methods, 1 for the cc variants), doubled when "very accurate" is on.
+  # A sound shorter than that cannot yield f0 at all and would otherwise make
+  # Praat throw a "shorter than window length" error that aborts the whole
+  # batch. Such tokens are skipped here with a note instead.
+  if method$ = "cc" or method$ = "filtered cc" or method$ = "raw cc"
+    periods_per_window = 1.0
+  else
+    periods_per_window = 3.0
+  endif
+  if method$ <> "shs" and very_accurate$ = "yes"
+    periods_per_window = periods_per_window * 2
+  endif
+  min_pitch_dur = periods_per_window / f0_min
+
+  if sound_dur < min_pitch_dur
+    appendInfoLine: "    SKIPPED: ", fixed$(sound_dur, 4), " s < ", fixed$(min_pitch_dur, 4), " s (too short for f0 at floor ", f0_min, " Hz)"
+    selectObject: sound
+    Remove
+  else
+    # Run the chosen pitch-extraction method.
+    # Parameter values come from the second dialog (or its defaults).
+    if method$ = "filtered ac"
+      pitch = noprogress To Pitch (filtered ac): time_step, f0_min, f0_max, maximum_number_of_candidates, very_accurate$, attenuation_at_top, silence_threshold, voicing_threshold, octave_cost, octave_jump_cost, voiced_unvoiced_cost
+    elsif method$ = "filtered cc"
+      pitch = noprogress To Pitch (filtered cc): time_step, f0_min, f0_max, maximum_number_of_candidates, very_accurate$, attenuation_at_top, silence_threshold, voicing_threshold, octave_cost, octave_jump_cost, voiced_unvoiced_cost
+    elsif method$ = "ac"
+      pitch = noprogress To Pitch (ac): time_step, f0_min, maximum_number_of_candidates, very_accurate$, silence_threshold, voicing_threshold, octave_cost, octave_jump_cost, voiced_unvoiced_cost, f0_max
+    elsif method$ = "cc"
+      pitch = noprogress To Pitch (cc): time_step, f0_min, maximum_number_of_candidates, very_accurate$, silence_threshold, voicing_threshold, octave_cost, octave_jump_cost, voiced_unvoiced_cost, f0_max
+    elsif method$ = "raw ac"
+      pitch = noprogress To Pitch (raw ac): time_step, f0_min, f0_max, maximum_number_of_candidates, very_accurate$, silence_threshold, voicing_threshold, octave_cost, octave_jump_cost, voiced_unvoiced_cost
+    elsif method$ = "raw cc"
+      pitch = noprogress To Pitch (raw cc): time_step, f0_min, f0_max, maximum_number_of_candidates, very_accurate$, silence_threshold, voicing_threshold, octave_cost, octave_jump_cost, voiced_unvoiced_cost
+    elsif method$ = "shs"
+      pitch = noprogress To Pitch (shs): time_step, f0_min, maximum_number_of_candidates, maximum_frequency, maximum_subharmonics, compression_factor, f0_max, number_of_points_per_octave
+    else
+      exitScript: "Unknown method: \'", method$, "\'. See the script header for valid values."
+    endif
+
+    # Save the binary .Pitch (preserves all candidates).
     selectObject: pitch
-    t      = Get time from frame: f
-    f0_val = Get value in frame: f, "Hertz"
-    if f0_val = undefined
-      f0_val$ = "NA"
-    else
-      f0_val$ = fixed$(f0_val, 4)
-    endif
-    selectObject: intensity
-    int_val = Get value at time: t, "cubic"
-    if int_val = undefined
-      int_val$ = "NA"
-    else
-      int_val$ = fixed$(int_val, 2)
-    endif
-    appendFileLine: csv_path$, basename$ + "," + fixed$(t, 4) + "," + f0_val$ + "," + int_val$
-  endfor
+    Save as binary file: output_folder$ + "/" + basename$ + ".Pitch"
 
-  # Tidy up so the Object list does not balloon over thousands of files.
-  selectObject: sound, pitch, intensity
-  Remove
+    # Intensity (dB) over the same recording. Shinytone\'s Inspect tab uses
+    # this to flag low-energy frames, where f0 estimates are unreliable
+    # (voicing onsets/offsets, devoiced or creaky tails). Praat needs the sound
+    # to last at least 6.4 / f0_min seconds for an intensity analysis; tokens
+    # shorter than that (but long enough for f0) keep their f0 with intensity
+    # written as NA, so one short file cannot halt the whole batch.
+    selectObject: sound
+    min_intensity_dur = 6.4 / f0_min
+    have_intensity = 0
+    if sound_dur >= min_intensity_dur
+      intensity = noprogress To Intensity: f0_min, time_step, "yes"
+      have_intensity = 1
+    else
+      appendInfoLine: "    intensity skipped: ", fixed$(sound_dur, 4), " s < ", fixed$(min_intensity_dur, 4), " s window (intensity = NA)"
+    endif
+
+    # Append every frame to the combined CSV. f0 comes from the Pitch frame;
+    # intensity is sampled from the Intensity object at that frame\'s time.
+    selectObject: pitch
+    n_frames = Get number of frames
+    for f to n_frames
+      selectObject: pitch
+      t      = Get time from frame: f
+      f0_val = Get value in frame: f, "Hertz"
+      if f0_val = undefined
+        f0_val$ = "NA"
+      else
+        f0_val$ = fixed$(f0_val, 4)
+      endif
+      if have_intensity
+        selectObject: intensity
+        int_val = Get value at time: t, "cubic"
+        if int_val = undefined
+          int_val$ = "NA"
+        else
+          int_val$ = fixed$(int_val, 2)
+        endif
+      else
+        int_val$ = "NA"
+      endif
+      appendFileLine: csv_path$, basename$ + "," + fixed$(t, 4) + "," + f0_val$ + "," + int_val$
+    endfor
+
+    # Tidy up so the Object list does not balloon over thousands of files.
+    if have_intensity
+      selectObject: sound, pitch, intensity
+    else
+      selectObject: sound, pitch
+    endif
+    Remove
+  endif
 endfor
 
 selectObject: file_list
