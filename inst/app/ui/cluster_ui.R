@@ -21,6 +21,31 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
   cluster_colour_scale <- function(...)
     ggplot2::scale_colour_manual(values = .cluster_pal, na.value = "#9aa5ad", ...)
 
+  # Friendly algorithm names for plot titles (avoid raw "hclust" etc.).
+  .method_label <- c(kmeans = "k-means", hclust = "hierarchical",
+                     gmm = "Gaussian mixture")
+  method_label <- function(m) {
+    lab <- unname(.method_label[m]); if (length(lab) != 1 || is.na(lab)) m else lab
+  }
+
+  # Shared larger-type theme so ticks / titles on the result plots are legible.
+  cluster_plot_theme <- function(base = 14)
+    ggplot2::theme_minimal(base_size = base) +
+    ggplot2::theme(
+      axis.text     = ggplot2::element_text(size = 13),
+      axis.title    = ggplot2::element_text(size = 14),
+      plot.title    = ggplot2::element_text(size = 15, face = "bold"),
+      plot.subtitle = ggplot2::element_text(size = 12.5),
+      legend.text   = ggplot2::element_text(size = 12),
+      strip.text    = ggplot2::element_text(size = 13, face = "bold"))
+
+  # Build a PNG download handler for a reactive ggplot object.
+  cl_dl_plot <- function(obj, stem, w = 9, h = 5)
+    downloadHandler(
+      filename = function() sprintf("%s_%s.png", input$dataset_name %||% "cluster", stem),
+      content  = function(file)
+        ggplot2::ggsave(file, plot = obj(), width = w, height = h, dpi = 150, bg = "white"))
+
   # --- active dataset (uploaded / normalised / curated) ---
   active_data <- reactive({
     has_norm <- !is.null(normalised_data())
@@ -50,12 +75,12 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
       tags$p(style = "margin: 4px 0 8px 0;", HTML(paste(
         "Don't know how many tones a language has? Group tokens by the",
         "<strong>shape</strong> of their f0 contour and let the data suggest the number",
-        "of categories. This is a <strong>hypothesis generator</strong> (after Kaland 2023),",
+        "of categories. This is a <strong>hypothesis generator</strong> (after Kaland, 2023a),",
         "not a verdict: clusters can reflect speaker, vowel or recording effects as well as",
         "tone, so confirm the result with linguistic analysis."))),
       tags$ul(style = "margin-bottom: 8px; padding-left: 18px;",
         tags$li(HTML("<strong>Normalise first (important).</strong> Cluster speaker-normalised f0 (semitone or z-score, from the Normalise tab). On raw Hz, clusters tend to separate <em>speakers</em> by pitch range rather than tones.")),
-        tags$li(tags$strong("Feature space."), " Cluster the resampled contour points, compact ", tags$em("Legendre"), " / ", tags$em("DCT"), " coefficients, or the ", tags$em("derivative"), " (rate of change: clusters by movement and discards height; Kaland 2023)."),
+        tags$li(tags$strong("Feature space."), " Cluster the resampled contour points, compact ", tags$em("Legendre"), " / ", tags$em("DCT"), " coefficients, or the ", tags$em("derivative"), " (rate of change: clusters by movement and discards height; Kaland, 2023a)."),
         tags$li(tags$strong("Register vs shape."), " Keep height so high and low level tones separate, or centre each contour to cluster on shape alone."),
         tags$li(tags$strong("How many tones?"), " The diagnostics (elbow, silhouette, gap, GMM/BIC) rarely agree exactly, so read off a plausible ", tags$em("range"), ", then inspect the cluster-mean contours."),
         tags$li(tags$strong("Validate / reuse."), " If you have provisional labels, check agreement (adjusted Rand index). Send the clusters on as candidate tone labels for Curate / Model.")
@@ -63,12 +88,25 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
       tags$details(style = "margin-top: 4px;",
         tags$summary(style = "cursor:pointer; font-size:0.82rem; color:#4a7868; font-weight:600;",
                      "Methods & references"),
-        tags$ul(style = "margin: 6px 0 0 0; padding-left: 18px; font-size: 0.8rem; color:#555;",
-          tags$li(HTML("<strong>Contour features.</strong> Time-normalised resampling and the <em>derivative</em> (rate-of-change) representation follow <strong>Kaland (2023)</strong>, <em>J. Int. Phonetic Assoc.</em> 53(1), 159&ndash;188 (derivative best for perception: <strong>Kaland 2023</strong>, <em>JASA</em> 154(1), 95&ndash;107). <em>Legendre</em> and <em>DCT</em> coefficients are standard orthogonal-basis summaries of a contour.")),
-          tags$li(HTML("<strong>Clustering algorithms.</strong> k-means (Hartigan &amp; Wong 1979); hierarchical / Ward (Ward 1963); Gaussian mixture with BIC (Scrucca et al. 2016, <em>mclust</em>).")),
-          tags$li(HTML("<strong>Number of groups.</strong> Silhouette (Rousseeuw 1987); gap statistic (Tibshirani et al. 2001); <em>MDL</em> information cost (<strong>Kaland &amp; Ellison 2023</strong>, <em>Proc. ICPhS 20</em>, 3448&ndash;3452).")),
-          tags$li(HTML("<strong>Token map.</strong> PCA (Jolliffe 2002) or UMAP (McInnes, Healy &amp; Melville 2018, <em>arXiv:1802.03426</em>).")),
-          tags$li(HTML("Kaland's own tool clusters hierarchically on DTW / correlation distances; this tab offers the methods above as accessible alternatives."))
+        tags$p(style = "font-size:0.8rem; color:#555; margin:8px 0 2px 0; font-weight:700;", "Methods"),
+        tags$ul(style = "margin: 0 0 0 0; padding-left: 18px; font-size: 0.8rem; color:#555;",
+          tags$li(HTML("<strong>Contour features.</strong> Each contour is time-normalised and resampled to a fixed number of points; the <em>derivative</em> (rate-of-change) representation discards height and clusters by movement (Kaland, 2023a), which best matches perceived contour similarity (Kaland, 2023b). <em>Legendre</em> and <em>DCT</em> coefficients are compact orthogonal-basis summaries of contour shape.")),
+          tags$li(HTML("<strong>Clustering algorithms.</strong> k-means (Hartigan &amp; Wong, 1979), hierarchical agglomerative clustering with Ward linkage (Ward, 1963), and Gaussian mixture models selected by BIC (Scrucca et al., 2016).")),
+          tags$li(HTML("<strong>Number of groups.</strong> The silhouette (Rousseeuw, 1987), gap statistic (Tibshirani et al., 2001) and a minimum-description-length information cost (Kaland &amp; Ellison, 2023) each suggest a value of k.")),
+          tags$li(HTML("<strong>Token map.</strong> Tokens are projected to two dimensions with PCA (Jolliffe, 2002) or UMAP (McInnes et al., 2018)."))
+        ),
+        tags$p(style = "font-size:0.8rem; color:#555; margin:10px 0 2px 0; font-weight:700;", "References"),
+        tags$ol(style = "margin: 0; padding-left: 20px; font-size: 0.76rem; color:#666; line-height:1.55;",
+          tags$li(HTML("Hartigan, J. A., &amp; Wong, M. A. (1979). Algorithm AS 136: A k-means clustering algorithm. <em>Journal of the Royal Statistical Society: Series C (Applied Statistics)</em>, 28(1), 100&ndash;108.")),
+          tags$li(HTML("Jolliffe, I. T. (2002). <em>Principal Component Analysis</em> (2nd ed.). Springer.")),
+          tags$li(HTML("Kaland, C. (2023a). Contour clustering: A field-data-driven approach for documenting and analysing prototypical f0 contours. <em>Journal of the International Phonetic Association</em>, 53(1), 159&ndash;188.")),
+          tags$li(HTML("Kaland, C. (2023b). Intonation contour similarity: f0 representations and distance measures compared to human perception in two languages. <em>The Journal of the Acoustical Society of America</em>, 154(1), 95&ndash;107.")),
+          tags$li(HTML("Kaland, C., &amp; Ellison, T. M. (2023). Evaluating cluster analysis on f0 contours: An information theoretic approach on three languages. In <em>Proceedings of the 20th International Congress of Phonetic Sciences</em> (pp. 3448&ndash;3452).")),
+          tags$li(HTML("McInnes, L., Healy, J., &amp; Melville, J. (2018). UMAP: Uniform manifold approximation and projection for dimension reduction. <em>arXiv:1802.03426</em>.")),
+          tags$li(HTML("Rousseeuw, P. J. (1987). Silhouettes: A graphical aid to the interpretation and validation of cluster analysis. <em>Journal of Computational and Applied Mathematics</em>, 20, 53&ndash;65.")),
+          tags$li(HTML("Scrucca, L., Fop, M., Murphy, T. B., &amp; Raftery, A. E. (2016). mclust 5: Clustering, classification and density estimation using Gaussian finite mixture models. <em>The R Journal</em>, 8(1), 289&ndash;317.")),
+          tags$li(HTML("Tibshirani, R., Walther, G., &amp; Hastie, T. (2001). Estimating the number of clusters in a data set via the gap statistic. <em>Journal of the Royal Statistical Society: Series B (Statistical Methodology)</em>, 63(2), 411&ndash;423.")),
+          tags$li(HTML("Ward, J. H. (1963). Hierarchical grouping to optimize an objective function. <em>Journal of the American Statistical Association</em>, 58(301), 236&ndash;244."))
         )
       )
     )
@@ -274,7 +312,7 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
       HTML("&#9888; "), msg)
   })
 
-  output$cluster_diag_plot <- renderPlot({
+  diag_plot_obj <- reactive({
     dg <- cl_run()$diag$table; ml <- mdl_live()
     long <- rbind(
       data.frame(k = dg$k, value = dg$wss,        metric = "Elbow (lower better)"),
@@ -298,9 +336,11 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
         axis.title  = ggplot2::element_text(size = 14),
         panel.spacing = ggplot2::unit(1.2, "lines"))
   })
+  output$cluster_diag_plot <- renderPlot({ diag_plot_obj() })
+  output$cluster_diag_dl <- cl_dl_plot(diag_plot_obj, "diagnostics", w = 10, h = 6)
 
   # --- cluster-mean contours (the candidate prototypical tones) ---
-  output$cluster_mean_plot <- renderPlot({
+  mean_plot_obj <- reactive({
     res <- final_res(); k <- final_k(); cm <- res$cluster_means
     np <- ncol(cm); xs <- seq(0, 1, length.out = np)
     # Colour by cluster number so a cluster keeps the same colour here and in
@@ -314,14 +354,16 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
       ggplot2::geom_line(linewidth = 1.2) +
       cluster_colour_scale(name = NULL, labels = labs) +
       ggplot2::labs(x = "normalised time", y = "mean f0 (normalised)",
-                    title = sprintf("%d candidate tone contours (%s)", k, res$method)) +
-      ggplot2::theme_minimal(base_size = 13)
+                    title = sprintf("%d candidate tone contours (%s)", k, method_label(res$method))) +
+      cluster_plot_theme(14)
   })
+  output$cluster_mean_plot <- renderPlot({ mean_plot_obj() })
+  output$cluster_mean_dl <- cl_dl_plot(mean_plot_obj, "candidate_contours", w = 9, h = 5)
 
   # --- compare candidate k (small multiples; uses the CHOSEN method) ---
   # Reacts to the compare-range slider, so the user can line up e.g. 6, 7, 8
   # whatever the committed solution is.
-  output$cluster_compare_plot <- renderPlot({
+  compare_plot_obj <- reactive({
     r <- cl_run(); feat <- r$feat; req(feat)
     meth <- input$cluster_method %||% "kmeans"
     rng <- input$cluster_compare_range %||% c(4, 7)
@@ -341,16 +383,19 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
     })
     cp$k <- factor(sprintf("%d tones", cp$kk),
                    levels = sprintf("%d tones", sort(unique(cp$kk))))
-    mlab <- c(kmeans = "k-means", hclust = "hierarchical", gmm = "GMM")[meth]
     ggplot2::ggplot(cp, ggplot2::aes(x = .data$x, y = .data$f0,
                                      colour = .data$cluster, group = .data$cluster)) +
       ggplot2::geom_line(linewidth = 0.9) +
       ggplot2::facet_wrap(~ k, nrow = 1) +
+      ggplot2::scale_x_continuous(breaks = c(0, 0.5, 1)) +
       cluster_colour_scale(guide = "none") +
       ggplot2::labs(x = "normalised time", y = "mean f0",
-                    subtitle = sprintf("%s solution per number of tones (drag the compare slider to change)", mlab)) +
-      ggplot2::theme_minimal(base_size = 12)
+                    subtitle = sprintf("%s solution per number of tones (drag the compare slider to change)",
+                                       method_label(meth))) +
+      cluster_plot_theme(13)
   })
+  output$cluster_compare_plot <- renderPlot({ compare_plot_obj() })
+  output$cluster_compare_dl <- cl_dl_plot(compare_plot_obj, "compare_solutions", w = 11, h = 4.5)
 
   # --- GMM membership confidence ---
   output$cluster_confidence <- renderUI({
@@ -362,16 +407,58 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
               n_amb, length(u), 100 * n_amb / length(u), mean(u)))
   })
 
-  # --- dendrogram (hierarchical method only; base R, no extra dependency) ---
-  output$cluster_dendro_plot <- renderPlot({
-    r <- cl_run(); tree <- r$res$tree; k <- final_k()
+  # --- interactive dendrogram (hierarchical method only) ----------------
+  # Built directly from the hclust merge tree (no extra dependency): leaf and
+  # node coordinates come from $merge / $height / $order, drawn as plotly line
+  # traces coloured by the k-cut (same cluster colours as the other plots).
+  # Hovering a leaf shows its token + cluster; hovering an internal node shows
+  # how many tokens sit below it.
+  output$cluster_dendro_plot <- plotly::renderPlotly({
+    r <- cl_run(); tree <- r$res$tree; k <- final_k(); res <- final_res()
     validate(need(!is.null(tree), "Dendrogram is only available for the hierarchical method."))
-    op <- graphics::par(mar = c(0.5, 4, 2.5, 0.5), cex.axis = 1.1, cex.lab = 1.2, cex.main = 1.2)
-    on.exit(graphics::par(op))
-    plot(tree, labels = FALSE, hang = -1, ylab = "merge height", xlab = "", sub = "",
-         main = sprintf("Hierarchical merge tree (%s linkage), cut into %d groups",
-                        r$linkage %||% "ward.D2", k))
-    stats::rect.hclust(tree, k = k, border = "#2c5f4f")
+    tokens <- r$feat$tokens
+    n <- length(tree$order)
+    grp <- unname(res$assignment[tokens])              # cluster id per leaf/row
+    leaf_x <- numeric(n); leaf_x[tree$order] <- seq_len(n)
+    mg <- tree$merge; ht <- tree$height
+    node_x <- numeric(n - 1); node_g <- rep(NA_integer_, n - 1); node_sz <- integer(n - 1)
+    cx <- function(i) if (i < 0) leaf_x[-i] else node_x[i]
+    cy <- function(i) if (i < 0) 0 else ht[i]
+    cg <- function(i) if (i < 0) grp[-i] else node_g[i]
+    csz <- function(i) if (i < 0) 1L else node_sz[i]
+    pal <- .cluster_pal
+    colf <- function(g) if (is.na(g)) "#c2cad1" else pal[((g - 1) %% length(pal)) + 1]
+    segx <- list(); segy <- list()
+    addseg <- function(key, x0, y0, x1, y1) {
+      segx[[key]] <<- c(segx[[key]], x0, x1, NA); segy[[key]] <<- c(segy[[key]], y0, y1, NA) }
+    for (m in seq_len(n - 1)) {
+      a <- mg[m, 1]; b <- mg[m, 2]
+      xa <- cx(a); xb <- cx(b); ya <- cy(a); yb <- cy(b); ga <- cg(a); gb <- cg(b)
+      g <- if (!is.na(ga) && !is.na(gb) && ga == gb) ga else NA_integer_
+      node_x[m] <- (xa + xb) / 2; node_g[m] <- g; node_sz[m] <- csz(a) + csz(b)
+      h <- ht[m]; key <- if (is.na(g)) "trunk" else as.character(g)
+      addseg(key, xa, ya, xa, h); addseg(key, xb, yb, xb, h); addseg(key, xa, h, xb, h)
+    }
+    p <- plotly::plot_ly()
+    for (key in names(segx)) {
+      g <- if (key == "trunk") NA_integer_ else as.integer(key)
+      p <- plotly::add_trace(p, x = segx[[key]], y = segy[[key]], type = "scatter",
+                             mode = "lines", line = list(color = colf(g), width = 1.3),
+                             hoverinfo = "skip", showlegend = FALSE)
+    }
+    p <- plotly::add_trace(p, x = leaf_x, y = rep(0, n), type = "scatter", mode = "markers",
+                           marker = list(size = 5, color = vapply(grp, colf, character(1))),
+                           text = sprintf("%s (cluster %d)", tokens, grp),
+                           hoverinfo = "text", showlegend = FALSE)
+    p <- plotly::add_trace(p, x = node_x, y = ht, type = "scatter", mode = "markers",
+                           marker = list(size = 4, color = "rgba(90,107,120,0.30)"),
+                           text = sprintf("%d tokens below (merge height %.2f)", node_sz, ht),
+                           hoverinfo = "text", showlegend = FALSE)
+    plotly::layout(p,
+      title = list(text = sprintf("Hierarchical merge tree (%s linkage), cut into %d groups",
+                                  r$linkage %||% "ward.D2", k), font = list(size = 15)),
+      xaxis = list(title = "", showticklabels = FALSE, zeroline = FALSE, showgrid = FALSE),
+      yaxis = list(title = "merge height"), margin = list(t = 42))
   })
 
   # --- name the clusters (one text box per cluster) ---
@@ -438,12 +525,16 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
       tags$h4(style = "margin:2px 0 12px 0; font-size:1.3rem; font-weight:600; color:#2c4a5e;",
               icon(ic), " ", title),
       ...)
+    dlbtn <- function(id) tags$div(style = "margin-top:8px;",
+      downloadButton(id, "Download plot (PNG)", class = "btn-sm", icon = icon("download"),
+                     style = "font-size:0.78rem; padding:3px 12px; color:#2c5f4f; border-color:#cfe0d8;"))
     tagList(
       uiOutput("cluster_norm_nudge"),
       uiOutput("cluster_suggest"),
       sec("How many tones? (cluster-count diagnostics)", "chart-line",
         plotOutput("cluster_diag_plot", height = "360px"),
-        tags$details(style = "background:#eef4fb; border:1px solid #cfe2f1; border-radius:6px; padding:6px 12px; margin:6px 0 0 0;",
+        dlbtn("cluster_diag_dl"),
+        tags$details(style = "background:#eef4fb; border:1px solid #cfe2f1; border-radius:6px; padding:6px 12px; margin:8px 0 0 0;",
           tags$summary(style = "cursor:pointer; font-weight:700; color:#2c5d80; font-size:0.85rem;",
                        icon("circle-info"), " How to read these diagnostics"),
           tags$ul(style = "font-size:0.82rem; color:#3f5a72; margin:8px 0 2px 0; padding-left:18px;",
@@ -462,18 +553,20 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
                     value = min(max(2L, r$k), kmax), step = 1, width = "340px")),
       sec("Candidate tone contours", "wave-square",
         plotOutput("cluster_mean_plot", height = "340px"),
+        dlbtn("cluster_mean_dl"),
         uiOutput("cluster_confidence")),
       conditionalPanel("input.cluster_method == 'hclust'",
         sec("Dendrogram (hierarchical merge tree)", "sitemap",
           tags$p(style = "color:#666; font-size:0.82rem; margin:0 0 6px 0;",
-            "Merge tree over all tokens (leaf labels hidden). Tall vertical gaps suggest natural cut points; the boxes show the current number of groups."),
-          plotOutput("cluster_dendro_plot", height = "300px"))),
+            "Interactive merge tree over all tokens (leaf labels hidden). Tall vertical gaps suggest natural cut points; coloured branches are the current groups. Hover a leaf to see its token and cluster, or a node to see how many tokens sit below it. Use the camera icon in the plot toolbar to download."),
+          plotly::plotlyOutput("cluster_dendro_plot", height = "340px"))),
       sec("Compare candidate solutions", "layer-group",
         tags$p(style = "color:#666; font-size:0.85rem; margin:0 0 8px 0;",
           "Cluster-mean contours at several values of k side by side, using your chosen algorithm. Drag the range to line up e.g. 6, 7 and 8 tones."),
         sliderInput("cluster_compare_range", "Show side-by-side for k =",
                     min = 2, max = 12, value = c(4, 7), step = 1, width = "340px"),
-        plotOutput("cluster_compare_plot", height = "230px")),
+        plotOutput("cluster_compare_plot", height = "230px"),
+        dlbtn("cluster_compare_dl")),
       sec("Token map", "diagram-project",
         radioButtons("cluster_projection", NULL, inline = TRUE,
                      choices = if (requireNamespace("uwot", quietly = TRUE))
@@ -481,7 +574,7 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
                      else c("PCA (linear)" = "pca"),
                      selected = "pca"),
         tags$div(style = "color:#888; font-size:0.78rem; margin:-4px 0 6px 0;",
-          "A 2-D map of every token coloured by cluster. PCA is linear; UMAP can separate groups more visibly but distorts distances, so read it as a sketch, not a measurement."),
+          "A 2-D map of every token coloured by cluster. PCA is linear; UMAP can separate groups more visibly but distorts distances, so read it as a sketch, not a measurement. Hover a point to see its token; use the camera icon in the plot toolbar to download."),
         plotly::plotlyOutput("cluster_proj_plot", height = "380px")),
       sec("Name the groups", "tag",
         tags$p(style = "color:#666; font-size:0.85rem; margin:0 0 8px 0;",
