@@ -54,8 +54,11 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
         tags$summary(style = "cursor:pointer; font-size:0.82rem; color:#4a7868; font-weight:600;",
                      "Methods & references"),
         tags$ul(style = "margin: 6px 0 0 0; padding-left: 18px; font-size: 0.8rem; color:#555;",
-          tags$li(HTML("<strong>From Kaland's approach:</strong> the time-normalised resampling and the <em>derivative</em> representation follow <strong>Kaland (2023)</strong>, <em>J. Int. Phonetic Assoc.</em> 53(1), 159&ndash;188; the <em>MDL</em> information-cost criterion follows <strong>Kaland &amp; Ellison (2023)</strong>, <em>Proc. ICPhS 20</em>, 3448&ndash;3452 (the derivative-best-for-perception result is <strong>Kaland 2023</strong>, <em>JASA</em> 154(1), 95&ndash;107).")),
-          tags$li(HTML("<strong>Standard methods</strong> (not specific to Kaland's tool, which is hierarchical + DTW based): k-means (Hartigan &amp; Wong 1979), hierarchical/Ward (Ward 1963), Gaussian mixture/BIC (Scrucca et al. 2016, <em>mclust</em>); silhouette (Rousseeuw 1987), gap statistic (Tibshirani et al. 2001); PCA (Jolliffe 2002)."))
+          tags$li(HTML("<strong>Contour features.</strong> Time-normalised resampling and the <em>derivative</em> (rate-of-change) representation follow <strong>Kaland (2023)</strong>, <em>J. Int. Phonetic Assoc.</em> 53(1), 159&ndash;188 (derivative best for perception: <strong>Kaland 2023</strong>, <em>JASA</em> 154(1), 95&ndash;107). <em>Legendre</em> and <em>DCT</em> coefficients are standard orthogonal-basis summaries of a contour.")),
+          tags$li(HTML("<strong>Clustering algorithms.</strong> k-means (Hartigan &amp; Wong 1979); hierarchical / Ward (Ward 1963); Gaussian mixture with BIC (Scrucca et al. 2016, <em>mclust</em>).")),
+          tags$li(HTML("<strong>Number of groups.</strong> Silhouette (Rousseeuw 1987); gap statistic (Tibshirani et al. 2001); <em>MDL</em> information cost (<strong>Kaland &amp; Ellison 2023</strong>, <em>Proc. ICPhS 20</em>, 3448&ndash;3452).")),
+          tags$li(HTML("<strong>Token map.</strong> PCA (Jolliffe 2002) or UMAP (McInnes, Healy &amp; Melville 2018, <em>arXiv:1802.03426</em>).")),
+          tags$li(HTML("Kaland's own tool clusters hierarchically on DTW / correlation distances; this tab offers the methods above as accessible alternatives."))
         )
       )
     )
@@ -87,10 +90,11 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
         # (features, method, k, run) sit near the top without scrolling. The
         # summary shows which dataset is active so it is clear when closed.
         tags$details(class = "cluster-data-group", style = "margin-bottom:4px;",
-          tags$summary(style = "cursor:pointer; font-weight:600; color:#2c5f4f; font-size:0.95rem; padding:2px 0; list-style:revert;",
-                       icon("table"), " Data & variables ",
-                       tags$span(style = "color:#8a9aa3; font-weight:400; font-size:0.8rem;",
-                                 sprintf("(%s)", ds_label))),
+          tags$summary(style = "cursor:pointer; padding:2px 0; list-style:revert;",
+                       tags$h5(style = "display:inline-block; margin:0;",
+                               "Data & variables ",
+                               tags$span(style = "color:#8a9aa3; font-weight:400; font-size:0.8rem;",
+                                         sprintf("(%s)", ds_label)))),
           tags$div(style = "margin-top:8px;",
             selectInput("cluster_dataset", "Select dataset:", choices = ds_choices, selected = ds_selected),
             selectInput("cluster_token_var", "Token ID variable:",
@@ -178,8 +182,49 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
       incProgress(0.85, detail = "assigning clusters")
       res <- cluster_f0(feat, method = input$cluster_method, k = k,
                         hclust_method = input$cluster_linkage %||% "ward.D2")
-      list(feat = feat, diag = diag, res = res, k = k, token = tok)
+      list(feat = feat, diag = diag, res = res, k = k, token = tok,
+           linkage = input$cluster_linkage %||% "ward.D2")
     })
+  })
+
+  # --- chosen number of groups -------------------------------------------
+  # The run picks a starting k (auto suggestion or the manual slider), but the
+  # diagnostics rarely agree, so the result panel exposes a live "Number of
+  # groups" slider. final_k()/final_res() re-cut the SAME features + method to
+  # the chosen k, and the contours, dendrogram, token map, names, validation
+  # and published labels all follow it. Defaults to the run's k (no recompute).
+  final_k <- reactive({
+    r <- cl_run()
+    k <- input$cluster_ngroups
+    if (is.null(k)) r$k else as.integer(k)
+  })
+  final_res <- reactive({
+    r <- cl_run(); k <- final_k()
+    if (length(k) != 1 || is.na(k) || k == r$k) return(r$res)   # reuse the run
+    cluster_f0(r$feat, method = r$res$method, k = k,
+               hclust_method = r$linkage %||% "ward.D2")
+  })
+
+  # The 2-D projection depends only on the features + projection choice, not on
+  # k, so cache it separately. Re-cutting the groups then only recolours points
+  # (no costly UMAP / PCA recompute on every slider nudge).
+  cluster_embedding <- reactive({
+    r <- cl_run(); X <- r$feat$features
+    proj <- input$cluster_projection %||% "pca"
+    if (proj == "umap" && requireNamespace("uwot", quietly = TRUE) && nrow(X) > 5) {
+      nn <- max(2L, min(15L, nrow(X) - 1L))
+      emb <- withProgress(message = "Computing UMAP", value = 0.4, {
+        set.seed(1); uwot::umap(X, n_neighbors = nn, min_dist = 0.1,
+                                n_components = 2, verbose = FALSE) })
+      list(D1 = emb[, 1], D2 = emb[, 2], xl = "UMAP-1", yl = "UMAP-2",
+           tokens = r$feat$tokens)
+    } else {
+      pca <- stats::prcomp(X, scale. = FALSE)
+      ve <- round(100 * pca$sdev^2 / sum(pca$sdev^2), 1)
+      list(D1 = pca$x[, 1], D2 = pca$x[, 2],
+           xl = sprintf("PC1 (%.1f%%)", ve[1]), yl = sprintf("PC2 (%.1f%%)", ve[2]),
+           tokens = r$feat$tokens)
+    }
   })
 
   # --- live MDL curve: recomputed as the bending slider changes, without
@@ -202,8 +247,7 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
       chip("silhouette", dg$k_silhouette), chip("gap", dg$k_gap),
       chip("GMM/BIC", dg$k_gmm), chip("MDL", k_mdl),
       tags$span(style = "color:#555; font-size:0.85rem;",
-        sprintf(" (showing %d clusters, %s).", r$k,
-                if (input$cluster_kmode == "manual") "set manually" else "auto")))
+        sprintf(" (currently showing %d groups; adjust below).", final_k())))
   })
 
   # --- diagnostics plot (elbow / silhouette / gap vs k) ---
@@ -223,38 +267,43 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
   output$cluster_diag_plot <- renderPlot({
     dg <- cl_run()$diag$table; ml <- mdl_live()
     long <- rbind(
-      data.frame(k = dg$k, value = dg$wss,        metric = "Elbow (within-SS, lower better)"),
+      data.frame(k = dg$k, value = dg$wss,        metric = "Elbow (lower better)"),
       data.frame(k = dg$k, value = dg$silhouette, metric = "Silhouette (higher better)"),
       data.frame(k = dg$k, value = dg$gap,        metric = "Gap (higher better)"),
-      data.frame(k = ml$k, value = ml$mdl,        metric = "MDL info-cost (lower better)"))
+      data.frame(k = ml$k, value = ml$mdl,        metric = "MDL cost (lower better)"))
     long <- long[is.finite(long$value), , drop = FALSE]
     long$metric <- factor(long$metric, levels = c(
-      "Elbow (within-SS, lower better)", "Silhouette (higher better)",
-      "Gap (higher better)", "MDL info-cost (lower better)"))
+      "Elbow (lower better)", "Silhouette (higher better)",
+      "Gap (higher better)", "MDL cost (lower better)"))
     ggplot2::ggplot(long, ggplot2::aes(x = .data$k, y = .data$value)) +
-      ggplot2::geom_line(colour = "#2c5f4f") +
-      ggplot2::geom_point(colour = "#2c5f4f", size = 2) +
-      ggplot2::facet_wrap(~ metric, scales = "free_y", nrow = 1) +
+      ggplot2::geom_line(colour = "#2c5f4f", linewidth = 0.8) +
+      ggplot2::geom_point(colour = "#2c5f4f", size = 2.4) +
+      ggplot2::facet_wrap(~ metric, scales = "free_y", ncol = 2) +
       ggplot2::scale_x_continuous(breaks = dg$k) +
       ggplot2::labs(x = "number of clusters (k)", y = NULL) +
-      ggplot2::theme_minimal(base_size = 12)
+      ggplot2::theme_minimal(base_size = 15) +
+      ggplot2::theme(
+        strip.text  = ggplot2::element_text(size = 12.5, face = "bold"),
+        axis.text   = ggplot2::element_text(size = 13),
+        axis.title  = ggplot2::element_text(size = 14),
+        panel.spacing = ggplot2::unit(1.2, "lines"))
   })
 
   # --- cluster-mean contours (the candidate prototypical tones) ---
   output$cluster_mean_plot <- renderPlot({
-    r <- cl_run(); cm <- r$res$cluster_means
+    res <- final_res(); k <- final_k(); cm <- res$cluster_means
     np <- ncol(cm); xs <- seq(0, 1, length.out = np)
     long <- do.call(rbind, lapply(seq_len(nrow(cm)), function(i)
       data.frame(x = xs, f0 = cm[i, ],
                  cluster = factor(i, levels = seq_len(nrow(cm))),
-                 size = r$res$sizes[i])))
+                 size = res$sizes[i])))
     long$lab <- sprintf("Cluster %s (n=%d)", long$cluster, long$size)
     ggplot2::ggplot(long, ggplot2::aes(x = .data$x, y = .data$f0,
                                        colour = .data$lab, group = .data$lab)) +
       ggplot2::geom_line(linewidth = 1.2) +
       ggplot2::scale_colour_hue(name = NULL) +
       ggplot2::labs(x = "normalised time", y = "mean f0 (normalised)",
-                    title = sprintf("%d candidate tone contours (%s)", r$k, r$res$method)) +
+                    title = sprintf("%d candidate tone contours (%s)", k, res$method)) +
       ggplot2::theme_minimal(base_size = 13)
   })
 
@@ -294,7 +343,7 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
 
   # --- GMM membership confidence ---
   output$cluster_confidence <- renderUI({
-    u <- cl_run()$res$uncertainty
+    u <- final_res()$uncertainty
     if (is.null(u)) return(NULL)
     n_amb <- sum(u > 0.4)
     tags$div(style = "color:#8a6d00; font-size:0.85rem; margin:4px 0 0 0;",
@@ -304,53 +353,41 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
 
   # --- dendrogram (hierarchical method only; base R, no extra dependency) ---
   output$cluster_dendro_plot <- renderPlot({
-    r <- cl_run(); tree <- r$res$tree
+    r <- cl_run(); tree <- r$res$tree; k <- final_k()
     validate(need(!is.null(tree), "Dendrogram is only available for the hierarchical method."))
-    op <- graphics::par(mar = c(0.5, 4, 2.5, 0.5)); on.exit(graphics::par(op))
+    op <- graphics::par(mar = c(0.5, 4, 2.5, 0.5), cex.axis = 1.1, cex.lab = 1.2, cex.main = 1.2)
+    on.exit(graphics::par(op))
     plot(tree, labels = FALSE, hang = -1, ylab = "merge height", xlab = "", sub = "",
          main = sprintf("Hierarchical merge tree (%s linkage), cut into %d groups",
-                        input$cluster_linkage %||% "ward.D2", r$k))
-    stats::rect.hclust(tree, k = r$k, border = "#2c5f4f")
+                        r$linkage %||% "ward.D2", k))
+    stats::rect.hclust(tree, k = k, border = "#2c5f4f")
   })
 
   # --- name the clusters (one text box per cluster) ---
   output$cluster_name_ui <- renderUI({
-    r <- cl_run()
+    res <- final_res(); k <- final_k()
     tags$div(style = "display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;",
-      lapply(seq_len(r$k), function(i)
+      lapply(seq_len(k), function(i)
         tags$div(style = "display:flex; flex-direction:column;",
           tags$label(style = "font-size:0.74rem; color:#666;",
-                     sprintf("Cluster %d (n=%d)", i, r$res$sizes[i])),
+                     sprintf("Cluster %d (n=%d)", i, res$sizes[i])),
           textInput(paste0("cluster_name_", i), label = NULL,
                     value = sprintf("T%d", i), width = "110px"))))
   })
 
   # --- token map: PCA (linear) or UMAP (non-linear) projection ---
+  # Embedding is cached (cluster_embedding); changing the number of groups only
+  # recolours the points by the re-cut assignment, so UMAP is not recomputed.
   output$cluster_proj_plot <- plotly::renderPlotly({
-    r <- cl_run(); X <- r$feat$features
-    proj <- input$cluster_projection %||% "pca"
-    if (proj == "umap" && requireNamespace("uwot", quietly = TRUE) && nrow(X) > 5) {
-      nn <- max(2L, min(15L, nrow(X) - 1L))
-      emb <- withProgress(message = "Computing UMAP", value = 0.4, {
-        set.seed(1); uwot::umap(X, n_neighbors = nn, min_dist = 0.1,
-                                n_components = 2, verbose = FALSE) })
-      df <- data.frame(D1 = emb[, 1], D2 = emb[, 2],
-                       cluster = factor(r$res$assignment[r$feat$tokens]),
-                       token = r$feat$tokens, stringsAsFactors = FALSE)
-      xl <- "UMAP-1"; yl <- "UMAP-2"
-    } else {
-      pca <- stats::prcomp(X, scale. = FALSE)
-      ve <- round(100 * pca$sdev^2 / sum(pca$sdev^2), 1)
-      df <- data.frame(D1 = pca$x[, 1], D2 = pca$x[, 2],
-                       cluster = factor(r$res$assignment[r$feat$tokens]),
-                       token = r$feat$tokens, stringsAsFactors = FALSE)
-      xl <- sprintf("PC1 (%.1f%%)", ve[1]); yl <- sprintf("PC2 (%.1f%%)", ve[2])
-    }
+    e <- cluster_embedding(); res <- final_res()
+    df <- data.frame(D1 = e$D1, D2 = e$D2,
+                     cluster = factor(res$assignment[e$tokens]),
+                     token = e$tokens, stringsAsFactors = FALSE)
     p <- ggplot2::ggplot(df, ggplot2::aes(x = .data$D1, y = .data$D2,
                                           colour = .data$cluster, customdata = .data$token)) +
       ggplot2::geom_point(alpha = 0.7, size = 1.6) +
       ggplot2::scale_colour_hue(name = "cluster") +
-      ggplot2::labs(x = xl, y = yl) +
+      ggplot2::labs(x = e$xl, y = e$yl) +
       ggplot2::theme_minimal(base_size = 13)
     plotly::ggplotly(p, tooltip = "customdata")
   })
@@ -362,7 +399,7 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
       return(tags$div(style = "color:#888; font-size:0.85rem; font-style:italic;",
         "No reference tone column selected, so no validation is shown. (Pick one in the sidebar to compare clusters against existing labels.)"))
     }
-    ag <- cluster_agreement(r$res$assignment[r$feat$tokens], r$feat$meta$tone)
+    ag <- cluster_agreement(final_res()$assignment[r$feat$tokens], r$feat$meta$tone)
     interp <- if (ag$ari >= 0.7) "strong" else if (ag$ari >= 0.4) "moderate"
               else if (ag$ari >= 0.2) "weak-to-moderate" else "weak"
     tagList(
@@ -380,20 +417,21 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
   })
 
   output$cluster_result_block <- renderUI({
-    req(cl_run())
+    r <- cl_run(); req(r)
+    kmax <- 12L                       # upper bound for the group-count slider
     # Each result group is wrapped in its own bordered section card so the long
     # panel reads as distinct steps (diagnostics, contours, compare, map,
     # naming, validation) rather than one continuous scroll.
     sec <- function(title, ic, ...) tags$div(
-      style = "border:1px solid #e6ebf1; border-radius:8px; padding:10px 16px 14px; margin:14px 0; background:#ffffff;",
-      tags$h4(style = "margin:2px 0 10px 0; font-size:1.02rem; color:#2c4a5e;",
+      style = "border:1px solid #e6ebf1; border-radius:8px; padding:12px 16px 16px; margin:16px 0; background:#ffffff;",
+      tags$h4(style = "margin:2px 0 12px 0; font-size:1.3rem; font-weight:600; color:#2c4a5e;",
               icon(ic), " ", title),
       ...)
     tagList(
       uiOutput("cluster_norm_nudge"),
       uiOutput("cluster_suggest"),
       sec("How many tones? (cluster-count diagnostics)", "chart-line",
-        plotOutput("cluster_diag_plot", height = "240px"),
+        plotOutput("cluster_diag_plot", height = "360px"),
         tags$details(style = "background:#eef4fb; border:1px solid #cfe2f1; border-radius:6px; padding:6px 12px; margin:6px 0 0 0;",
           tags$summary(style = "cursor:pointer; font-weight:700; color:#2c5d80; font-size:0.85rem;",
                        icon("circle-info"), " How to read these diagnostics"),
@@ -403,7 +441,14 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
             tags$li(HTML("<strong>Gap</strong>: compares the clustering to random noise; the smallest k within one SE of the next is the choice.")),
             tags$li(HTML("<strong>GMM / BIC</strong>: model-based; the k with the best Bayesian Information Criterion.")),
             tags$li(HTML("<strong>MDL info-cost</strong> (Kaland &amp; Ellison 2023): total bits to describe the data; raise the <em>bending factor</em> on the left until the curve forms a clear dip, and the dip is the preferred k.")),
-            tags$li(HTML("<strong>Why they disagree:</strong> elbow / silhouette / gap reward <em>well-separated blobs</em>, so when tone categories overlap in f0 shape they favour <em>fewer</em> clusters than the true linguistic count (e.g. silhouette = 2, gap = 3). BIC / MDL reward fit and lean higher. If you know roughly how many tones there are, set k manually and judge by the candidate contours + the validation below."))))),
+            tags$li(HTML("<strong>Why they disagree:</strong> elbow / silhouette / gap reward <em>well-separated blobs</em>, so when tone categories overlap in f0 shape they favour <em>fewer</em> clusters than the true linguistic count (e.g. silhouette = 2, gap = 3). BIC / MDL reward fit and lean higher. If you know roughly how many tones there are, set the number of groups below and judge by the candidate contours + the validation."))))),
+      tags$div(style = "border:1px solid #cfe0d8; background:#f1f8f4; border-radius:8px; padding:12px 16px; margin:16px 0;",
+        tags$div(style = "font-weight:600; color:#2c4a5e; font-size:1.05rem; margin-bottom:2px;",
+                 icon("sliders"), " Number of groups (tones) to use"),
+        tags$div(style = "color:#5a6b78; font-size:0.82rem; margin-bottom:6px;",
+                 "Starts at the suggested number. Drag to re-cut: the candidate contours, dendrogram, token map, group names and the published labels all follow this."),
+        sliderInput("cluster_ngroups", NULL, min = 2, max = kmax,
+                    value = min(max(2L, r$k), kmax), step = 1, width = "340px")),
       sec("Candidate tone contours", "wave-square",
         plotOutput("cluster_mean_plot", height = "340px"),
         uiOutput("cluster_confidence")),
@@ -450,12 +495,12 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
 
   # --- publish candidate labels + download ---
   clustered_df <- reactive({
-    r <- cl_run(); d <- active_data(); req(d)
-    nm <- vapply(seq_len(r$k), function(i) {
+    r <- cl_run(); res <- final_res(); k <- final_k(); d <- active_data(); req(d)
+    nm <- vapply(seq_len(k), function(i) {
       v <- input[[paste0("cluster_name_", i)]]
       if (is.null(v) || !nzchar(trimws(v))) sprintf("T%d", i) else trimws(v)
     }, character(1))
-    ids <- unname(r$res$assignment[as.character(d[[r$token]])])  # integer per row
+    ids <- unname(res$assignment[as.character(d[[r$token]])])  # integer per row
     d$cluster_id <- ids
     d$cluster    <- ifelse(is.na(ids), NA_character_, nm[ids])   # named tone label
     d
