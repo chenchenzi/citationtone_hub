@@ -1721,12 +1721,18 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                       tags$span(class = "btn-chip", "Upload existing f0 CSV"),
                       ", and pick the ", tags$code("all_correctedf0.csv"),
                       " you saved at the end of session 1."),
-              tags$li("A toast confirms: ",
+              tags$li("A notification confirms: ",
                       tags$em("\"Restored previous corrections...\""), "."),
               tags$li("Open ",
                       tags$span(class = "tab-chip", "F0 Correction"),
                       ": ✎ marks, edited dots, and the edit-status banner ",
                       "recover automatically."),
+              tags$li("(Optional) Still in ",
+                      tags$span(class = "tab-chip", "F0 Correction"),
+                      ", click ",
+                      tags$span(class = "btn-chip", icon("upload"), " Upload edit log"),
+                      " and pick the ", tags$code("edit_log_....csv"),
+                      " you saved to bring the action-by-action history back into the Edit log table."),
               tags$li("Open the ",
                       tags$strong("Filter by edit status"),
                       " drawer and pick ",
@@ -1853,6 +1859,11 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           " Open the guide")
       ),
 
+      # Idle-timeout reminder: arm a client-side timer that nudges the user to
+      # save before shinyapps.io drops an inactive session. Resets on any
+      # interaction; fires input$fp_idle_warning after ~10 idle minutes.
+      tags$script(HTML("(function(){ if(window.__shinytoneIdleWarn) return; window.__shinytoneIdleWarn=true; var IDLE_MS=10*60*1000, t=null; function arm(){ if(t) clearTimeout(t); t=setTimeout(function(){ if(window.Shiny && Shiny.setInputValue){ Shiny.setInputValue('fp_idle_warning', Date.now(), {priority:'event'}); } }, IDLE_MS); } ['mousemove','mousedown','keydown','scroll','touchstart','click'].forEach(function(ev){ document.addEventListener(ev, arm, {passive:true}); }); arm(); })();")),
+
       tags$h4("Audio"),
       uiOutput("fp_corr_audio"),
       tags$h4(style = "margin-top: 14px;", "Waveform + f0"),
@@ -1872,12 +1883,19 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       uiOutput("fp_corr_edit_status"),
       plotly::plotlyOutput("fp_corr_plot", height = "560px"),
       tags$h4(style = "margin-top: 16px;", "Edit log"),
-      tags$div(style = "display: flex; align-items: center; gap: 12px; margin-bottom: 6px;",
+      tags$div(style = "display: flex; align-items: center; gap: 12px; margin-bottom: 4px; flex-wrap: wrap;",
         downloadButton("fp_corr_log_download", "Download edit log (CSV)",
                        icon = icon("download")),
         actionButton("fp_corr_log_clear", "Clear log", icon = icon("eraser")),
         tags$span(style = "color: #888; font-size: 0.8rem; font-style: italic;",
                   "Chronological record of every edit applied in this session.")
+      ),
+      tags$div(style = "display: flex; align-items: center; gap: 10px; margin-bottom: 6px; max-width: 480px;",
+        tags$span(style = "color:#555; font-size:0.82rem; white-space:nowrap;",
+                  "Restore a saved log:"),
+        tags$div(style = "flex: 1; min-width: 220px;",
+          fileInput("fp_corr_log_upload", NULL, accept = ".csv",
+                    buttonLabel = "Upload edit log", placeholder = "edit_log_....csv"))
       ),
       DT::dataTableOutput("fp_corr_edits_table")
     )
@@ -1941,6 +1959,44 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     ))
     showNotification("Edit log cleared.", type = "message", duration = 2)
   })
+
+  # ---- Restore a saved edit log (faithful: keeps the original dates, actions,
+  # frame indices/times and details). Pairs with re-uploading the corrected f0
+  # CSV in F0 Extraction, which restores the actual corrected values; this just
+  # brings the action-by-action history back into the Edit log table. ----
+  observeEvent(input$fp_corr_log_upload, {
+    fi <- input$fp_corr_log_upload; req(fi)
+    df <- tryCatch(utils::read.csv(fi$datapath, stringsAsFactors = FALSE,
+                                   colClasses = "character"),
+                   error = function(e) NULL)
+    if (is.null(df) || !nrow(df)) {
+      showNotification("Could not read that edit-log CSV.", type = "error", duration = 6); return() }
+    if (!all(c("token", "action") %in% names(df))) {
+      showNotification("That CSV does not look like an edit log (it needs at least a token and an action column).",
+                       type = "error", duration = 9); return() }
+    schema <- c("date", "token", "action", "n_frames", "frame_indices",
+                "frame_times_s", "frame_pct", "details")
+    for (col in schema) if (!(col %in% names(df))) df[[col]] <- NA_character_
+    df <- df[, schema, drop = FALSE]
+    df$n_frames <- suppressWarnings(as.integer(df$n_frames))
+    cur <- fp_edit_log()
+    fp_edit_log(rbind(cur, df))
+    showNotification(
+      sprintf("Restored %d edit-log row(s).%s", nrow(df),
+              if (nrow(cur) > 0) sprintf(" Added to %d row(s) already in this session.", nrow(cur)) else ""),
+      type = "message", duration = 6)
+  }, ignoreInit = TRUE)
+
+  # ---- Idle warning. shinyapps.io disconnects a session after a stretch of
+  # inactivity, which would lose unsaved edits. A small client-side timer (set
+  # up in the main panel) fires this after ~10 idle minutes, resetting on any
+  # interaction; remind the user to download their work before that happens. ----
+  observeEvent(input$fp_idle_warning, {
+    showNotification(
+      tags$span(icon("clock"),
+        HTML(" <strong>Still working?</strong> The app can disconnect after a stretch of inactivity, which would lose unsaved edits. To keep your progress, use <em>Download all tokens</em> (and, if you want the history, <em>Download edit log</em>) before stepping away.")),
+      type = "warning", duration = NULL, id = "fp_idle_warning_note")
+  }, ignoreInit = TRUE)
 
   # ---- Edit handlers ----
   observeEvent(input$fp_corr_halve, {
