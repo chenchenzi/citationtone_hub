@@ -951,7 +951,7 @@ ui <- fluidPage(
                         tags$h2(style = "color: #2c5f4f; margin: 0 0 8px 0; font-weight: 700;",
                                 "Recommended workflows"),
                         tags$p(style = "color: #777; font-size: 0.95rem; margin: 0;",
-                          "Four major pipelines through Shinytone. The output of each pipeline chains into the input of the next.")
+                          "Five major pipelines through Shinytone. The output of each pipeline chains into the input of the next; the tone-discovery branch is optional.")
                       ),
                       tags$style(HTML("
                         .workflows-section { max-width: 1080px; margin: 0 auto; padding: 20px 15px 8px 15px; }
@@ -1008,6 +1008,9 @@ ui <- fluidPage(
                         .wf-step.wf-app.wf-opt {
                           border-style: dashed;
                         }
+                        .workflow-row.wf-row-opt { border-style: dashed; border-color: #9bc2b5; background: #fbfdfc; }
+                        .workflow-num.wf-num-opt { background: #ffffff; color: #2a7a5a; border: 1.5px dashed #78c2ad; }
+                        .wf-opttag { font-size: 0.78rem; color: #9aa6a0; font-style: italic; }
                         .wf-step.wf-external {
                           background: #fff8e1; border: 1.5px dashed #e0a800;
                           color: #8a6d00; font-style: italic;
@@ -1078,7 +1081,7 @@ ui <- fluidPage(
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
                             tags$span(class = "wf-step wf-app", "Inspect"),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
-                            tags$span(class = "wf-step wf-result", `data-flow-out` = "flagged-f0", HTML("&#128202; .csv with flags"))
+                            tags$span(class = "wf-step wf-result", `data-flow-out` = "flagged-f0", HTML("&#128202; f0 + metadata + flags .csv"))
                           )
                         ),
 
@@ -1094,7 +1097,7 @@ ui <- fluidPage(
                           tags$div(class = "workflow-flow",
                             tags$span(class = "wf-step wf-data", HTML("&#127908; .wav")),
                             tags$span(class = "wf-or", "+"),
-                            tags$span(class = "wf-step wf-data", `data-flow-in` = "flagged-f0", HTML("&#128202; .csv with flags")),
+                            tags$span(class = "wf-step wf-data", `data-flow-in` = "flagged-f0", HTML("&#128202; f0 + metadata + flags .csv")),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
                             tags$span(class = "wf-step wf-app", "F0 Correction"),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
@@ -1102,15 +1105,38 @@ ui <- fluidPage(
                           )
                         ),
 
-                        # --- Workflow 4 ---
+                        # --- Workflow 4 (optional): Tone discovery ---
+                        tags$div(class = "workflow-row wf-row-opt", style = "position: relative; z-index: 1;",
+                          tags$div(class = "workflow-head",
+                            tags$span(class = "workflow-num wf-num-opt", "4"),
+                            tags$span(class = "workflow-title", "Tone discovery"),
+                            tags$span(class = "wf-opttag", "optional path"),
+                            tags$span(class = "tab-ref-chip", "F0 Analysis tab")
+                          ),
+                          tags$div(class = "workflow-desc",
+                            "For under-documented languages whose tone categories are not yet established: cluster f0-contour shapes to propose how many tones there are, then verify and relabel the candidate groups in Curate. Skip this whole path if your tone labels are already known."),
+                          tags$div(class = "workflow-flow",
+                            tags$span(class = "wf-step wf-data", `data-flow-in` = "cleaned-f0", HTML("&#128202; clean f0 .csv")),
+                            tags$span(class = "wf-arrow", HTML("&#10132;")),
+                            tags$span(class = "wf-step wf-app", "Normalise"),
+                            tags$span(class = "wf-arrow", HTML("&#10132;")),
+                            tags$span(class = "wf-step wf-app", "Cluster"),
+                            tags$span(class = "wf-arrow", HTML("&#10132;")),
+                            tags$span(class = "wf-step wf-app", "Curate"),
+                            tags$span(class = "wf-arrow", HTML("&#10132;")),
+                            tags$span(class = "wf-step wf-result", HTML("&#128202; clean f0 + cluster labels .csv"))
+                          )
+                        ),
+
+                        # --- Workflow 5 ---
                         tags$div(class = "workflow-row", style = "position: relative; z-index: 1;",
                           tags$div(class = "workflow-head",
-                            tags$span(class = "workflow-num", "4"),
+                            tags$span(class = "workflow-num", "5"),
                             tags$span(class = "workflow-title", "Pitch contour modelling and summary"),
                             tags$span(class = "tab-ref-chip", "F0 Analysis tab")
                           ),
                           tags$div(class = "workflow-desc",
-                            "Normalise the contours, optionally relabel tone-category variants or exclude tokens (Curate) on the normalised scale, then fit polynomial / GCA / GAMM models and convert contours into Chao tone numerals."),
+                            "Normalise the contours, optionally relabel tone-category variants or exclude tokens (Curate) on the normalised scale, then fit polynomial / GCA / GAMM models and convert contours into Chao tone numerals. Takes your known tone labels, or the clustered labels from step 4."),
                           tags$div(class = "workflow-flow",
                             tags$span(class = "wf-step wf-data", `data-flow-in` = "cleaned-f0", HTML("&#128202; clean f0 .csv")),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
