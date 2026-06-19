@@ -26,6 +26,7 @@ source("ui/view_ui.R")
 source("ui/visualise_ui.R")
 source("ui/normalise_ui.R")
 source("ui/inspect_ui.R")
+source("ui/cluster_ui.R")
 source("ui/curate_ui.R")
 source("ui/model_ui.R")
 source("ui/gca_ui.R")
@@ -79,7 +80,13 @@ server <- function(input, output, session) {
           library(lme4); library(emmeans); library(mgcv)
           library(tuneR); library(rPraat); library(praatpicture)
           library(thematic)
-          thematic::thematic_shiny(font = "auto")
+          # Pin the plot device background to white (the page background) rather
+          # than "auto". With "auto", shiny::startPNG calls
+          # getCurrentOutputInfo()[["bg"]]() which errors ("attempt to apply
+          # non-function") whenever a plot output does not report its CSS theme
+          # info (e.g. plotOutput nested inside styled section cards). White
+          # matches the page, so this is visually identical but crash-proof.
+          thematic::thematic_shiny(bg = "white", font = "auto")
           ggplot2::theme_set(ggplot2::theme_bw(base_size = 16))
         })),
         error = function(e) NULL)
@@ -171,6 +178,11 @@ server <- function(input, output, session) {
   # actual Inspect flags can seed re-label candidates). NULL until Inspect runs.
   inspect_result <- reactiveVal(NULL)
 
+  # Shared storage for clustered dataset (written by Cluster tab: adds a
+  # `cluster` column of candidate tone categories; offered as a "Clustered
+  # data" source in the modelling tabs). NULL until the user runs clustering.
+  cluster_data <- reactiveVal(NULL)
+
   # Shared storage for model prediction data (written by GCA/GAMM, read by Summarise)
   gca_pred_data <- reactiveVal(NULL)
   gamm_pred_data <- reactiveVal(NULL)
@@ -187,10 +199,11 @@ server <- function(input, output, session) {
   normalised_ui(input, output, session, dataset, normalised_data)
   visualise_ui(input, output, session, dataset, normalised_data)
   inspect_ui(input, output, session, dataset, inspect_result)
-  curate_ui(input, output, session, dataset, normalised_data, curated_data, inspect_result)
-  model_ui(input, output, session, dataset, normalised_data, curated_data)
-  gca_ui(input, output, session, dataset, normalised_data, gca_pred_data, curated_data)
-  gamm_ui(input, output, session, dataset, normalised_data, gamm_pred_data, curated_data)
+  cluster_ui(input, output, session, dataset, normalised_data, curated_data, cluster_data)
+  curate_ui(input, output, session, dataset, normalised_data, curated_data, inspect_result, cluster_data)
+  model_ui(input, output, session, dataset, normalised_data, curated_data, cluster_data)
+  gca_ui(input, output, session, dataset, normalised_data, gca_pred_data, curated_data, cluster_data)
+  gamm_ui(input, output, session, dataset, normalised_data, gamm_pred_data, curated_data, cluster_data)
   checklist_ui(input, output, session)
   filename_guide_ui(input, output, session)
   waveform_guide_ui(input, output, session)

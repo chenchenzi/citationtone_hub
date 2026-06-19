@@ -154,10 +154,16 @@ fit_polynomial <- function(data,
 legendre_basis <- function(t, degree) {
   n <- length(t)
   B <- matrix(NA_real_, nrow = n, ncol = degree + 1)
-  B[, 1] <- 1                                       # P0
-  if (degree >= 1) B[, 2] <- t                      # P1
-  if (degree >= 2) B[, 3] <- (3 * t^2 - 1) / 2     # P2
-  if (degree >= 3) B[, 4] <- (5 * t^3 - 3 * t) / 2 # P3
+  B[, 1] <- 1                                  # P0
+  if (degree >= 1) B[, 2] <- t                 # P1
+  # Bonnet recurrence for higher orders: P_k = ((2k-1) t P_{k-1} - (k-1) P_{k-2}) / k.
+  # Identical to the closed forms for P2 = (3t^2-1)/2 and P3 = (5t^3-3t)/2,
+  # but extends cleanly to any degree (used by the clustering feature space).
+  if (degree >= 2) {
+    for (k in 2:degree) {
+      B[, k + 1] <- ((2 * k - 1) * t * B[, k] - (k - 1) * B[, k - 1]) / k
+    }
+  }
   colnames(B) <- paste0("c", 0:degree)
   B
 }

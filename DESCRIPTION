@@ -29,12 +29,14 @@ Imports:
     rlang
 Suggests:
     bslib,
+    cluster,
     DT,
     emmeans,
     ggplot2,
     gridExtra,
     knitr,
     lme4,
+    mclust,
     mgcv,
     plotly,
     praatpicture,
@@ -44,6 +46,7 @@ Suggests:
     testthat (>= 3.0.0),
     thematic,
     tuneR,
+    uwot,
     wrassp
 Config/testthat/edition: 3
 VignetteBuilder: knitr

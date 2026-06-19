@@ -2,7 +2,7 @@
 # Model: Polynomials tab — Legendre polynomial fitting per token
 ###############################################
 
-model_ui <- function(input, output, session, dataset, normalised_data, curated_data = NULL) {
+model_ui <- function(input, output, session, dataset, normalised_data, curated_data = NULL, cluster_data = NULL) {
 
   # --- Guide text ---
   output$model_guide <- renderUI({
@@ -41,8 +41,11 @@ model_ui <- function(input, output, session, dataset, normalised_data, curated_d
   active_data <- reactive({
     has_norm <- !is.null(normalised_data())
     has_cur  <- !is.null(curated_data) && !is.null(curated_data())
+    has_clu  <- !is.null(cluster_data) && !is.null(cluster_data())
     sel <- input$model_dataset
-    if (!is.null(sel) && sel == "curated" && has_cur) {
+    if (!is.null(sel) && sel == "clustered" && has_clu) {
+      cluster_data()
+    } else if (!is.null(sel) && sel == "curated" && has_cur) {
       curated_data()
     } else if (!is.null(sel) && sel == "normalised" && has_norm) {
       normalised_data()
@@ -55,6 +58,7 @@ model_ui <- function(input, output, session, dataset, normalised_data, curated_d
   output$ui_model <- renderUI({
     has_norm <- !is.null(normalised_data())
     has_cur  <- !is.null(curated_data) && !is.null(curated_data())
+    has_clu  <- !is.null(cluster_data) && !is.null(cluster_data())
 
     # Dataset choices
     ds_choices <- c("Uploaded data" = "uploaded")
@@ -63,6 +67,9 @@ model_ui <- function(input, output, session, dataset, normalised_data, curated_d
     }
     if (has_cur) {
       ds_choices <- c(ds_choices, "Curated data" = "curated")
+    }
+    if (has_clu) {
+      ds_choices <- c(ds_choices, "Clustered data" = "clustered")
     }
     # Preserve current selection
     ds_selected <- if (!is.null(input$model_dataset) && input$model_dataset %in% ds_choices) {

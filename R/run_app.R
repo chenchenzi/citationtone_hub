@@ -24,9 +24,9 @@ run_app <- function(...) {
   # lightweight, those packages live in `Suggests:` rather than
   # `Imports:`. Check that they are present before booting the app, and
   # offer to install them if not.
-  app_deps <- c("bslib", "DT", "emmeans", "ggplot2", "gridExtra",
-                "lme4", "mgcv", "plotly", "praatpicture", "RColorBrewer",
-                "rPraat", "thematic", "tuneR", "wrassp")
+  app_deps <- c("bslib", "cluster", "DT", "emmeans", "ggplot2", "gridExtra",
+                "lme4", "mclust", "mgcv", "plotly", "praatpicture", "RColorBrewer",
+                "rPraat", "thematic", "tuneR", "uwot", "wrassp")
   missing_deps <- app_deps[!vapply(app_deps, requireNamespace,
                                     logical(1), quietly = TRUE)]
   if (length(missing_deps) > 0) {

@@ -2,7 +2,7 @@
 # Model: GAMM tab — Generalised Additive Mixed Model using mgcv
 ###############################################
 
-gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_data = NULL, curated_data = NULL) {
+gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_data = NULL, curated_data = NULL, cluster_data = NULL) {
 
   # --- Guide text ---
   output$gamm_guide <- renderUI({
@@ -63,8 +63,11 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
   active_data <- reactive({
     has_norm <- !is.null(normalised_data())
     has_cur  <- !is.null(curated_data) && !is.null(curated_data())
+    has_clu  <- !is.null(cluster_data) && !is.null(cluster_data())
     sel <- input$gamm_dataset
-    if (!is.null(sel) && sel == "curated" && has_cur) {
+    if (!is.null(sel) && sel == "clustered" && has_clu) {
+      cluster_data()
+    } else if (!is.null(sel) && sel == "curated" && has_cur) {
       curated_data()
     } else if (!is.null(sel) && sel == "normalised" && has_norm) {
       normalised_data()
@@ -77,6 +80,7 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
   output$ui_gamm <- renderUI({
     has_norm <- !is.null(normalised_data())
     has_cur  <- !is.null(curated_data) && !is.null(curated_data())
+    has_clu  <- !is.null(cluster_data) && !is.null(cluster_data())
 
     # Dataset choices
     ds_choices <- c("Uploaded data" = "uploaded")
@@ -85,6 +89,9 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
     }
     if (has_cur) {
       ds_choices <- c(ds_choices, "Curated data" = "curated")
+    }
+    if (has_clu) {
+      ds_choices <- c(ds_choices, "Clustered data" = "clustered")
     }
     ds_selected <- if (!is.null(input$gamm_dataset) && input$gamm_dataset %in% ds_choices) {
       input$gamm_dataset

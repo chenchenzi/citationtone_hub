@@ -17,7 +17,7 @@
 ###############################################
 
 curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL,
-                      curated_data, inspect_result = NULL) {
+                      curated_data, inspect_result = NULL, cluster_data = NULL) {
 
   # ---- curation state ----
   rv_relabel   <- reactiveVal(stats::setNames(character(0), character(0)))
@@ -29,17 +29,28 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
     tone = character(0), action = character(0), to = character(0),
     note = character(0), stringsAsFactors = FALSE))
 
-  # Prefer the normalised dataset once Normalise has been run: it is a superset
-  # of the upload (adds f0_st / f0_zscore), so every selector still works and the
-  # f0-variable guess below defaults to the normalised column. Falls back to the
-  # raw upload otherwise.
+  # Data source for Curate. By default prefer the clustered dataset (so the
+  # natural flow Cluster -> Curate lets you verify/refine the candidate tones),
+  # then the normalised dataset (a superset of the upload), then the raw upload.
+  # The sidebar selector (curate_source) overrides this preference.
+  .cd <- reactive(if (!is.null(cluster_data)) cluster_data() else NULL)
+  .nd <- reactive(if (!is.null(normalised_data)) normalised_data() else NULL)
+  active_source <- reactive({
+    src <- input$curate_source
+    if (identical(src, "clustered")  && !is.null(.cd())) "clustered"
+    else if (identical(src, "normalised") && !is.null(.nd())) "normalised"
+    else if (identical(src, "uploaded")) "uploaded"
+    else if (!is.null(.cd())) "clustered"
+    else if (!is.null(.nd())) "normalised"
+    else "uploaded"
+  })
   dataset <- reactive({
-    nd <- if (!is.null(normalised_data)) normalised_data() else NULL
-    if (!is.null(nd)) nd else dataset_in()
+    switch(active_source(),
+           clustered  = .cd(),
+           normalised = .nd(),
+           dataset_in())
   })
-  using_normalised <- reactive({
-    !is.null(if (!is.null(normalised_data)) normalised_data() else NULL)
-  })
+  using_normalised <- reactive(active_source() == "normalised")
 
   cvar <- reactive({
     req(dataset())
@@ -115,7 +126,7 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
   # user to run them first. Each step shows a tick once done; the whole box
   # collapses by default once both are complete (still available, just tidy).
   output$curate_prep <- renderUI({
-    norm_done <- isTRUE(using_normalised())
+    norm_done <- !is.null(.nd())
     insp_done <- !is.null(if (!is.null(inspect_result)) inspect_result() else NULL)
 
     step <- function(n, title, tab, why, done, here = FALSE) {
@@ -199,15 +210,28 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
     vars <- if (!is.null(dataset())) names(dataset()) else c("No dataset available")
     data_types <- if (!is.null(dataset())) sapply(dataset(), class) else rep("NA", length(vars))
     var_types <- paste0(vars, " {", data_types, "}")
-    tone_default <- guess_var(vars, var_patterns$tone, 5)
+    tone_default <- if (identical(active_source(), "clustered") && "cluster" %in% vars)
+                      "cluster" else guess_var(vars, var_patterns$tone, 5)
     tone_choices <- if (!is.null(dataset()) && tone_default %in% names(dataset()))
                       sort(unique(as.character(dataset()[[tone_default]]))) else NULL
     item_default <- lex_col(); if (is.null(item_default)) item_default <- "__none__"
+    src_choices <- c("Uploaded data" = "uploaded")
+    if (!is.null(.nd())) src_choices <- c(src_choices, "Normalised data" = "normalised")
+    if (!is.null(.cd())) src_choices <- c(src_choices, "Clustered data" = "clustered")
+    sel_src <- active_source()
+    if (!sel_src %in% src_choices) sel_src <- unname(src_choices[1])  # always valid
     tagList(
       wellPanel(
         h5("Dataset",
            tags$small(style = "color: #777; margin-left: 6px; font-weight: 400;", input$dataset_name)),
-        if (isTRUE(using_normalised()))
+        if (length(src_choices) > 1)
+          selectInput("curate_source", "Data source:", choices = src_choices,
+                      selected = sel_src),
+        if (identical(active_source(), "clustered"))
+          tags$div(style = "font-size: 0.75rem; color: #2a7a5a; margin: -4px 0 8px 0;",
+                   icon("circle-nodes"), " Verifying clustered data (tone variable set to ",
+                   tags$code("cluster"), ")."),
+        if (identical(active_source(), "normalised"))
           tags$div(style = "font-size: 0.75rem; color: #2a7a5a; margin: -4px 0 8px 0;",
                    icon("wave-square"), " Using your normalised dataset."),
         selectInput("curate_token_var", "Token ID variable:",
@@ -215,7 +239,7 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
                     selected = guess_var(vars, var_patterns$token, 1)),
         selectInput("curate_tone_var", "Tone category variable:",
                     choices = stats::setNames(vars, var_types),
-                    selected = guess_var(vars, var_patterns$tone, 5)),
+                    selected = tone_default),
         selectInput("curate_speaker_var", "Speaker variable:",
                     choices = stats::setNames(vars, var_types),
                     selected = guess_var(vars, var_patterns$speaker, 4)),
