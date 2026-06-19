@@ -371,6 +371,9 @@ appendInfoLine: "  Combined CSV: ", csv_path$
         tags$li("Click ", tags$strong("OK"),
                 " on each. Progress and the final summary appear in the Info window.")
       ),
+      tags$p(style = "font-size: 0.85rem; color: #6b6b6b; margin-top: 6px;",
+             icon("circle-info"),
+             HTML(" <strong>Very short sounds are handled automatically.</strong> A token shorter than the pitch-analysis window (about 3 / pitch-floor seconds) is logged as <code>SKIPPED</code> and omitted; a token long enough for f0 but shorter than the intensity window (6.4 / pitch-floor seconds, e.g. about 0.085 s at a 75 Hz floor) keeps its f0 with <code>intensity = NA</code>. The batch always finishes instead of stopping on one clip.")),
 
       h4("Tuning advanced parameters"),
       tags$p("The second dialog exposes the same parameters as Praat's native ",
