@@ -128,42 +128,77 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
   output$curate_prep <- renderUI({
     norm_done <- !is.null(.nd())
     insp_done <- !is.null(if (!is.null(inspect_result)) inspect_result() else NULL)
+    clustered <- {
+      d <- dataset()
+      identical(active_source(), "clustered") || (!is.null(d) && "cluster" %in% names(d))
+    }
 
     step <- function(n, title, tab, why, done, here = FALSE) {
-      badge_cls <- if (here) "cp-cur" else if (done) "cp-done" else "cp-todo"
-      badge_txt <- if (here) HTML("&#9679;") else if (done) HTML("&#10003;") else as.character(n)
-      status <- if (here)
-                  tags$div(class = "cp-status", style = "color:#2f5d86;", "You are here")
-                else if (done)
-                  tags$div(class = "cp-status cp-done-t", HTML("&#10003; Done"))
-                else
-                  tags$div(class = "cp-status cp-todo-t", "Recommended first")
+      badge <- if (here) tags$span(class = "cp-badge cp-cur", HTML("&#9679;"))
+               else if (done) tags$span(class = "cp-badge cp-done", HTML("&#10003;"))
+               else tags$span(class = "cp-badge cp-todo", as.character(n))
       tags$div(class = if (here) "cp-step cp-here" else "cp-step",
-        tags$div(class = "cp-head",
-          tags$span(class = paste("cp-badge", badge_cls), badge_txt),
-          tags$span(class = "cp-title", title),
-          if (!is.null(tab)) tags$span(class = "cp-tab", tab)),
-        tags$div(class = "cp-why", why),
-        status)
+        tags$div(class = "cp-head", badge, tags$span(class = "cp-title", title),
+                 if (!is.null(tab)) tags$span(class = "cp-tab", tab)),
+        tags$div(class = "cp-why", why))
     }
     arrow <- tags$div(class = "cp-arrow", HTML("&#10132;"))
+    chip <- function(ic, txt) tags$span(class = "cr-chip", icon(ic), " ", txt)
+    taskstrip <- function(lab_ic, lab, chips, tag_txt, tag_cls) {
+      items <- list(tags$span(class = "cr-task-lab", icon(lab_ic), " ", lab))
+      for (ch in chips) items <- c(items, list(tags$span(class = "cr-task-ar", HTML("&#10132;")), ch))
+      items <- c(items, list(tags$span(class = paste("cr-tag", tag_cls), tag_txt)))
+      tags$div(class = "cr-task", items)
+    }
+    routebox <- function(sum_ic, sum_txt, intro, flow, task) {
+      tags$details(class = "curate-route",
+        tags$summary(icon(sum_ic), " ", sum_txt, tags$span(class = "cr-hint", "(click to expand)")),
+        tags$p(class = "cr-intro", intro),
+        tags$div(class = "curate-route-flow", flow),
+        task)
+    }
+
+    box_known <- routebox("list-check",
+      "You already have tone categories: Normalise and Inspect first",
+      "Refine known tone labels. Running Normalise and Inspect first makes divergent tokens easy to spot.",
+      tagList(
+        step(1, "Normalise", "Normalise tab", "Put speakers on one scale so contour height is comparable.", norm_done),
+        arrow,
+        step(2, "Inspect", "Inspect tab", "Flag level outliers as ready-made candidates to review.", insp_done),
+        arrow,
+        step(3, "Curate", NULL, "You are here. Select tokens, then relabel or exclude.", FALSE, here = TRUE)),
+      taskstrip("layer-group", "Variant readings / forms",
+        list(chip("eye", "View one tone"), chip("draw-polygon", "Select the variant"), chip("tag", "Relabel new")),
+        "split", "s"))
+
+    box_explore <- routebox("diagram-project",
+      "You came from Cluster and are exploring tone categories",
+      "Compare the candidate clusters and merge any that variation has over-split.",
+      tagList(
+        step(1, "Normalise", "Normalise tab", "Put speakers on one scale so shapes are comparable.", norm_done),
+        arrow,
+        step(2, "Cluster", "Cluster tab", "Group contour shapes and publish candidate tone labels.", clustered),
+        arrow,
+        step(3, "Curate", NULL, "You are here. Verify the clusters, then merge or exclude.", FALSE, here = TRUE)),
+      taskstrip("object-group", "Over-split clusters",
+        list(chip("table-cells", "All-tones view"), chip("tag", "Relabel to an existing tone")),
+        "merge", "m"))
 
     tagList(
       tags$style(HTML("
-        .curate-prep { background:#eef4fb; border:1px solid #d2e1f1; border-radius:8px;
-          padding:6px 16px 9px 16px; margin:0 0 12px 0; }
-        .curate-prep > summary { cursor:pointer; font-weight:700; color:#2f5d86;
-          font-size:0.9rem; list-style:none; padding:1px 0; }
-        .curate-prep > summary::-webkit-details-marker { display:none; }
-        .curate-prep > summary::before { content:'\\25B8'; color:#5a8fc0;
+        details.curate-route { background:#f3f8fc; border:1px solid #cfe2f1; border-radius:8px;
+          padding:7px 14px 11px 14px; margin:0 0 11px 0; }
+        .curate-route > summary { cursor:pointer; font-weight:700; color:#2c5d80;
+          font-size:0.92rem; list-style:none; padding:1px 0; }
+        .curate-route > summary::-webkit-details-marker { display:none; }
+        .curate-route > summary::before { content:'\\25B8'; color:#5b9bd5;
           display:inline-block; margin-right:8px; transition:transform .15s ease; }
-        .curate-prep[open] > summary::before { transform:rotate(90deg); }
-        .curate-prep > summary .cp-hint { color:#7a9ec2; font-weight:400; font-size:0.8rem; margin-left:4px; }
-        .curate-prep[open] > summary .cp-hint { display:none; }
-        .curate-prep-flow { display:flex; align-items:stretch; gap:9px;
-          margin-top:9px; flex-wrap:wrap; }
-        .cp-step { flex:1 1 220px; background:#fff; border:1px solid #e1e9f2;
-          border-radius:7px; padding:8px 12px; }
+        .curate-route[open] > summary::before { transform:rotate(90deg); }
+        .curate-route .cr-hint { color:#7aa6cc; font-weight:400; font-size:0.78rem; margin-left:6px; }
+        .curate-route[open] .cr-hint { display:none; }
+        .cr-intro { color:#3f5a72; font-size:0.83rem; line-height:1.5; margin:9px 0 0; }
+        .curate-route-flow { display:flex; align-items:stretch; gap:9px; margin-top:11px; flex-wrap:wrap; }
+        .cp-step { flex:1 1 185px; background:#fff; border:1px solid #e1e9f2; border-radius:7px; padding:8px 12px; }
         .cp-step.cp-here { border-color:#78c2ad; box-shadow:0 0 0 2px rgba(120,194,173,0.18); }
         .cp-head { display:flex; align-items:center; gap:7px; margin-bottom:3px; flex-wrap:wrap; }
         .cp-badge { width:20px; height:20px; border-radius:50%; flex-shrink:0;
@@ -171,37 +206,26 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
           font-size:0.72rem; font-weight:700; color:#fff; }
         .cp-badge.cp-todo { background:#aab9c6; }
         .cp-badge.cp-done { background:#46a37e; }
-        .cp-badge.cp-cur  { background:#d9534f; font-size:0.55rem; }
-        .cp-title { font-weight:700; color:#2c5f4f; font-size:0.88rem; }
+        .cp-badge.cp-cur  { background:#d9534f; font-size:0.5rem; }
+        .cp-title { font-weight:700; color:#2c5f4f; font-size:0.86rem; }
         .cp-tab { display:inline-block; background:#e8f5f0; color:#2c5f4f;
-          padding:1px 8px; border-radius:10px; font-size:0.68rem; font-weight:600;
+          padding:1px 7px; border-radius:10px; font-size:0.66rem; font-weight:600;
           font-family:'SFMono-Regular',Menlo,Consolas,monospace; white-space:nowrap; }
-        .cp-why { font-size:0.78rem; color:#5f6b66; line-height:1.4; margin-top:2px; }
-        .cp-status { font-size:0.72rem; font-weight:600; margin-top:5px; }
-        .cp-status.cp-done-t { color:#46a37e; }
-        .cp-status.cp-todo-t { color:#c0852a; }
-        .cp-arrow { display:flex; align-items:center; color:#9fbbd6; font-size:1.35rem; }
+        .cp-why { font-size:0.76rem; color:#5f6b66; line-height:1.4; margin-top:2px; }
+        .cp-arrow { display:flex; align-items:center; color:#9fbbd6; font-size:1.3rem; }
         @media (max-width:760px){ .cp-arrow{ display:none; } }
+        .cr-task { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:12px;
+          background:#fff; border:1px solid #d6e6f2; border-radius:8px; padding:9px 13px; }
+        .cr-task-lab { font-size:0.8rem; color:#2c5d80; font-weight:700; white-space:nowrap; }
+        .cr-task-ar { color:#aaa; font-size:0.9rem; }
+        .cr-chip { display:inline-flex; align-items:center; gap:5px; background:#e8f5f0;
+          border:1.5px solid #78c2ad; color:#2a7a5a; border-radius:6px; padding:3px 8px;
+          font-size:0.74rem; white-space:nowrap; }
+        .cr-tag { font-size:0.66rem; border-radius:5px; padding:1px 6px; border:1px solid; }
+        .cr-tag.m { background:#eef6f2; border-color:#bcdfd2; color:#2a7a5a; }
+        .cr-tag.s { background:#fff3f4; border-color:#f3c7ca; color:#a85a5d; }
       ")),
-      tags$details(class = "curate-prep",
-        tags$summary("Recommended before you curate: Normalise, then Inspect",
-                     tags$span(class = "cp-hint", "(click to expand)")),
-        tags$div(class = "cp-why", style = "margin-top:5px;",
-          "Both are optional but make divergent tokens far easier to spot."),
-        tags$div(class = "curate-prep-flow",
-          step(1, "Normalise", "Normalise tab",
-               "Put speakers on one scale (semitones or z-score) so contour height is comparable across speakers.",
-               norm_done),
-          arrow,
-          step(2, "Inspect", "Inspect tab",
-               "Flag token-level level outliers; flagged tokens appear in amber in the plot as ready-made candidates to review.",
-               insp_done),
-          arrow,
-          step(3, "Curate", NULL,
-               "Box- or lasso-select the divergent tokens, then re-label or exclude them.",
-               FALSE, here = TRUE)
-        )
-      )
+      if (clustered) tagList(box_explore, box_known) else tagList(box_known, box_explore)
     )
   })
 
@@ -330,7 +354,8 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
       tags$h4("Identify and select tokens to curate"),
       tags$div(style = "display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 4px;",
         selectInput("curate_view_tone", "Tone:",
-                    choices = tones, selected = tones[1], width = "110px"),
+                    choices = c("All tones (compare)" = "__all__", stats::setNames(tones, tones)),
+                    selected = tones[1], width = "155px"),
         selectInput("curate_view_speaker", "Speaker:",
                     choices = c("All speakers" = "__all__", stats::setNames(speakers, speakers)),
                     selected = "__all__", width = "150px"),
@@ -377,14 +402,20 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
 
   output$curate_plot_holder <- renderUI({
     d <- dataset(); req(d); v <- cvar()
-    fc <- facet_col(); h <- 520
-    if (!is.null(fc) && fc %in% names(d)) {
-      keep <- as.character(d[[v$tone]]) == input$curate_view_tone
-      spk <- input$curate_view_speaker
-      if (!is.null(spk) && spk != "__all__" && v$speaker %in% names(d))
-        keep <- keep & as.character(d[[v$speaker]]) == spk
-      n <- length(unique(as.character(d[[fc]][keep])))
-      h <- max(420, ceiling(n / 3) * 240)
+    h <- 520
+    if (identical(input$curate_view_tone, "__all__")) {
+      n <- length(unique(as.character(d[[v$tone]])))   # one panel per tone
+      h <- max(440, ceiling(n / 3) * 250)
+    } else {
+      fc <- facet_col()
+      if (!is.null(fc) && fc %in% names(d)) {
+        keep <- as.character(d[[v$tone]]) == input$curate_view_tone
+        spk <- input$curate_view_speaker
+        if (!is.null(spk) && spk != "__all__" && v$speaker %in% names(d))
+          keep <- keep & as.character(d[[v$speaker]]) == spk
+        n <- length(unique(as.character(d[[fc]][keep])))
+        h <- max(420, ceiling(n / 3) * 240)
+      }
     }
     plotly::plotlyOutput("curate_plot", height = paste0(h, "px"))
   })
@@ -392,7 +423,9 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
   output$curate_plot <- plotly::renderPlotly({
     d <- dataset(); req(d, input$curate_view_tone)
     v <- cvar(); req(all(c(v$tone, v$token, v$f0) %in% names(d)))
-    sub <- d[as.character(d[[v$tone]]) == input$curate_view_tone, , drop = FALSE]
+    all_tones <- identical(input$curate_view_tone, "__all__")
+    sub <- if (all_tones) d
+           else d[as.character(d[[v$tone]]) == input$curate_view_tone, , drop = FALSE]
     spk <- input$curate_view_speaker
     if (!is.null(spk) && spk != "__all__" && v$speaker %in% names(sub))
       sub <- sub[as.character(sub[[v$speaker]]) == spk, , drop = FALSE]
@@ -419,9 +452,15 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
       ggplot2::scale_colour_manual(values = pal, drop = FALSE, name = NULL) +
       ggplot2::labs(x = xlab, y = f0_axis_label(v$f0))
 
-    fc <- facet_col()
-    if (!is.null(fc) && fc %in% names(sub)) {
-      p <- p + ggplot2::facet_wrap(ggplot2::vars(.data[[fc]]), scales = "free_y", ncol = 3)
+    if (all_tones) {
+      # one panel per tone so every cluster is visible at once; box/lasso-select
+      # works in any panel exactly as for a single tone.
+      p <- p + ggplot2::facet_wrap(ggplot2::vars(.data[[v$tone]]), scales = "free_y", ncol = 3)
+    } else {
+      fc <- facet_col()
+      if (!is.null(fc) && fc %in% names(sub)) {
+        p <- p + ggplot2::facet_wrap(ggplot2::vars(.data[[fc]]), scales = "free_y", ncol = 3)
+      }
     }
 
     gg <- plotly::ggplotly(p, tooltip = "customdata")
@@ -450,7 +489,8 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
   # tokens in the current view (tone + optional speaker filter)
   view_tokens <- reactive({
     d <- dataset(); req(d, input$curate_view_tone); v <- cvar()
-    keep <- as.character(d[[v$tone]]) == input$curate_view_tone
+    keep <- if (identical(input$curate_view_tone, "__all__")) rep(TRUE, nrow(d))
+            else as.character(d[[v$tone]]) == input$curate_view_tone
     spk <- input$curate_view_speaker
     if (!is.null(spk) && spk != "__all__" && v$speaker %in% names(d))
       keep <- keep & as.character(d[[v$speaker]]) == spk
@@ -484,9 +524,11 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
     if (has_flags) {
       vt <- view_tokens(); fl <- intersect(level_flagged_tokens(), vt)
       spk <- input$curate_view_speaker
+      tone_lab <- if (identical(input$curate_view_tone, "__all__")) "all tones"
+                  else sprintf("tone %s", input$curate_view_tone)
       where <- if (!is.null(spk) && spk != "__all__")
-                 sprintf("tone %s &middot; %s", input$curate_view_tone, spk)
-               else sprintf("tone %s &middot; all speakers", input$curate_view_tone)
+                 sprintf("%s &middot; %s", tone_lab, spk)
+               else sprintf("%s &middot; all speakers", tone_lab)
       chips[[length(chips) + 1]] <- tags$div(
         style = "flex:0 0 auto; min-width:150px; border:1px solid #f0e3b8; background:#fffaf0; border-left:4px solid #e0a800; border-radius:6px; padding:5px 12px;",
         tags$div(style = "font-size:0.68rem; text-transform:uppercase; letter-spacing:0.04em; color:#a07c00;",

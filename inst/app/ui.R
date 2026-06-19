@@ -1108,7 +1108,7 @@ ui <- fluidPage(
                         # --- Workflow 4 (optional): Tone discovery ---
                         tags$div(class = "workflow-row wf-row-opt", style = "position: relative; z-index: 1;",
                           tags$div(class = "workflow-head",
-                            tags$span(class = "workflow-num wf-num-opt", "4"),
+                            tags$span(class = "workflow-num", "4"),
                             tags$span(class = "workflow-title", "Tone discovery"),
                             tags$span(class = "wf-opttag", "optional path"),
                             tags$span(class = "tab-ref-chip", "F0 Analysis tab")
@@ -1124,7 +1124,7 @@ ui <- fluidPage(
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
                             tags$span(class = "wf-step wf-app", "Curate"),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
-                            tags$span(class = "wf-step wf-result", HTML("&#128202; clean f0 + cluster labels .csv"))
+                            tags$span(class = "wf-step wf-result", `data-flow-out` = "clustered-labels", HTML("&#128202; clean f0 + cluster labels .csv"))
                           )
                         ),
 
@@ -1138,7 +1138,7 @@ ui <- fluidPage(
                           tags$div(class = "workflow-desc",
                             "Normalise the contours, optionally relabel tone-category variants or exclude tokens (Curate) on the normalised scale, then fit polynomial / GCA / GAMM models and convert contours into Chao tone numerals. Takes your known tone labels, or the clustered labels from step 4."),
                           tags$div(class = "workflow-flow",
-                            tags$span(class = "wf-step wf-data", `data-flow-in` = "cleaned-f0", HTML("&#128202; clean f0 .csv")),
+                            tags$span(class = "wf-step wf-data", `data-flow-in` = "cleaned-f0 clustered-labels", HTML("&#128202; clean f0 .csv")),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
                             tags$span(class = "wf-step wf-app", "Normalise"),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
@@ -1191,11 +1191,11 @@ ui <- fluidPage(
                               tx /= tlen; ty /= tlen;
                               var px = -ty, py = tx;
 
-                              var bodyW   = 11;   // body half-width (slim)
+                              var bodyW   = 8;    // body half-width (slim)
                               var tailW   = bodyW;
                               var neckW   = bodyW;
-                              var headW   = 22;   // arrowhead flare (2x body — clearly an arrow)
-                              var headLen = 18;
+                              var headW   = 16;   // arrowhead flare (2x body — clearly an arrow)
+                              var headLen = 15;
 
                               // Adaptive ctrlScale: laterally-heavier curves need bigger
                               // control-point offsets to keep the middle from pinching.
@@ -1256,7 +1256,7 @@ ui <- fluidPage(
                               var outs = section.querySelectorAll('[data-flow-out]');
                               outs.forEach(function(out) {
                                 var id  = out.getAttribute('data-flow-out');
-                                var ins = section.querySelectorAll('[data-flow-in=\"' + id + '\"]');
+                                var ins = Array.prototype.filter.call(section.querySelectorAll('[data-flow-in]'), function(e){ return e.getAttribute('data-flow-in').split(' ').indexOf(id) >= 0; });
                                 ins.forEach(function(inEl) {
                                   var oR = out.getBoundingClientRect();
                                   var iR = inEl.getBoundingClientRect();
