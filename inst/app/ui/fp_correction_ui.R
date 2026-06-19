@@ -610,8 +610,15 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     updateSelectInput(session,     "fp_corr_tone_col",    selected = "")
     updateCheckboxInput(session,   "fp_corr_only_flagged", value = FALSE)
     updateRadioButtons(session,    "fp_corr_edit_filter", selected = "all")
-    showNotification("Filters cleared. The uploaded CSV is still loaded.",
-                     type = "message", duration = 3)
+    # Confirm the effect explicitly: the selected token stays put after a clear,
+    # so report how many tokens are now visible to make it obvious the filters
+    # lifted (the alternative reads as "nothing happened").
+    df <- fp_f0_data()
+    n_all <- if (is.null(df)) 0L else length(unique(as.character(df$token)))
+    showNotification(
+      sprintf("Filters cleared. Now showing all %d token%s (the uploaded CSV stays loaded).",
+              n_all, if (n_all == 1L) "" else "s"),
+      type = "message", duration = 4)
   })
 
   observeEvent(input$fp_corr_flagged_csv, {
@@ -1394,6 +1401,27 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
               if (nextBtn) { e.preventDefault(); nextBtn.click(); }
               return;
             }
+            // q → quit / clear the current point / box / lasso selection, so you
+            // can start a fresh selection (or just drop the highlighted frames)
+            // without dragging an empty box. (Esc is avoided as browsers bind it
+            // to stop-loading / exit-fullscreen.) Removes the visual outline and
+            // nulls the Shiny-side selection inputs the plot reads from.
+            if ((e.key === 'q' || e.key === 'Q') && !e.metaKey && !e.ctrlKey && !e.altKey) {
+              var pdiv = document.getElementById('fp_corr_plot');
+              if (pdiv) {
+                try {
+                  var zl = pdiv._fullLayout && pdiv._fullLayout._zoomlayer;
+                  if (zl) zl.selectAll('.select-outline').remove();
+                  if (typeof pdiv.emit === 'function') pdiv.emit('plotly_deselect');
+                } catch (err) {}
+              }
+              if (window.Shiny && Shiny.setInputValue) {
+                Shiny.setInputValue('plotly_selected-fp_corr_plot', null, {priority: 'event'});
+                Shiny.setInputValue('plotly_click-fp_corr_plot', null, {priority: 'event'});
+              }
+              e.preventDefault();
+              return;
+            }
 
             var gd = document.getElementById('fp_corr_plot');
             if (!gd || !gd._fullLayout || !gd._fullLayout.xaxis) return;
@@ -1477,6 +1505,11 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                 tags$span(class = "sep", "/"),
                 tags$kbd("Ctrl"), "+", tags$kbd("Z")),
               tags$div(class = "kbd-desc", "Undo the last edit.")),
+
+            tags$div(class = "kbd-set-title", "Selection"),
+            tags$div(class = "kbd-row",
+              tags$div(class = "kbd-keys", tags$kbd("Q")),
+              tags$div(class = "kbd-desc", "Clear the current point / box / lasso selection.")),
 
             tags$div(class = "kbd-set-title", "Navigation"),
             tags$div(class = "kbd-row",
