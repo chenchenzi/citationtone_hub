@@ -1744,6 +1744,7 @@ ui <- fluidPage(
                                                DT::dataTableOutput("normalised_data")),
                                       tabPanel("Visualise",
                                                uiOutput("visualise_guide"),
+                                               uiOutput("vis_tone_warning"),
                                                tags$div(class = "plot-spinner-wrap",
                                                  plotOutput("ggplot_output",height = "auto", width = "auto"),
                                                  tags$div(class = "plot-spinner")

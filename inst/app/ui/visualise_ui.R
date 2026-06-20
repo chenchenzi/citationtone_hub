@@ -112,12 +112,24 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
 
     plot_data <- vis_dataset()
 
-    # Always coerce the tone column to factor if it's numeric — scale_color_brewer
-    # requires a discrete scale and integer tone codes (e.g. 1..5) would fail
-    # otherwise. The checkbox lets the user keep an already-factor column as-is.
-    tone_col <- plot_data[[input$tone_var]]
-    if (is.numeric(tone_col) || isTRUE(input$convert_tone_to_factor)) {
-      plot_data[[input$tone_var]] <- as.factor(tone_col)
+    # Colour by Tone only when it has a manageable number of distinct values. A
+    # high-cardinality column (e.g. a continuous variable mis-selected as Tone,
+    # which happens with freshly-extracted f0 data that has no tone labels yet)
+    # would explode scale_color_brewer's discrete legend. Compute this on the
+    # raw column BEFORE any factor coercion, and only coerce when we will really
+    # colour by it: coercing otherwise would also wreck the axis when the same
+    # column is mapped to y (e.g. Tone and Y both default to "f0").
+    n_tone_lv      <- length(unique(plot_data[[input$tone_var]]))
+    colour_by_tone <- n_tone_lv <= 12
+    one_col        <- "#3b8a6e"
+
+    # scale_color_brewer needs a discrete scale, so factor a numeric tone column
+    # (e.g. integer codes 1..5). The checkbox keeps an already-factor column as-is.
+    if (colour_by_tone) {
+      tone_col <- plot_data[[input$tone_var]]
+      if (is.numeric(tone_col) || isTRUE(input$convert_tone_to_factor)) {
+        plot_data[[input$tone_var]] <- as.factor(tone_col)
+      }
     }
 
     # ---- Optional landmark alignment ----------------------------------------
@@ -163,12 +175,14 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
     }
 
     # Use aes() + .data[[var]] (the modern replacement for aes_string(),
-    # which was deprecated in ggplot2 3.0). Behaviour is identical for our
-    # use case but no longer prints the per-session deprecation warning.
-    p <- ggplot(plot_data,
-                aes(x = .data[[x_aes]],
-                    y = .data[[input$y_var]],
-                    color = .data[[input$tone_var]]))
+    # which was deprecated in ggplot2 3.0). colour_by_tone / one_col were
+    # computed above (before any factor coercion of the tone column).
+    p <- if (colour_by_tone)
+      ggplot(plot_data, aes(x = .data[[x_aes]], y = .data[[input$y_var]],
+                            color = .data[[input$tone_var]]))
+    else
+      ggplot(plot_data, aes(x = .data[[x_aes]], y = .data[[input$y_var]]))
+
     # Dashed segment boundaries when laying segments side by side.
     if (seq_layout && is.finite(max_i) && max_i > 1) {
       p <- p + geom_vline(xintercept = seq_len(max_i - 1), linetype = "dashed",
@@ -176,11 +190,18 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
     }
     # When aligned, connect each token's frames into a contour line.
     if (aligned && ".grp" %in% names(plot_data)) {
-      p <- p + geom_line(aes(group = .data[[".grp"]]), alpha = 0.45, linewidth = 0.4)
+      p <- p + (if (colour_by_tone)
+                  geom_line(aes(group = .data[[".grp"]]), alpha = 0.45, linewidth = 0.4)
+                else
+                  geom_line(aes(group = .data[[".grp"]]), colour = one_col,
+                            alpha = 0.4, linewidth = 0.4))
     }
-    p <- p + geom_point(alpha = 0.75) +
-      scale_color_brewer(palette = "Set3") +
-      labs(x = x_lab, y = f0_axis_label(input$y_var), color = input$tone_var)
+    p <- p + (if (colour_by_tone) geom_point(alpha = 0.75)
+              else geom_point(colour = one_col, alpha = 0.6))
+    if (colour_by_tone) p <- p + scale_color_brewer(palette = "Set3")
+    p <- p + labs(
+      x = x_lab, y = f0_axis_label(input$y_var),
+      color = if (colour_by_tone) input$tone_var else NULL)
     if (seq_layout && is.finite(max_i)) {
       p <- p + scale_x_continuous(breaks = seq(0.5, max_i - 0.5, by = 1),
                                   labels = seq_len(max_i), minor_breaks = NULL)
@@ -224,6 +245,29 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
     current_plot()
   }, height = function() { plot_height() },
      width = function() { plot_width() })
+
+  # Warn above the plot when the chosen Tone variable has too many distinct
+  # values to colour by (usually a continuous column mis-selected as Tone, as
+  # happens with freshly-extracted f0 data that has no tone labels yet). The
+  # plot still renders, in a single colour.
+  output$vis_tone_warning <- renderUI({
+    req(input$plot_button > 0, input$tone_var)
+    d <- vis_dataset(); req(d)
+    if (!input$tone_var %in% names(d)) return(NULL)
+    n_lv <- length(unique(d[[input$tone_var]]))
+    if (n_lv <= 12) return(NULL)
+    tags$div(
+      style = paste("background-color: #fff8e1; border-left: 4px solid #e0a800;",
+                    "padding: 10px 14px; margin-bottom: 10px; border-radius: 4px;",
+                    "color: #7a5d00; font-size: 0.88rem;"),
+      icon("triangle-exclamation"),
+      HTML(sprintf(
+        paste(" The <strong>Tone category</strong> variable <code>%s</code> has <strong>%d</strong>",
+              "distinct values, which looks like a continuous column rather than tone categories.",
+              "Contours are shown in a single colour. Pick a categorical tone column to colour by tone."),
+        input$tone_var, n_lv))
+    )
+  })
 
   # Download handler for saving the plot
   output$save_plot_button <- downloadHandler(
@@ -276,7 +320,10 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
       ""
     )
 
-    if (input$convert_tone_to_factor) {
+    # Colour by tone only when it has few enough levels (mirrors the plot).
+    cbt <- is.null(vis_dataset()) ||
+           length(unique(vis_dataset()[[input$tone_var]])) <= 12
+    if (cbt && input$convert_tone_to_factor) {
       code_lines <- c(code_lines,
         "# Convert tone category to factor",
         paste0('dat$', input$tone_var, ' <- as.factor(dat$', input$tone_var, ')'),
@@ -315,21 +362,31 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
       if (seqL) n_seg <- suppressWarnings(max(as.integer(vis_dataset()[[ic]]), na.rm = TRUE))
     }
 
-    code_lines <- c(code_lines,
-      "# Create the plot",
-      paste0('p <- ggplot(dat, aes(x = ', x_code, ', y = ', input$y_var, ', color = ', input$tone_var, ')) +'))
+    code_lines <- c(code_lines, "# Create the plot")
+    if (cbt) {
+      code_lines <- c(code_lines,
+        paste0('p <- ggplot(dat, aes(x = ', x_code, ', y = ', input$y_var, ', color = ', input$tone_var, ')) +'))
+    } else {
+      code_lines <- c(code_lines,
+        paste0("# Tone variable '", input$tone_var, "' has too many values to colour by; using one colour."),
+        paste0('p <- ggplot(dat, aes(x = ', x_code, ', y = ', input$y_var, ')) +'))
+    }
     if (seqL && is.finite(n_seg) && n_seg > 1) {
       code_lines <- c(code_lines,
         paste0('  geom_vline(xintercept = 1:', n_seg - 1, ', linetype = "dashed", colour = "grey75") +'))
     }
     if (aligned && !is.null(tok_code)) {
-      code_lines <- c(code_lines, '  geom_line(aes(group = grp), alpha = 0.45, linewidth = 0.4) +')
+      code_lines <- c(code_lines,
+        if (cbt) '  geom_line(aes(group = grp), alpha = 0.45, linewidth = 0.4) +'
+        else     '  geom_line(aes(group = grp), colour = "#3b8a6e", alpha = 0.4, linewidth = 0.4) +')
     }
     code_lines <- c(code_lines,
-      "  geom_point(alpha = 0.75) +",
-      '  scale_color_brewer(palette = "Set3") +',
-      paste0('  labs(x = "', x_lab_code, '", y = "', f0_axis_label(input$y_var), '", color = "', input$tone_var, '")')
-    )
+      if (cbt) "  geom_point(alpha = 0.75) +"
+      else     '  geom_point(colour = "#3b8a6e", alpha = 0.6) +')
+    if (cbt) code_lines <- c(code_lines, '  scale_color_brewer(palette = "Set3") +')
+    code_lines <- c(code_lines,
+      if (cbt) paste0('  labs(x = "', x_lab_code, '", y = "', f0_axis_label(input$y_var), '", color = "', input$tone_var, '")')
+      else     paste0('  labs(x = "', x_lab_code, '", y = "', f0_axis_label(input$y_var), '")'))
     if (seqL && is.finite(n_seg)) {
       code_lines <- c(code_lines,
         paste0('p <- p + scale_x_continuous(breaks = seq(0.5, ', n_seg - 0.5, ', by = 1), labels = 1:', n_seg, ')'))

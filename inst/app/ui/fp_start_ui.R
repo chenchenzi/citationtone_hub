@@ -100,15 +100,6 @@ fp_start_ui <- function(input, output, session, fp_audio_data) {
         ", and ", tags$code("ma1.Pitch"),
         " are treated as one token."
       ),
-      tags$div(
-        style = "color: #555; font-size: 0.85rem; margin-bottom: 12px;",
-        tags$span(style = "color: #c0392b;", icon("triangle-exclamation")),
-        " Recordings too short for a single pitch frame (under about ",
-        tags$strong(sprintf("%.0f ms", min_audio_dur(75) * 1000)),
-        " at a 75 Hz floor) are flagged ",
-        tags$span(style = "color: #c0392b; font-weight: 600;", "red"),
-        " in the File Preview and skipped automatically during f0 extraction and correction, so they will not appear in the output."
-      ),
       if (is.null(fp_audio_data())) {
         tags$p("Once uploaded, a per-token file summary will appear below.")
       },
@@ -158,7 +149,16 @@ fp_start_ui <- function(input, output, session, fp_audio_data) {
                onclick = "Shiny.setInputValue('about_nav_target', 'Data Collection|Filename', {priority:'event'}); return false;",
                icon("arrow-right"), " See the full filename convention guide in Data Collection")),
       tags$hr(),
-      h4("File Preview")
+      h4("File Preview"),
+      tags$div(
+        style = "color: #555; font-size: 0.85rem; margin: 6px 0 10px 0;",
+        tags$span(style = "color: #c0392b;", icon("triangle-exclamation")),
+        " Recordings too short for a single pitch frame (under about ",
+        tags$strong(sprintf("%.0f ms", min_audio_dur(75) * 1000)),
+        " at a 75 Hz floor) are flagged ",
+        tags$span(style = "color: #c0392b; font-weight: 600;", "red"),
+        " below and skipped automatically during f0 extraction and correction, so they will not appear in the output."
+      )
     )
   })
 

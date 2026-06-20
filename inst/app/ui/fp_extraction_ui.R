@@ -44,10 +44,16 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         tags$hr()
       ),
       uiOutput("fp_extract_run_btn"),
+      tags$hr(),
       # ---- Landmarks from TextGrid (optional) ----
-      conditionalPanel("input.fp_extract_mode != 'csv'",
-        uiOutput("fp_landmark_picker")
-      ),
+      h5("Landmarks from TextGrid"),
+      tags$p(style = "color: #777; font-size: 0.8rem; margin-bottom: 6px;",
+        "If you uploaded ", tags$code(".TextGrid"), " files, choose interval tier(s) to read ",
+        "boundaries from. Each adds ", tags$code("<tier>"), ", ", tags$code("<tier>_start"),
+        ", ", tags$code("<tier>_end"), ", ", tags$code("<tier>_i"),
+        " columns (the segment label, its start and end in seconds, and its index) to every ",
+        "f0 frame, so the Visualise tab can align contours by these landmarks."),
+      uiOutput("fp_landmark_picker"),
       tags$hr(),
       # ---- Metadata (optional) ----
       h5("Metadata"),
@@ -148,7 +154,7 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     audio <- fp_audio_data()
     if (is.null(audio) || nrow(audio) == 0) {
       return(tags$div(style = "color: #888; font-size: 0.8rem; margin-bottom: 8px; font-style: italic;",
-        "Upload audio files in the Start tab — segment counts will be detected from their filenames."))
+        "Upload audio files in the Start tab; segment counts will be detected from their filenames."))
     }
     splits <- fp_meta_splits()
     n_each <- vapply(splits, length, integer(1))
@@ -311,7 +317,7 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
             "<code>vowel</code>, <code>rhyme</code>). Each tier tags every f0 frame with the segment it falls in, ",
             "adding <code>&lt;tier&gt;</code>, <code>&lt;tier&gt;_start</code>, <code>&lt;tier&gt;_end</code>, and ",
             "<code>&lt;tier&gt;_i</code> (segment index) columns. Downstream, the <strong>Visualise</strong> tab ",
-            "can align contours by these landmarks — including syllable by syllable for multi-syllable words.")))
+            "can align contours by these landmarks, including syllable by syllable for multi-syllable words.")))
         )
       )
     )
@@ -430,21 +436,13 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
 
   output$fp_landmark_picker <- renderUI({
     tiers <- fp_tg_tiers()
-    if (length(tiers) == 0) return(NULL)
-    tagList(
-      tags$hr(),
-      h5(icon("ruler-combined"), " Landmarks from TextGrid ",
-         tags$span(style = "font-weight:400; color:#888; font-size:0.8rem;", "(optional)")),
-      tags$p(style = "color:#777; font-size:0.78rem; margin:-4px 0 6px 0;",
-        "Choose interval tier(s) to read boundaries from. Each adds ",
-        tags$code("<tier>"), ", ", tags$code("<tier>_start"), ", ",
-        tags$code("<tier>_end"), ", ", tags$code("<tier>_i"),
-        " columns (the segment label, its start/end in seconds, and its index) to every f0 frame. ",
-        "The Visualise tab can then align contours by these landmarks."),
-      selectizeInput("fp_landmark_tiers", NULL, choices = tiers, selected = character(0),
-                     multiple = TRUE,
-                     options = list(placeholder = "No landmarks (leave empty)"))
-    )
+    if (length(tiers) == 0) {
+      return(tags$div(style = "color: #999; font-size: 0.78rem; font-style: italic;",
+        "Upload .TextGrid files in the Start tab to enable landmark columns."))
+    }
+    selectizeInput("fp_landmark_tiers", NULL, choices = tiers, selected = character(0),
+                   multiple = TRUE,
+                   options = list(placeholder = "No landmarks (leave empty)"))
   })
 
   # Attach the selected TextGrid landmark columns to a freshly-extracted frame.
