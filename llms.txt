@@ -198,6 +198,8 @@ time normalisation for multisyllabic words.
   : Normalise f0 by speaker
 - [`normalise_time_landmarks()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_time_landmarks.md)
   : Landmark-normalised time columns
+- [`normalise_time_token()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_time_token.md)
+  : Whole-token 0-1 time normalisation
 
 ## TextGrid landmarks
 
