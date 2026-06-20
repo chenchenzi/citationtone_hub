@@ -38,18 +38,21 @@ fp_praat_script_ui <- function(input, output, session) {
 #                                    F0 Processing > Start, then in
 #                                    F0 Extraction pick
 #                                    "Use uploaded .Pitch / .PitchTier (Praat)".
-#   * <output_folder>/f0_long.csv -> upload directly in F0 Analysis > Start
-#                                    if you do not need frame-level correction.
+#   * the Output_csv file          -> the combined CSV. Saved inside the output
+#                                    folder by default, or wherever you Browse to.
+#                                    Upload directly in F0 Analysis > Start if you
+#                                    do not need frame-level correction.
 ###############################################################
 
 # ============================================================
 # 1) First dialog: basic settings
 # ============================================================
 form Extract f0 with Praat
-  comment === Folders ===
+  comment === Input / output ===
   folder Input_folder /path/to/your/wav/files
   folder Output_folder /path/to/output
-  word Output_csv f0_long.csv
+  comment CSV: a bare name is saved inside Output_folder; Browse to put it elsewhere.
+  outfile Output_csv f0_long.csv
 
   comment === Pitch range (Hz) -- tighten to your speakers ===
   positive F0_min 75
@@ -126,8 +129,16 @@ endif
 # Make sure the output folder exists
 createFolder: output_folder$
 
+# Where to write the combined CSV: a bare filename goes inside the output
+# folder; a path (e.g. chosen via the Browse button) is used as-is, so the CSV
+# can live anywhere. Praat uses "/" in script paths on every platform.
+if index(output_csv$, "/") = 0
+  csv_path$ = output_folder$ + "/" + output_csv$
+else
+  csv_path$ = output_csv$
+endif
+
 # Open (overwrite) the combined CSV with a header row
-csv_path$ = output_folder$ + "/" + output_csv$
 writeFileLine: csv_path$, "token,time,f0,intensity"
 
 # Enumerate .wav files
@@ -332,7 +343,8 @@ appendInfoLine: "  Combined CSV: ", csv_path$
                 tags$code("filtered ac"), ", Praat 6.4+)."),
         tags$li("Saves a text ", tags$code("<basename>.Pitch"),
                 " file per recording into the output folder."),
-        tags$li("Writes a single ", tags$code("f0_long.csv"),
+        tags$li("Writes one combined CSV (you name it; default ",
+                tags$code("f0_long.csv"), ", saved in the output folder or any path you Browse to)",
                 " with columns ", tags$code("token, time, f0, intensity"),
                 " (long format), one row per frame per token. The ",
                 tags$code("intensity"), " column (dB) lets the ",
@@ -362,7 +374,7 @@ appendInfoLine: "  Combined CSV: ", csv_path$
                 " will appear in sequence:"),
         tags$ul(style = "margin-top: -6px;",
           tags$li(tags$strong("Basic settings:"),
-                  " input / output folders, pitch range, time step, and method."),
+                  " input / output folders, the CSV name or save path, pitch range, time step, and method."),
           tags$li(tags$strong("Advanced parameters:"),
                   " silence threshold, voicing threshold, octave costs, etc., ",
                   "pre-filled with Praat's defaults for the method you chose ",
@@ -410,7 +422,8 @@ appendInfoLine: "  Combined CSV: ", csv_path$
                 " and click Run extraction. In ", tags$strong("F0 Correction"),
                 " the top-3 candidate markers will show up automatically."),
         tags$li(tags$strong("If the f0 is already clean enough:"),
-                " upload ", tags$code("f0_long.csv"), " directly in ",
+                " upload your combined CSV (", tags$code("f0_long.csv"),
+                " by default) directly in ",
                 tags$strong("F0 Analysis > Start"), " and proceed to ",
                 tags$em("Normalise"), ", ", tags$em("Visualise"), ", ",
                 tags$em("Inspect"), ", or any of the modelling tabs.")
