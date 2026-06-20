@@ -100,6 +100,15 @@ fp_start_ui <- function(input, output, session, fp_audio_data) {
         ", and ", tags$code("ma1.Pitch"),
         " are treated as one token."
       ),
+      tags$div(
+        style = "color: #555; font-size: 0.85rem; margin-bottom: 12px;",
+        tags$span(style = "color: #c0392b;", icon("triangle-exclamation")),
+        " Recordings too short for a single pitch frame (under about ",
+        tags$strong(sprintf("%.0f ms", min_audio_dur(75) * 1000)),
+        " at a 75 Hz floor) are flagged ",
+        tags$span(style = "color: #c0392b; font-weight: 600;", "red"),
+        " in the File Preview and skipped automatically during f0 extraction and correction, so they will not appear in the output."
+      ),
       if (is.null(fp_audio_data())) {
         tags$p("Once uploaded, a per-token file summary will appear below.")
       },
@@ -170,6 +179,11 @@ fp_start_ui <- function(input, output, session, fp_audio_data) {
     sr_str   <- if (length(sr_uniq))  paste(sr_uniq, collapse = ", ") else "—"
     bit_str  <- if (length(bit_uniq)) paste(bit_uniq, collapse = ", ") else "—"
 
+    thr     <- min_audio_dur(75)
+    has_wav <- !is.na(df$wav_path)
+    n_short <- sum(has_wav & !is.na(df$dur) & df$dur < thr)
+    n_unread<- sum(has_wav & is.na(df$dur))
+
     tags$div(
       style = "background-color: #eef6f2; border: 1px solid #c8e1d6; padding: 10px 14px; margin-bottom: 12px; border-radius: 4px; font-size: 0.9rem;",
       tags$ul(style = "margin: 0; padding-left: 18px;",
@@ -180,13 +194,32 @@ fp_start_ui <- function(input, output, session, fp_audio_data) {
         tags$li(".Pitch / .PitchTier files: ", tags$strong(n_pitch)),
         tags$li("Sample rate(s): ", tags$strong(sr_str), " Hz"),
         tags$li("Bit depth(s): ", tags$strong(bit_str), " bits")
-      )
+      ),
+      if (n_short + n_unread > 0)
+        tags$div(style = "margin-top: 8px; color: #c0392b; font-size: 0.85rem;",
+          icon("triangle-exclamation"), " ",
+          tags$strong(n_short + n_unread),
+          if (n_short + n_unread == 1) " file is" else " files are",
+          sprintf(" flagged red below (%s shorter than %.3f s at a 75 Hz floor%s). ",
+                  n_short, thr,
+                  if (n_unread > 0) sprintf(", %s unreadable", n_unread) else ""),
+          "They are too short for a pitch frame and are skipped automatically during f0 extraction.")
     )
   })
 
   output$fp_files_table <- DT::renderDataTable({
     df <- fp_audio_data()
     req(df)
+
+    # Flag files too short for the pitch analyser (or whose .wav header could
+    # not be read). "Too short" / "Unreadable" rows are highlighted red and are
+    # skipped automatically during wrassp extraction. Praat-only rows (no .wav)
+    # are not duration-checked here: their .Pitch/.PitchTier already encode
+    # whatever frames exist.
+    thr     <- min_audio_dur(75)
+    has_wav <- !is.na(df$wav_path)
+    status  <- ifelse(has_wav & !is.na(df$dur) & df$dur < thr, "Too short",
+               ifelse(has_wav & is.na(df$dur),                 "Unreadable", "OK"))
 
     display <- data.frame(
       basename = df$basename,
@@ -198,6 +231,7 @@ fp_start_ui <- function(input, output, session, fp_audio_data) {
       Channels           = df$channels,
       `Duration (s)`     = df$dur,
       `.wav size (KB)`   = df$wav_size_kb,
+      Status             = status,
       check.names = FALSE, stringsAsFactors = FALSE
     )
 
@@ -208,6 +242,18 @@ fp_start_ui <- function(input, output, session, fp_audio_data) {
         pageLength = 25, autoWidth = TRUE,
         columnDefs = list(list(className = "dt-center", targets = "_all"))
       )
-    )
+    ) |>
+      DT::formatStyle(
+        "Status", target = "row",
+        backgroundColor = DT::styleEqual(c("Too short", "Unreadable"),
+                                         c("#fdecea", "#fdecea"))
+      ) |>
+      DT::formatStyle(
+        "Status",
+        color = DT::styleEqual(c("Too short", "Unreadable", "OK"),
+                               c("#c0392b", "#c0392b", "#2a7a5a")),
+        fontWeight = DT::styleEqual(c("Too short", "Unreadable"), c("700", "700"),
+                                    default = "400")
+      )
   })
 }

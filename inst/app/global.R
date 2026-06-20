@@ -48,6 +48,50 @@ make_token_key <- function(x, strip_ext = TRUE) {
 }
 
 # ---------------------------------------------------------------------------
+# Shortest audio duration (seconds) the pitch analyser can return a frame for.
+# A pitch-floor autocorrelation window spans 3 periods of the floor, so a clip
+# shorter than 3 / f0_min yields no f0 (and, being even shorter than the wider
+# intensity window, no intensity either). Used to flag/skip too-short files in
+# the F0 Processing Start preview and the wrassp extraction loop.
+# ---------------------------------------------------------------------------
+min_audio_dur <- function(f0_min = 75) {
+  f0_min <- suppressWarnings(as.numeric(f0_min)[1])
+  if (length(f0_min) == 0 || is.na(f0_min) || f0_min <= 0) f0_min <- 75
+  3 / f0_min
+}
+
+# ---------------------------------------------------------------------------
+# Landmark sets in a column-name vector. A "set" is a base name X for which
+# both X_start and X_end exist (as written by the F0 Extraction landmark step,
+# e.g. syllable_start / syllable_end). X_i (segment index) is optional. Returns
+# a named list base -> list(start, end, idx, has_i). Used by the Visualise tab
+# to offer landmark-based time alignment.
+# ---------------------------------------------------------------------------
+landmark_sets <- function(vars) {
+  out <- list()
+  for (s in grep("_start$", vars, value = TRUE)) {
+    base <- sub("_start$", "", s)
+    e <- paste0(base, "_end")
+    if (nzchar(base) && e %in% vars) {
+      out[[base]] <- list(start = s, end = e,
+                          idx = paste0(base, "_i"),
+                          has_i = paste0(base, "_i") %in% vars)
+    }
+  }
+  out
+}
+
+# First column name matching a token-like pattern, or NULL if none. Used to
+# connect points into per-token contour lines when aligning by landmarks.
+vis_token_col <- function(vars) {
+  for (pat in var_patterns$token) {
+    m <- grep(pat, vars, ignore.case = TRUE, value = TRUE)
+    if (length(m)) return(m[1])
+  }
+  NULL
+}
+
+# ---------------------------------------------------------------------------
 # Pretty y-axis label for an f0 column. Maps the column *name* to a typeset
 # label with a subscript zero (f0 -> f₀):
 #   *_hz / raw f0 -> "f₀ (Hz)"        *_st / semitone -> "f₀ (semitone)"

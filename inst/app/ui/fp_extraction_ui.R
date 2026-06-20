@@ -44,6 +44,10 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         tags$hr()
       ),
       uiOutput("fp_extract_run_btn"),
+      # ---- Landmarks from TextGrid (optional) ----
+      conditionalPanel("input.fp_extract_mode != 'csv'",
+        uiOutput("fp_landmark_picker")
+      ),
       tags$hr(),
       # ---- Metadata (optional) ----
       h5("Metadata"),
@@ -300,7 +304,14 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
             "<strong>Metadata (optional):</strong> either upload a metadata CSV (one row per audio file) ",
             "or have Shinytone derive metadata by splitting each filename on a separator (default ",
             "<code>_</code>) and naming the segments. Either way, the metadata is joined to the f0 ",
-            "output so the download is ready for F0 Analysis.")))
+            "output so the download is ready for F0 Analysis."))),
+          tags$li(HTML(paste0(
+            "<strong>Landmarks from TextGrid (optional):</strong> if you uploaded <code>.TextGrid</code> ",
+            "files, pick one or more <em>interval</em> tiers (e.g. <code>syllable</code>, <code>phoneme</code>, ",
+            "<code>vowel</code>, <code>rhyme</code>). Each tier tags every f0 frame with the segment it falls in, ",
+            "adding <code>&lt;tier&gt;</code>, <code>&lt;tier&gt;_start</code>, <code>&lt;tier&gt;_end</code>, and ",
+            "<code>&lt;tier&gt;_i</code> (segment index) columns. Downstream, the <strong>Visualise</strong> tab ",
+            "can align contours by these landmarks — including syllable by syllable for multi-syllable words.")))
         )
       )
     )
@@ -407,6 +418,55 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       actionButton("fp_extract_run", "Run extraction", icon = icon("play"))
     }
   })
+
+  # ---- Landmarks from TextGrid (optional) ----
+  # Interval-tier names available across the uploaded TextGrids (sampled, since
+  # tiers are usually uniform across a corpus). Empty unless TextGrids exist.
+  fp_tg_tiers <- reactive({
+    audio <- fp_audio_data()
+    if (is.null(audio) || !"tg_path" %in% names(audio)) return(character(0))
+    tg_interval_tiers(audio$tg_path)
+  })
+
+  output$fp_landmark_picker <- renderUI({
+    tiers <- fp_tg_tiers()
+    if (length(tiers) == 0) return(NULL)
+    tagList(
+      tags$hr(),
+      h5(icon("ruler-combined"), " Landmarks from TextGrid ",
+         tags$span(style = "font-weight:400; color:#888; font-size:0.8rem;", "(optional)")),
+      tags$p(style = "color:#777; font-size:0.78rem; margin:-4px 0 6px 0;",
+        "Choose interval tier(s) to read boundaries from. Each adds ",
+        tags$code("<tier>"), ", ", tags$code("<tier>_start"), ", ",
+        tags$code("<tier>_end"), ", ", tags$code("<tier>_i"),
+        " columns (the segment label, its start/end in seconds, and its index) to every f0 frame. ",
+        "The Visualise tab can then align contours by these landmarks."),
+      selectizeInput("fp_landmark_tiers", NULL, choices = tiers, selected = character(0),
+                     multiple = TRUE,
+                     options = list(placeholder = "No landmarks (leave empty)"))
+    )
+  })
+
+  # Attach the selected TextGrid landmark columns to a freshly-extracted frame.
+  attach_landmarks_if_any <- function(d) {
+    tiers <- input$fp_landmark_tiers
+    if (is.null(tiers) || length(tiers) == 0 || is.null(d)) return(d)
+    out <- tryCatch(attach_landmarks(d, fp_audio_data(), tiers),
+                    error = function(e) {
+                      showNotification(paste("Could not attach landmarks:", conditionMessage(e)),
+                                       type = "warning", duration = 6)
+                      d
+                    })
+    n_new <- length(setdiff(names(out), names(d)))
+    if (n_new > 0) {
+      n_tok <- length(unique(out$token[!is.na(out[[setdiff(names(out), names(d))[1]]])]))
+      showNotification(
+        sprintf("Attached %d landmark column(s) from tier(s) %s. Matched a TextGrid for %d token(s).",
+                n_new, paste(tiers, collapse = ", "), n_tok),
+        type = "message", duration = 6)
+    }
+    out
+  }
 
   # ---- CSV column auto-detection + auto-load ----
   # When the user picks a CSV in "Upload existing f0 CSV" mode, we read it
@@ -564,6 +624,27 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       f0_max  <- as.numeric(input$fp_f0_max)
       step_ms <- as.numeric(input$fp_window_ms)
 
+      # Drop files too short to yield a single pitch frame at the chosen floor
+      # (flagged red in the Start preview), plus any whose .wav header could not
+      # be read. These produce no f0/intensity, so we skip them up front.
+      min_dur <- min_audio_dur(f0_min)
+      drop    <- is.na(wavs$dur) | wavs$dur < min_dur
+      if (any(drop)) {
+        dropped <- wavs$basename[drop]
+        wavs <- wavs[!drop, , drop = FALSE]
+        showNotification(
+          sprintf("Skipped %d file(s) too short for f0 (< %.3f s) or unreadable: %s%s",
+                  length(dropped), min_dur,
+                  paste(utils::head(dropped, 5), collapse = ", "),
+                  if (length(dropped) > 5) sprintf(", and %d more", length(dropped) - 5) else ""),
+          type = "warning", duration = 7)
+      }
+      if (nrow(wavs) == 0) {
+        showNotification("All .wav files are too short for f0 extraction.",
+                         type = "warning", duration = 5)
+        return()
+      }
+
       # Wipe any previous extraction so the user sees a clean transition,
       # and announce that work has started (the progress bar can be subtle).
       fp_f0_data(NULL)
@@ -584,7 +665,7 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                            type = "error", duration = 6)
           return()
         }
-        fp_f0_data(do.call(rbind, lapply(results, `[[`, "df")))
+        fp_f0_data(attach_landmarks_if_any(do.call(rbind, lapply(results, `[[`, "df"))))
         if (!is.null(fp_pitch_candidates)) fp_pitch_candidates(list())  # wrassp has no candidates
         n_fail <- nrow(wavs) - length(results)
         msg <- if (n_fail == 0) {
@@ -626,7 +707,7 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                            type = "error", duration = 6)
           return()
         }
-        fp_f0_data(do.call(rbind, lapply(results, `[[`, "df")))
+        fp_f0_data(attach_landmarks_if_any(do.call(rbind, lapply(results, `[[`, "df"))))
         if (!is.null(fp_pitch_candidates)) {
           cands <- list()
           for (b in names(results)) {
