@@ -64,3 +64,29 @@ test_that("attach_landmarks is a no-op without tiers or token/time columns", {
   expect_identical(attach_landmarks(df, audio, character(0)), df)
   expect_identical(attach_landmarks(data.frame(a = 1), audio, "syllable"), data.frame(a = 1))
 })
+
+# ---------- normalise_time_landmarks -----------------------------------------
+
+test_that("normalise_time_landmarks adds within-segment and sequential time", {
+  # syllable 1 over [0.0, 0.2], syllable 2 over [0.2, 0.6]
+  df <- data.frame(
+    time           = c(0.05, 0.10, 0.40),
+    syllable_start = c(0.0,  0.0,  0.2),
+    syllable_end   = c(0.2,  0.2,  0.6),
+    syllable_i     = c(1L,   1L,   2L)
+  )
+  out <- normalise_time_landmarks(df, "time", "syllable")
+  # within-segment 0-1
+  expect_equal(out$syllable_t01, c(0.25, 0.50, 0.50))
+  # sequential: segment 1 keeps 0-1, segment 2 shifted into 1-2
+  expect_equal(out$syllable_tseq, c(0.25, 0.50, 1.50))
+})
+
+test_that("normalise_time_landmarks clamps to 0-1 and is a no-op when columns missing", {
+  df <- data.frame(time = c(-1, 5), syllable_start = c(0, 0), syllable_end = c(1, 1))
+  out <- normalise_time_landmarks(df, "time", "syllable")
+  expect_equal(out$syllable_t01, c(0, 1))                 # clamped
+  expect_equal(out$syllable_tseq, c(0, 1))                # no _i -> equals t01
+  expect_identical(normalise_time_landmarks(data.frame(a = 1), "time", "syllable"),
+                   data.frame(a = 1))
+})

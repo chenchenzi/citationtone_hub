@@ -133,3 +133,37 @@ attach_landmarks <- function(df, audio, tier_names, strip_ext = TRUE) {
   }
   out
 }
+
+#' Landmark-normalised time columns
+#'
+#' Rescales a time column within each segment of a landmark set so multisyllabic
+#' contours share a syllable-aware time axis. Adds two columns, named from the
+#' set:
+#'
+#' * `<set>_t01` — time rescaled to 0-1 *within* each segment (segments overlap;
+#'   good for comparing segment shapes against each other).
+#' * `<set>_tseq` — *sequential* time, `(<set>_i - 1) + <set>_t01`, so segments
+#'   lie end to end across the word (a word-level time axis that keeps order).
+#'
+#' @param df Data frame with the `time` column and the set's `_start` / `_end`
+#'   (and optionally `_i`) columns, e.g. from [attach_landmarks()].
+#' @param time Name of the raw time column (seconds, matching the landmark units).
+#' @param set Landmark-set base name (e.g. "syllable").
+#' @return `df` with the two columns appended. Returned unchanged when the
+#'   required columns are absent.
+#' @export
+normalise_time_landmarks <- function(df, time, set) {
+  sc <- paste0(set, "_start"); ec <- paste0(set, "_end"); ic <- paste0(set, "_i")
+  if (is.null(df) || !all(c(time, sc, ec) %in% names(df))) return(df)
+  tv <- suppressWarnings(as.numeric(df[[time]]))
+  st <- suppressWarnings(as.numeric(df[[sc]]))
+  en <- suppressWarnings(as.numeric(df[[ec]]))
+  p  <- (tv - st) / (en - st)
+  p[!is.finite(p)] <- NA_real_
+  p  <- pmin(pmax(p, 0), 1)
+  df[[paste0(set, "_t01")]]  <- p
+  df[[paste0(set, "_tseq")]] <- if (ic %in% names(df))
+    (suppressWarnings(as.integer(df[[ic]])) - 1) + p
+  else p
+  df
+}
