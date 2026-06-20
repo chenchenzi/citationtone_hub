@@ -95,7 +95,7 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
         tags$li(HTML("<strong>Choose a feature space.</strong> Each contour is summarised as resampled <em>points</em>, compact <em>Legendre</em> / <em>DCT</em> coefficients, or its <em>derivative</em> (movement, discarding height; Kaland, 2023a): this is what gets clustered. Keep the <em>register</em> so high and low level tones separate, or cluster on <em>shape</em> alone.")),
         tags$li(HTML("<strong>Cluster without labels.</strong> An <em>unsupervised</em> algorithm (k-means, hierarchical, or Gaussian mixture) groups tokens purely by contour shape, with no tone labels needed.")),
         tags$li(HTML("<strong>Decide how many groups.</strong> The diagnostics (elbow, silhouette, gap, GMM/BIC, MDL) rarely agree exactly, so read off a plausible <em>range</em>, <em>compare</em> candidate solutions side by side, then set the number of groups with the slider.")),
-        tags$li(HTML("<strong>Inspect, validate, reuse.</strong> Read the candidate-mean contours, the dendrogram and the token map; if you have provisional labels, check agreement (adjusted Rand index); then send the clusters on as candidate tone labels for Curate / Model."))
+        tags$li(HTML("<strong>Inspect, validate, reuse.</strong> Read the candidate-mean contours, the dendrogram (its merge-height axis is square-root scaled so the early, low merges stay legible) and the token map; if you have provisional labels, check agreement (adjusted Rand index); then send the clusters on as candidate tone labels for Curate / Model."))
       ),
       tags$p(style = "font-size:0.85rem; color:#444; margin:10px 0 2px 0; font-weight:700;", "Methods"),
       tags$ul(style = "margin-bottom: 8px; padding-left: 18px;",
