@@ -903,7 +903,7 @@ ui <- fluidPage(
                                     showcase_card("analysis", "\U0001F50E", "Inspect", "inspect.png",
                                       "Flag likely f0 artefacts such as octave jumps, out-of-range outliers, and tracking errors, using by-speaker z-scores and sample-to-sample jump detection."),
                                     showcase_card("analysis", "\U0001F333", "Cluster", "cluster.png",
-                                      "Discover candidate tone categories from contour shape when you do not have reliable labels: hierarchical clustering (Ward) with a data-driven or manual number of tones, a merge-tree dendrogram, and one click to publish the clusters as candidate tone labels for Curate."),
+                                      "Discover candidate tone categories from contour shape when you do not have reliable labels: multiple methods for f0 contour clustering with a data-driven or manual number of tones."),
                                     showcase_card("analysis", "\U0001F3F7", "Curate", "curate.png",
                                       "Re-label tone-category variants for linguistic variation (tone splits or mergers, colloquial vs. literary readings, sandhi or sociolinguistic forms) or exclude mis-elicited tokens."),
                                     showcase_card("analysis", "\U0001F4CA", "Model", "model.png",
