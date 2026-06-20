@@ -62,6 +62,46 @@ normalised_ui <- function(input, output, session, dataset, normalised_data) {
                                     "By-speaker Z-score" = "zscore"),
                      selected = "semitone"),
         tags$hr(),
+        # --- Collapsible illustrated guide for time normalisation ---
+        tags$details(class = "msg-route",
+          tags$style(HTML("
+            details.msg-route{background:#f3f8fc;border:1px solid #cfe2f1;border-radius:8px;padding:7px 12px 10px;margin:0 0 10px;}
+            .msg-route>summary{cursor:pointer;font-weight:700;color:#2c5d80;font-size:0.86rem;list-style:none;padding:1px 0;}
+            .msg-route>summary::-webkit-details-marker{display:none;}
+            .msg-route>summary::before{content:'\\25B8';color:#5b9bd5;display:inline-block;margin-right:7px;transition:transform .15s ease;}
+            .msg-route[open]>summary::before{transform:rotate(90deg);}
+            .msg-hint{color:#7aa6cc;font-weight:400;font-size:0.74rem;margin-left:5px;}
+            .msg-route[open] .msg-hint{display:none;}
+            .msg-intro{color:#3f5a72;font-size:0.78rem;line-height:1.45;margin:8px 0 0;}
+            .msg-flow{display:flex;flex-direction:column;gap:7px;margin-top:9px;}
+            .msg-step{background:#fff;border:1px solid #e1e9f2;border-radius:6px;padding:7px 10px;}
+            .msg-stitle{font-weight:700;color:#2c5f4f;font-size:0.8rem;}
+            .msg-swhy{font-size:0.74rem;color:#5f6b66;line-height:1.4;margin-top:2px;}
+            .msg-tip{font-size:0.74rem;color:#33536f;background:#eaf3fb;border:1px solid #d3e6f5;border-radius:6px;padding:6px 10px;margin-top:9px;line-height:1.45;}
+            .msg-tip .fa,.msg-tip svg{color:#5b9bd5;margin-right:3px;}
+          ")),
+          tags$summary(icon("ruler-horizontal"), " Multisyllabic or sub-syllabic data?",
+                       tags$span(class = "msg-hint", "(click to expand)")),
+          tags$p(class = "msg-intro",
+            "Add a normalised-time column so contours share a common axis. Pick the option that matches your data:"),
+          tags$div(class = "msg-flow",
+            tags$div(class = "msg-step",
+              tags$div(class = "msg-stitle", "Multisyllabic word"),
+              tags$div(class = "msg-swhy",
+                HTML("Pick the <code>syllable</code> tier &rarr; <code>syllable_tseq</code> lays syllables end to end (one word-level axis)."))),
+            tags$div(class = "msg-step",
+              tags$div(class = "msg-stitle", "Within a region"),
+              tags$div(class = "msg-swhy",
+                HTML("Pick a <code>rhyme</code> / <code>vowel</code> / <code>phone</code> tier &rarr; time is normalised inside the marked region only."))),
+            tags$div(class = "msg-step",
+              tags$div(class = "msg-stitle", "Monosyllabic / whole word"),
+              tags$div(class = "msg-swhy",
+                HTML("Pick <code>Whole token (0&ndash;1)</code> &rarr; each token's time is rescaled to 0&ndash;1 (no landmarks needed).")))
+          ),
+          tags$div(class = "msg-tip",
+            icon("lightbulb"),
+            HTML(" <code>&lt;tier&gt;_t01</code> overlays segments on a 0&ndash;1 axis; <code>&lt;tier&gt;_tseq</code> lays them out in sequence."))
+        ),
         h5("Time Normalisation options ",
            tags$span(style = "font-weight:400; color:#888; font-size:0.8rem;", "(optional)")),
         uiOutput("norm_time_landmark_ui"),
@@ -85,21 +125,30 @@ normalised_ui <- function(input, output, session, dataset, normalised_data) {
     ds   <- dataset()
     vars <- if (!is.null(ds)) names(ds) else character(0)
     sets <- landmark_sets(vars)
-    if (length(sets) == 0) {
+    tok  <- vis_token_col(vars)   # token column enables the whole-token 0-1 option
+
+    choices <- c("(none)" = "__none__")
+    if (!is.null(tok))  choices <- c(choices, "Whole token (0–1)" = "__token__")
+    if (length(sets))   choices <- c(choices, stats::setNames(names(sets), names(sets)))
+
+    if (length(choices) == 1) {   # only "(none)": no token and no landmarks
       return(tags$div(style = "color: #999; font-size: 0.78rem; font-style: italic;",
-        "No landmark columns in this dataset. Add them in F0 Extraction (choose TextGrid tiers) to enable time normalisation."))
+        "No token or landmark columns detected. Add landmark columns in F0 Extraction (choose TextGrid tiers) to normalise time within segments."))
     }
     var_types <- paste0(vars, " {", sapply(ds, class), "}")
     tagList(
-      selectInput("norm_time_set", "Landmark tier:",
-                  choices = c("(none)" = "__none__",
-                              stats::setNames(names(sets), names(sets))),
-                  selected = "__none__"),
+      selectInput("norm_time_set", "Normalise time by:",
+                  choices = choices, selected = "__none__"),
       conditionalPanel(
         "input.norm_time_set && input.norm_time_set != '__none__'",
         selectInput("norm_time_var", "Time variable:",
                     choices = stats::setNames(vars, var_types),
-                    selected = guess_var(vars, var_patterns$time, 1)))
+                    selected = guess_var(vars, var_patterns$time, 1))),
+      conditionalPanel(
+        "input.norm_time_set == '__token__'",
+        selectInput("norm_time_token_var", "Token ID variable:",
+                    choices = stats::setNames(vars, var_types),
+                    selected = if (!is.null(tok)) tok else vars[1]))
     )
   })
 
@@ -135,17 +184,24 @@ normalised_ui <- function(input, output, session, dataset, normalised_data) {
       })
     }
 
-    # --- optional landmark time normalisation --------------------------------
+    # --- optional time normalisation: whole token (0-1) or per landmark ------
     set <- input$norm_time_set
-    time_cols <- character(0)
+    time_cols <- character(0); time_ctx <- character(0)
     if (!is.null(set) && nzchar(set) && set != "__none__") {
       tvar <- input$norm_time_var
       if (is.null(tvar) || !nzchar(tvar)) tvar <- guess_var(names(data), var_patterns$time, 1)
-      before    <- names(data)
-      data      <- normalise_time_landmarks(data, tvar, set)
+      before <- names(data)
+      if (identical(set, "__token__")) {
+        tok <- input$norm_time_token_var
+        if (is.null(tok) || !nzchar(tok)) tok <- vis_token_col(names(data))
+        if (!is.null(tok)) { data <- normalise_time_token(data, tvar, tok); time_ctx <- tok }
+      } else {
+        data <- normalise_time_landmarks(data, tvar, set)
+        time_ctx <- paste0(set, "_i")
+      }
       time_cols <- setdiff(names(data), before)
       if (length(time_cols) > 0)
-        showNotification(sprintf("Added landmark time column(s): %s.",
+        showNotification(sprintf("Added time column(s): %s.",
                                  paste(time_cols, collapse = ", ")),
                          type = "message", duration = 5)
     }
@@ -153,11 +209,11 @@ normalised_ui <- function(input, output, session, dataset, normalised_data) {
     # Store the full dataset with normalised columns (for other tabs)
     normalised_data(data)
 
-    # Display subset: f0 columns (when produced) + any landmark time columns.
+    # Display subset: f0 columns (when produced) + any time-normalisation columns.
     norm_col <- if (input$normalisation_method == "zscore") "f0_zscore" else "f0_st"
     keep <- c(input$f0_var, input$speaker_var, input$tone_var,
               if (f0_ok) c("speaker_mean", norm_col),
-              if (length(time_cols) > 0) c(paste0(set, "_i"), time_cols))
+              if (length(time_cols) > 0) c(time_ctx, time_cols))
     keep <- unique(intersect(keep, names(data)))
     norm_display(if (length(keep) > 0) data[, keep, drop = FALSE] else data)
   })

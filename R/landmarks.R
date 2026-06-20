@@ -167,3 +167,28 @@ normalise_time_landmarks <- function(df, time, set) {
   else p
   df
 }
+
+#' Whole-token 0-1 time normalisation
+#'
+#' Rescales each token's time to the interval 0-1, treating the whole token as a
+#' single segment. No landmarks are needed, so it works for monosyllabic data,
+#' or to put many tokens on one common 0-1 axis. Adds a single column,
+#' `token_t01`.
+#'
+#' @param df Data frame with the `time` and `token` columns.
+#' @param time Name of the raw time column (seconds).
+#' @param token Name of the token-ID column (rows are grouped by it).
+#' @return `df` with `token_t01` appended. Returned unchanged when the required
+#'   columns are absent.
+#' @export
+normalise_time_token <- function(df, time, token) {
+  if (is.null(df) || !all(c(time, token) %in% names(df))) return(df)
+  tv <- suppressWarnings(as.numeric(df[[time]]))
+  tk <- as.character(df[[token]])
+  mn <- tapply(tv, tk, min, na.rm = TRUE)
+  mx <- tapply(tv, tk, max, na.rm = TRUE)
+  p  <- as.numeric((tv - mn[tk]) / (mx[tk] - mn[tk]))  # as.numeric drops tapply's dim/names
+  p[!is.finite(p)] <- NA_real_
+  df[["token_t01"]] <- pmin(pmax(p, 0), 1)
+  df
+}

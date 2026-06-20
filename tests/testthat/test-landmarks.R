@@ -82,6 +82,16 @@ test_that("normalise_time_landmarks adds within-segment and sequential time", {
   expect_equal(out$syllable_tseq, c(0.25, 0.50, 1.50))
 })
 
+test_that("normalise_time_token rescales each token's time to 0-1", {
+  df <- data.frame(
+    token = c("a", "a", "a", "b", "b"),
+    time  = c(0.0, 0.5, 1.0, 2.0, 2.4)
+  )
+  out <- normalise_time_token(df, "time", "token")
+  expect_equal(out$token_t01, c(0, 0.5, 1, 0, 1))   # per-token min->0, max->1
+  expect_identical(normalise_time_token(df, "time", "nope"), df)  # no-op, missing col
+})
+
 test_that("normalise_time_landmarks clamps to 0-1 and is a no-op when columns missing", {
   df <- data.frame(time = c(-1, 5), syllable_start = c(0, 0), syllable_end = c(1, 1))
   out <- normalise_time_landmarks(df, "time", "syllable")
