@@ -26,6 +26,8 @@ inspect_f0(
   carryover_mult = 1.5,
   level_threshold = 3.5,
   min_tokens = 5,
+  intensity = NULL,
+  intensity_drop = 15,
   time_unit = c("s", "ms")
 )
 ```
@@ -92,6 +94,20 @@ inspect_f0(
   check for a group. Default `5`. More tokens give a more reliable
   estimate of the group's spread.
 
+- intensity:
+
+  Optional column name of intensity in dB. When supplied, the
+  sample-level low-intensity check
+  ([`flag_low_intensity()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_low_intensity.md))
+  is run and its results are added (see Value). `NULL` (default) skips
+  the check.
+
+- intensity_drop:
+
+  Flag voiced samples whose intensity is more than this many dB below
+  the token's peak intensity. Default `15`. Ignored when `intensity` is
+  `NULL`.
+
 - time_unit:
 
   One of `"s"` or `"ms"`. Default `"s"`. Inspection is meant to run on
@@ -113,7 +129,13 @@ A long-format data frame containing the original `token`, `time`, `f0`,
   any sample-level jump, or an unusual overall level for its tone.
 
 - `flag_notes`: human-readable concatenation of the reasons a sample was
-  flagged (e.g. `"max too high"`, `"jump (rise)"`, `"level too high"`).
+  flagged (e.g. `"max too high"`, `"jump (rise)"`, `"level too high"`,
+  `"low intensity"`).
+
+When `intensity` is supplied, the result additionally carries the
+`intensity` column and a sample-level `flag_low_intensity` logical. The
+low-intensity flag is advisory: it appears in `flag_notes` but does not
+by itself set `flagged_token`.
 
 ## Details
 
@@ -146,8 +168,10 @@ yourself in a non-standard way.
 
 ## References
 
-Steffman, J., & Cole, J. (2022). Pitch tracking artefacts and the
-detection of voicing errors in spontaneous speech.
+Steffman, J., & Cole, J. (2022). An automated method for detecting f0
+measurement jumps based on sample-to-sample differences. *JASA Express
+Letters*, 2(11), 115201.
+[doi:10.1121/10.0015045](https://doi.org/10.1121/10.0015045)
 
 Sundberg, J. (1973). The acoustics of the singing voice. *Scientific
 American*, 229(3), 82–91.

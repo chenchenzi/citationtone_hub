@@ -15,7 +15,7 @@ is the function that backs the Inspect tab of the Shiny app."><meta property="og
 
     <a class="navbar-brand me-2" href="../index.html">shinytone</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -72,6 +72,8 @@ is the function that backs the Inspect tab of the Shiny app.</p>
 <span>  carryover_mult <span class="op">=</span> <span class="fl">1.5</span>,</span>
 <span>  level_threshold <span class="op">=</span> <span class="fl">3.5</span>,</span>
 <span>  min_tokens <span class="op">=</span> <span class="fl">5</span>,</span>
+<span>  intensity <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  intensity_drop <span class="op">=</span> <span class="fl">15</span>,</span>
 <span>  time_unit <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"s"</span>, <span class="st">"ms"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -140,6 +142,18 @@ required to run the check for a group. Default <code>5</code>. More tokens give 
 more reliable estimate of the group's spread.</p></dd>
 
 
+<dt id="arg-intensity">intensity<a class="anchor" aria-label="anchor" href="#arg-intensity"></a></dt>
+<dd><p>Optional column name of intensity in dB. When supplied,
+the sample-level low-intensity check (<code><a href="flag_low_intensity.html">flag_low_intensity()</a></code>) is run and
+its results are added (see Value). <code>NULL</code> (default) skips the check.</p></dd>
+
+
+<dt id="arg-intensity-drop">intensity_drop<a class="anchor" aria-label="anchor" href="#arg-intensity-drop"></a></dt>
+<dd><p>Flag voiced samples whose intensity is more than this
+many dB below the token's peak intensity. Default <code>15</code>. Ignored when
+<code>intensity</code> is <code>NULL</code>.</p></dd>
+
+
 <dt id="arg-time-unit">time_unit<a class="anchor" aria-label="anchor" href="#arg-time-unit"></a></dt>
 <dd><p>One of <code>"s"</code> or <code>"ms"</code>. Default <code>"s"</code>. Inspection is
 meant to run on real-time data; a normalised-time option was removed
@@ -157,8 +171,12 @@ per-token summary statistics.</p></li>
 any sample-level jump, or an unusual overall level for its tone.</p></li>
 <li><p><code>flag_notes</code>: human-readable concatenation of the reasons a sample
 was flagged (e.g. <code>"max too high"</code>, <code>"jump (rise)"</code>,
-<code>"level too high"</code>).</p></li>
-</ul></div>
+<code>"level too high"</code>, <code>"low intensity"</code>).</p></li>
+</ul><p>When <code>intensity</code> is supplied, the result additionally carries the
+<code>intensity</code> column and a sample-level <code>flag_low_intensity</code> logical. The
+low-intensity flag is advisory: it appears in <code>flag_notes</code> but does not by
+itself set <code>flagged_token</code>.</p>
+    </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
 
@@ -184,8 +202,9 @@ yourself in a non-standard way.</p>
     </div>
     <div class="section level2">
     <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a></h2>
-    <p>Steffman, J., &amp; Cole, J. (2022). Pitch tracking artefacts and the
-detection of voicing errors in spontaneous speech.</p>
+    <p>Steffman, J., &amp; Cole, J. (2022). An automated method for detecting f0
+measurement jumps based on sample-to-sample differences. <em>JASA
+Express Letters</em>, 2(11), 115201. <a href="https://doi.org/10.1121/10.0015045" class="external-link">doi:10.1121/10.0015045</a></p>
 <p>Sundberg, J. (1973). The acoustics of the singing voice.
 <em>Scientific American</em>, 229(3), 82–91.</p>
 <p>Xu, C., &amp; Zhang, C. (2024). A cross-linguistic review of citation

@@ -189,18 +189,33 @@ no upload limits, recordings stay on your machine.
 - [`run_app()`](https://chenchenzi.github.io/citationtone_hub/reference/run_app.md)
   : Launch the Shinytone app locally
 
-## f0 normalisation
+## Normalisation
 
-By-speaker semitone or z-score normalisation.
+By-speaker semitone or z-score f0 normalisation, plus landmark-based
+time normalisation for multisyllabic words.
 
 - [`normalise_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_f0.md)
   : Normalise f0 by speaker
+- [`normalise_time_landmarks()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_time_landmarks.md)
+  : Landmark-normalised time columns
+
+## TextGrid landmarks
+
+Read interval tiers from Praat TextGrids and attach per-frame segment
+labels and boundaries (e.g. syllables) to long-format f0 data.
+
+- [`tg_interval_tiers()`](https://chenchenzi.github.io/citationtone_hub/reference/tg_interval_tiers.md)
+  : Interval-tier names across a set of TextGrids
+- [`assign_tier_landmarks()`](https://chenchenzi.github.io/citationtone_hub/reference/assign_tier_landmarks.md)
+  : Assign each time to its interval in a TextGrid interval tier
+- [`attach_landmarks()`](https://chenchenzi.github.io/citationtone_hub/reference/attach_landmarks.md)
+  : Attach TextGrid landmark columns to a long-format f0 data frame
 
 ## Outlier and artefact inspection
 
 Token-level outlier detection by speaker z-score and by speaker x tone
-level, plus sample-level pitch-tracking artefacts (Sundberg 1973,
-Steffman & Cole 2022).
+level, plus sample-level pitch-tracking artefacts and a low-intensity
+check (Sundberg 1973, Steffman & Cole 2022).
 
 - [`inspect_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/inspect_f0.md)
   : Inspect f0 data for token-level outliers and sample-level jumps
@@ -209,8 +224,36 @@ Steffman & Cole 2022).
 - [`flag_level_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_level_outliers.md)
   : Flag tokens whose overall f0 level is unusual for their speaker and
   tone
+- [`flag_low_intensity()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_low_intensity.md)
+  : Flag low-intensity f0 samples within tokens
 - [`flag_pitch_jumps()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_pitch_jumps.md)
   : Flag sample-to-sample f0 jumps within tokens
+
+## Contour clustering
+
+Unsupervised grouping of tokens by f0-contour shape to discover
+candidate tone categories when the number of tones is unknown (Kaland
+2023), with feature extraction and a choice of how many groups.
+
+- [`cluster_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/cluster_f0.md)
+  : Cluster f0 contours into candidate tone categories
+- [`cluster_features()`](https://chenchenzi.github.io/citationtone_hub/reference/cluster_features.md)
+  : Build per-token feature vectors for f0-contour clustering
+- [`choose_k_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/choose_k_f0.md)
+  : Diagnostics for choosing the number of clusters (candidate tones)
+- [`cluster_mdl()`](https://chenchenzi.github.io/citationtone_hub/reference/cluster_mdl.md)
+  : Recompute MDL information cost for stored clusterings at a given
+  bending
+- [`cluster_agreement()`](https://chenchenzi.github.io/citationtone_hub/reference/cluster_agreement.md)
+  : Agreement between clusters and known tone labels
+
+## Curate tone labels
+
+Re-label tone-category variants or exclude tokens, without overwriting
+the original labels.
+
+- [`apply_relabels()`](https://chenchenzi.github.io/citationtone_hub/reference/apply_relabels.md)
+  : Apply tone re-labels and exclusions to a long-format f0 table
 
 ## Contour modelling
 

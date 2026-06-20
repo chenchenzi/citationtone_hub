@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">shinytone</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -55,9 +55,9 @@
         </dt>
         <dd>Launch the Shinytone app locally</dd>
       </dl></div><div class="section level2">
-      <h2 id="f-normalisation">f0 normalisation<a class="anchor" aria-label="anchor" href="#f-normalisation"></a></h2>
+      <h2 id="normalisation">Normalisation<a class="anchor" aria-label="anchor" href="#normalisation"></a></h2>
 
-      <div class="section-desc"><p>By-speaker semitone or z-score normalisation.</p></div>
+      <div class="section-desc"><p>By-speaker semitone or z-score f0 normalisation, plus landmark-based time normalisation for multisyllabic words.</p></div>
 
       <dl></dl></div><div class="section level2">
 
@@ -70,10 +70,47 @@
 
         </dt>
         <dd>Normalise f0 by speaker</dd>
+
+        <dt>
+
+          <code><a href="normalise_time_landmarks.html">normalise_time_landmarks()</a></code>
+
+        </dt>
+        <dd>Landmark-normalised time columns</dd>
+      </dl></div><div class="section level2">
+      <h2 id="textgrid-landmarks">TextGrid landmarks<a class="anchor" aria-label="anchor" href="#textgrid-landmarks"></a></h2>
+
+      <div class="section-desc"><p>Read interval tiers from Praat TextGrids and attach per-frame segment labels and boundaries (e.g. syllables) to long-format f0 data.</p></div>
+
+      <dl></dl></div><div class="section level2">
+
+
+
+
+      <dl><dt>
+
+          <code><a href="tg_interval_tiers.html">tg_interval_tiers()</a></code>
+
+        </dt>
+        <dd>Interval-tier names across a set of TextGrids</dd>
+
+        <dt>
+
+          <code><a href="assign_tier_landmarks.html">assign_tier_landmarks()</a></code>
+
+        </dt>
+        <dd>Assign each time to its interval in a TextGrid interval tier</dd>
+
+        <dt>
+
+          <code><a href="attach_landmarks.html">attach_landmarks()</a></code>
+
+        </dt>
+        <dd>Attach TextGrid landmark columns to a long-format f0 data frame</dd>
       </dl></div><div class="section level2">
       <h2 id="outlier-and-artefact-inspection">Outlier and artefact inspection<a class="anchor" aria-label="anchor" href="#outlier-and-artefact-inspection"></a></h2>
 
-      <div class="section-desc"><p>Token-level outlier detection by speaker z-score and by speaker x tone level, plus sample-level pitch-tracking artefacts (Sundberg 1973, Steffman &amp; Cole 2022).</p></div>
+      <div class="section-desc"><p>Token-level outlier detection by speaker z-score and by speaker x tone level, plus sample-level pitch-tracking artefacts and a low-intensity check (Sundberg 1973, Steffman &amp; Cole 2022).</p></div>
 
       <dl></dl></div><div class="section level2">
 
@@ -103,10 +140,77 @@
 
         <dt>
 
+          <code><a href="flag_low_intensity.html">flag_low_intensity()</a></code>
+
+        </dt>
+        <dd>Flag low-intensity f0 samples within tokens</dd>
+
+        <dt>
+
           <code><a href="flag_pitch_jumps.html">flag_pitch_jumps()</a></code>
 
         </dt>
         <dd>Flag sample-to-sample f0 jumps within tokens</dd>
+      </dl></div><div class="section level2">
+      <h2 id="contour-clustering">Contour clustering<a class="anchor" aria-label="anchor" href="#contour-clustering"></a></h2>
+
+      <div class="section-desc"><p>Unsupervised grouping of tokens by f0-contour shape to discover candidate tone categories when the number of tones is unknown (Kaland 2023), with feature extraction and a choice of how many groups.</p></div>
+
+      <dl></dl></div><div class="section level2">
+
+
+
+
+      <dl><dt>
+
+          <code><a href="cluster_f0.html">cluster_f0()</a></code>
+
+        </dt>
+        <dd>Cluster f0 contours into candidate tone categories</dd>
+
+        <dt>
+
+          <code><a href="cluster_features.html">cluster_features()</a></code>
+
+        </dt>
+        <dd>Build per-token feature vectors for f0-contour clustering</dd>
+
+        <dt>
+
+          <code><a href="choose_k_f0.html">choose_k_f0()</a></code>
+
+        </dt>
+        <dd>Diagnostics for choosing the number of clusters (candidate tones)</dd>
+
+        <dt>
+
+          <code><a href="cluster_mdl.html">cluster_mdl()</a></code>
+
+        </dt>
+        <dd>Recompute MDL information cost for stored clusterings at a given bending</dd>
+
+        <dt>
+
+          <code><a href="cluster_agreement.html">cluster_agreement()</a></code>
+
+        </dt>
+        <dd>Agreement between clusters and known tone labels</dd>
+      </dl></div><div class="section level2">
+      <h2 id="curate-tone-labels">Curate tone labels<a class="anchor" aria-label="anchor" href="#curate-tone-labels"></a></h2>
+
+      <div class="section-desc"><p>Re-label tone-category variants or exclude tokens, without overwriting the original labels.</p></div>
+
+      <dl></dl></div><div class="section level2">
+
+
+
+
+      <dl><dt>
+
+          <code><a href="apply_relabels.html">apply_relabels()</a></code>
+
+        </dt>
+        <dd>Apply tone re-labels and exclusions to a long-format f0 table</dd>
       </dl></div><div class="section level2">
       <h2 id="contour-modelling">Contour modelling<a class="anchor" aria-label="anchor" href="#contour-modelling"></a></h2>
 

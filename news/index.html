@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">shinytone</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -42,20 +42,33 @@
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="development version" id="shinytone-development-version">shinytone (development version)<a class="anchor" aria-label="anchor" href="#shinytone-development-version"></a></h2>
 <div class="section level3">
-<h3 id="shinytone-development-version-1">shinytone 0.1.2<a class="anchor" aria-label="anchor" href="#shinytone-development-version-1"></a></h3>
+<h3 id="shinytone-development-version-1">shinytone 0.1.3<a class="anchor" aria-label="anchor" href="#shinytone-development-version-1"></a></h3>
+<ul><li>
+<strong>Contour clustering</strong> (new). An unsupervised “tone discovery” workflow that groups tokens by f0-contour shape when the number of tone categories is unknown (Kaland 2023). New functions: <code><a href="../reference/cluster_f0.html">cluster_f0()</a></code> (k-means, hierarchical Ward, or Gaussian-mixture clustering), <code><a href="../reference/cluster_features.html">cluster_features()</a></code> (represent each contour as resampled points, Legendre / DCT coefficients, or its derivative), <code><a href="../reference/choose_k_f0.html">choose_k_f0()</a></code> (suggest the number of groups via silhouette, gap statistic, and a minimum-description-length cost), <code><a href="../reference/cluster_mdl.html">cluster_mdl()</a></code>, and <code><a href="../reference/cluster_agreement.html">cluster_agreement()</a></code> (adjusted Rand index against provisional labels). Surfaced through the new <strong>Cluster</strong> tab.</li>
+<li>
+<strong>Curate</strong> (new). <code><a href="../reference/apply_relabels.html">apply_relabels()</a></code> re-labels tone-category variants (splits or mergers, colloquial vs. literary readings, sandhi) or excludes mis-elicited tokens without overwriting the original labels, surfaced through the new <strong>Curate</strong> tab.</li>
+<li>
+<strong>TextGrid landmarks</strong> (new). When Praat <code>.TextGrid</code> files are supplied, the F0 Extraction step can attach per-frame landmark columns from a chosen interval tier: <code>&lt;tier&gt;</code>, <code>&lt;tier&gt;_start</code>, <code>&lt;tier&gt;_end</code>, and <code>&lt;tier&gt;_i</code> (segment index). New functions: <code><a href="../reference/tg_interval_tiers.html">tg_interval_tiers()</a></code>, <code><a href="../reference/assign_tier_landmarks.html">assign_tier_landmarks()</a></code>, and <code><a href="../reference/attach_landmarks.html">attach_landmarks()</a></code>. The Visualise tab can then align contours by these landmarks, including syllable by syllable for multisyllabic words.</li>
+<li>
+<strong>Landmark time normalisation</strong> (new). <code><a href="../reference/normalise_time_landmarks.html">normalise_time_landmarks()</a></code> rescales time within each segment, adding a within-segment 0–1 axis (<code>&lt;tier&gt;_t01</code>) and a sequential, word-level axis (<code>&lt;tier&gt;_tseq</code>). Surfaced through a new “Time Normalisation” section on the Normalise tab. The model tabs default the Time variable to <code>&lt;tier&gt;_tseq</code> when present and steer multisyllabic analyses toward GAMM.</li>
+<li>
+<strong>F0 Processing.</strong> The Start preview now flags audio files too short to yield an f0 frame and skips them during extraction. <code><a href="../reference/flag_low_intensity.html">flag_low_intensity()</a></code> (the intensity-based inspection check) is now exported and documented.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="shinytone-development-version-2">shinytone 0.1.2<a class="anchor" aria-label="anchor" href="#shinytone-development-version-2"></a></h3>
 <ul><li>New <code><a href="../reference/flag_level_outliers.html">flag_level_outliers()</a></code>: a third inspection layer that compares each token’s overall level (its median f0, in semitones) against other tokens of the <em>same speaker and same tone</em> using a robust modified z-score (median/MAD; Iglewicz &amp; Hoaglin 1993, cutoff 3.5). It flags smoothly shifted contours — e.g. a low-tone token mis-tracked up into the mid-tone band — that the pooled max/min check and the sample-level jump check both miss. Surfaced through <code><a href="../reference/inspect_f0.html">inspect_f0()</a></code> (new <code>level_threshold</code> and <code>min_tokens</code> arguments, <code>level too high</code> / <code>level too low</code> notes) and the Inspect tab.</li>
 <li>The <code>"norm"</code> (normalised-time) option was removed from <code>time_unit</code> in <code><a href="../reference/flag_pitch_jumps.html">flag_pitch_jumps()</a></code>, <code><a href="../reference/inspect_f0.html">inspect_f0()</a></code>, and the Inspect tab: the rate-of- change thresholds are physiological (ST per 10 ms) and have no meaning once real time is discarded. Inspection runs on real-time data (s / ms).</li>
 <li>Inspect-tab guide rewritten around three complementary layers, and the “Pitch-tracking quality check” workflow now marks Normalise as optional (inspection runs on raw f0).</li>
 </ul></div>
 <div class="section level3">
-<h3 id="shinytone-development-version-2">shinytone 0.1.1<a class="anchor" aria-label="anchor" href="#shinytone-development-version-2"></a></h3>
+<h3 id="shinytone-development-version-3">shinytone 0.1.1<a class="anchor" aria-label="anchor" href="#shinytone-development-version-3"></a></h3>
 <ul><li>
 <code><a href="../reference/flag_pitch_jumps.html">flag_pitch_jumps()</a></code> (and therefore <code><a href="../reference/inspect_f0.html">inspect_f0()</a></code> and the Inspect tab): when a sample-to-sample jump is detected, the flag is now placed on whichever side of the jump is <em>farther from the token’s median f0</em>, rather than always on the landing sample. This correctly identifies the artefact whether it sits at the start or the end of a sequence (e.g. an octave doubling on the first frame of a token, which the previous landing-only logic mis-flagged).</li>
 <li>Carryover now walks both forward AND backward from each flagged sample, so artefact runs that begin or end the token are extended in both directions.</li>
 <li>Inspect-tab guide text and <code><a href="../reference/flag_pitch_jumps.html">flag_pitch_jumps()</a></code>’s function docs describe the new median-aware logic as an adaptation of the rate-of-change + carryover approach in Steffman &amp; Cole (2022).</li>
 </ul></div>
 <div class="section level3">
-<h3 id="shinytone-development-version-3">shinytone 0.1.0<a class="anchor" aria-label="anchor" href="#shinytone-development-version-3"></a></h3>
+<h3 id="shinytone-development-version-4">shinytone 0.1.0<a class="anchor" aria-label="anchor" href="#shinytone-development-version-4"></a></h3>
 <ul><li>First public release as an R package, alongside the existing online Shiny app at <a href="https://chenzixu.shinyapps.io/shinytone/" class="external-link uri">https://chenzixu.shinyapps.io/shinytone/</a>.</li>
 <li>Package skin only at this stage: the Shiny app continues to run unchanged. Standalone analytical functions (<code><a href="../reference/normalise_f0.html">normalise_f0()</a></code>, <code><a href="../reference/fit_gca.html">fit_gca()</a></code>, <code><a href="../reference/fit_gamm.html">fit_gamm()</a></code>, <code><a href="../reference/contour_to_chao.html">contour_to_chao()</a></code>, …) will be extracted in subsequent releases.</li>
 </ul></div>
