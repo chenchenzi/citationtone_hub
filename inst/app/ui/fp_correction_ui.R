@@ -1695,86 +1695,6 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           .resume-arrow .resume-arrow-svg { transform: rotate(90deg); margin: 0; animation: none; }
         }
       ")),
-      tags$details(class = "resume-wrap",
-        tags$summary(icon("rotate"),
-                     " Continue later? Resume work across sessions ",
-                     tags$span(style = "color: #b08a35; font-weight: 400; font-size: 0.82rem;",
-                               "(click to expand)")),
-        tags$p(style = "margin: 10px 0 0 0; color: #5a4d2c; font-size: 0.88rem;",
-          tags$strong("Before you close the app or leave it idle"),
-          ", click ",
-          tags$span(class = "btn-chip", icon("download"), " Download all tokens"),
-          " from the sidebar. The downloaded CSV is your save file. ",
-          "Re-upload it in ",
-          tags$span(class = "tab-chip", "F0 Extraction"),
-          " next time, and the ",
-          tags$span(class = "tab-chip", "F0 Correction"),
-          " tab will restore your progress automatically:"),
-        tags$div(class = "resume-flow",
-
-          # ----- Session 1 -----
-          tags$div(class = "resume-card",
-            tags$div(class = "resume-card-title",
-              icon("pen-to-square"), " Session 1: edit + download"),
-            tags$ol(class = "resume-steps",
-              tags$li("Make your edits in ",
-                      tags$span(class = "tab-chip", "F0 Correction"), "."),
-              tags$li("Click ",
-                      tags$span(class = "btn-chip", icon("download"), " Download all tokens"),
-                      " and save ", tags$code("all_correctedf0.csv"),
-                      " somewhere safe."),
-              tags$li("(Recommended) Click ",
-                      tags$span(class = "btn-chip", icon("download"), " Download edit log (CSV)"),
-                      " to keep an action-by-action history of what you ",
-                      "changed."),
-              tags$li("Close the app whenever.")
-            )
-          ),
-
-          # ----- Arrow + file -----
-          tags$div(class = "resume-arrow",
-            tags$div(class = "resume-arrow-svg", HTML("&#10142;")),
-            tags$div(class = "resume-file",
-                     icon("file-csv"), " all_correctedf0.csv"),
-            tags$div(class = "resume-file-note",
-              "carries ", tags$code("f0_corrected"), " + ", tags$code("edited"))
-          ),
-
-          # ----- Session 2 -----
-          tags$div(class = "resume-card",
-            tags$div(class = "resume-card-title",
-              icon("play"), " Session 2: upload + continue"),
-            tags$ol(class = "resume-steps",
-              tags$li("Open the app. In ",
-                      tags$span(class = "tab-chip", "Start"),
-                      ", re-upload your ", tags$code(".wav"), " files."),
-              tags$li("Go to ",
-                      tags$span(class = "tab-chip", "F0 Extraction"),
-                      ", choose ",
-                      tags$span(class = "btn-chip", "Upload existing f0 CSV"),
-                      ", and pick the ", tags$code("all_correctedf0.csv"),
-                      " you saved at the end of session 1."),
-              tags$li("A notification confirms: ",
-                      tags$em("\"Restored previous corrections...\""), "."),
-              tags$li("Open ",
-                      tags$span(class = "tab-chip", "F0 Correction"),
-                      ": ✎ marks, edited dots, and the edit-status banner ",
-                      "recover automatically."),
-              tags$li("(Optional) Still in ",
-                      tags$span(class = "tab-chip", "F0 Correction"),
-                      ", click ",
-                      tags$span(class = "btn-chip", icon("upload"), " Upload edit log"),
-                      " and pick the ", tags$code("edit_log_....csv"),
-                      " you saved to bring the action-by-action history back into the Edit log table."),
-              tags$li("Open the ",
-                      tags$strong("Filter by edit status"),
-                      " drawer and pick ",
-                      tags$span(class = "btn-chip", "Only unedited"),
-                      " to pick up exactly where you left off.")
-            )
-          )
-        )
-      ),
 
       # ---- Speaker / tone / flagged filter workflow (collapsible) ----
       # Reuses the same .resume-* CSS classes from the resume illustration
@@ -1890,6 +1810,90 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           onclick = "Shiny.setInputValue('about_nav_target', 'Data Collection|Reading waveform', {priority:'event'}); return false;",
           icon("arrow-right"),
           " Open the guide")
+      ),
+
+      # ---- Resume across sessions (placed below the other guides) ----
+      tags$details(class = "resume-wrap",
+        tags$summary(icon("rotate"),
+                     " Continue later? Resume work across sessions ",
+                     tags$span(style = "color: #b08a35; font-weight: 400; font-size: 0.82rem;",
+                               "(click to expand)")),
+        tags$p(style = "margin: 10px 0 0 0; color: #5a4d2c; font-size: 0.88rem;",
+          tags$strong("Before you close the app or leave it idle"),
+          ", click ",
+          tags$span(class = "btn-chip", icon("download"), " Download all tokens"),
+          " from the sidebar. The downloaded CSV is your save file. ",
+          "Re-upload it in ",
+          tags$span(class = "tab-chip", "F0 Extraction"),
+          " next time, and the ",
+          tags$span(class = "tab-chip", "F0 Correction"),
+          " tab will restore your progress automatically:"),
+        tags$div(class = "resume-flow",
+
+          # ----- Session 1 -----
+          tags$div(class = "resume-card",
+            tags$div(class = "resume-card-title",
+              icon("pen-to-square"), " Session 1: edit + download"),
+            tags$ol(class = "resume-steps",
+              tags$li("Make your edits in ",
+                      tags$span(class = "tab-chip", "F0 Correction"), "."),
+              tags$li("Click ",
+                      tags$span(class = "btn-chip", icon("download"), " Download all tokens"),
+                      " and save ", tags$code("all_correctedf0.csv"),
+                      " somewhere safe."),
+              tags$li("(Recommended) Click ",
+                      tags$span(class = "btn-chip", icon("download"), " Download edit log (CSV)"),
+                      " to keep an action-by-action history of what you ",
+                      "changed."),
+              tags$li("Close the app whenever.")
+            )
+          ),
+
+          # ----- Arrow + file -----
+          tags$div(class = "resume-arrow",
+            tags$div(class = "resume-arrow-svg", HTML("&#10142;")),
+            tags$div(class = "resume-file",
+                     icon("file-csv"), " all_correctedf0.csv"),
+            tags$div(class = "resume-file-note",
+              "carries ", tags$code("f0_corrected"), " + ", tags$code("edited")),
+            tags$div(class = "resume-file", style = "margin-top: 12px;",
+                     icon("file-csv"), " edit_log_....csv"),
+            tags$div(class = "resume-file-note",
+              tags$em("(optional)"), " action-by-action history")
+          ),
+
+          # ----- Session 2 -----
+          tags$div(class = "resume-card",
+            tags$div(class = "resume-card-title",
+              icon("play"), " Session 2: upload + continue"),
+            tags$ol(class = "resume-steps",
+              tags$li("Open the app. In ",
+                      tags$span(class = "tab-chip", "Start"),
+                      ", re-upload your ", tags$code(".wav"), " files."),
+              tags$li("Go to ",
+                      tags$span(class = "tab-chip", "F0 Extraction"),
+                      ", choose ",
+                      tags$span(class = "btn-chip", "Upload existing f0 CSV"),
+                      ", and pick the ", tags$code("all_correctedf0.csv"),
+                      " you saved at the end of session 1."),
+              tags$li("Open ",
+                      tags$span(class = "tab-chip", "F0 Correction"),
+                      ": a notification confirms the restore, and ✎ marks, edited ",
+                      "dots, and the edit-status banner recover automatically."),
+              tags$li("(Optional) Still in ",
+                      tags$span(class = "tab-chip", "F0 Correction"),
+                      ", click ",
+                      tags$span(class = "btn-chip", icon("upload"), " Upload edit log"),
+                      " and pick the ", tags$code("edit_log_....csv"),
+                      " you saved to bring the action-by-action history back into the Edit log table."),
+              tags$li("Open the ",
+                      tags$strong("Filter by edit status"),
+                      " drawer and pick ",
+                      tags$span(class = "btn-chip", "Only unedited"),
+                      " to pick up exactly where you left off.")
+            )
+          )
+        )
       ),
 
       # Idle-timeout reminder: arm a client-side timer that nudges the user to
