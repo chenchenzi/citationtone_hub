@@ -375,7 +375,9 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   #                NULL for .PitchTier (which is a sparse curve).
   extract_praat_one <- function(pitch_path, pitchtier_path, basename) {
     if (!is.na(pitch_path)) {
-      parsed <- tryCatch(rPraat::pitch.read(pitch_path), error = function(e) NULL)
+      # suppressWarnings: a binary / non-UTF-8 file makes rPraat spew dozens of
+      # vroom + "unable to translate to a wide string" warnings before erroring.
+      parsed <- suppressWarnings(tryCatch(rPraat::pitch.read(pitch_path), error = function(e) NULL))
       if (!is.null(parsed)) {
         n <- parsed$nx
         if (is.null(n) || n == 0) return(NULL)
@@ -400,7 +402,7 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       }
     }
     if (!is.na(pitchtier_path)) {
-      parsed <- tryCatch(rPraat::pt.read(pitchtier_path), error = function(e) NULL)
+      parsed <- suppressWarnings(tryCatch(rPraat::pt.read(pitchtier_path), error = function(e) NULL))
       if (!is.null(parsed)) {
         return(list(
           df = data.frame(token = basename, time = parsed$t, f0 = parsed$f,
@@ -701,8 +703,29 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           if (!is.null(one)) results[[b]] <- one
         }
         if (length(results) == 0) {
-          showNotification("Parsing failed for all files.",
-                           type = "error", duration = 6)
+          # Re-read the first file outside the silent tryCatch so we can show the
+          # actual reason (binary-format Praat files are the usual culprit; rPraat
+          # only reads text / short-text files).
+          first  <- has_praat[1, , drop = FALSE]
+          reason <- suppressWarnings(tryCatch({
+            if (!is.na(first$pitch_path))          rPraat::pitch.read(first$pitch_path)
+            else if (!is.na(first$pitchtier_path)) rPraat::pt.read(first$pitchtier_path)
+            "the file parsed but held no usable f0 frames"
+          }, error = function(e) conditionMessage(e)))
+          wav_present <- any(!is.na(audio$wav_path))
+          showNotification(
+            tags$div(
+              tags$strong("Could not parse any .Pitch / .PitchTier file."),
+              tags$div(style = "color:#666; font-size:0.82rem; margin:4px 0;",
+                       "Reason: ", tags$code(substr(reason, 1, 150))),
+              "Praat pitch files must be saved as ", tags$strong("text"),
+              " (in Praat: ", tags$em("Save as text file…"),
+              "); binary files cannot be read.",
+              if (wav_present) tags$div(style = "margin-top:4px;",
+                "Your upload includes .wav files, so you can instead choose ",
+                tags$strong("Extract from .wav (wrassp)"), " above.")
+            ),
+            type = "error", duration = 14)
           return()
         }
         fp_f0_data(attach_landmarks_if_any(do.call(rbind, lapply(results, `[[`, "df"))))

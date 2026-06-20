@@ -89,7 +89,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     if (is.null(tok) || is.null(audio)) return(NULL)
     row <- audio[audio$basename == tok, , drop = FALSE]
     if (nrow(row) == 0 || is.na(row$tg_path[1])) return(NULL)
-    tryCatch(rPraat::tg.read(row$tg_path[1]), error = function(e) NULL)
+    suppressWarnings(tryCatch(rPraat::tg.read(row$tg_path[1]), error = function(e) NULL))
   })
 
   # Current token's contour (corrected if edited, else original)

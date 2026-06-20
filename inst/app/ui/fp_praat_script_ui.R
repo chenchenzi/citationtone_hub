@@ -17,7 +17,7 @@ fp_praat_script_ui <- function(input, output, session) {
 # Shinytone | F0 extraction with Praat
 #
 # Reads every .wav file in the chosen input folder, extracts pitch with
-# the chosen algorithm, saves a binary `.Pitch` file per recording (which
+# the chosen algorithm, saves a text `.Pitch` file per recording (which
 # preserves all pitch candidates so Shinytone\'s F0 Correction tab can
 # show the top-3 candidate markers on the plot), and writes a combined
 # long-format CSV (one row per frame per token; columns: token, time,
@@ -187,9 +187,10 @@ for i to n_files
       exitScript: "Unknown method: \'", method$, "\'. See the script header for valid values."
     endif
 
-    # Save the binary .Pitch (preserves all candidates).
+    # Save the .Pitch as a text file. Text preserves all candidates too, and
+    # (unlike binary) it is the format rPraat / Shinytone can read back.
     selectObject: pitch
-    Save as binary file: output_folder$ + "/" + basename$ + ".Pitch"
+    Save as text file: output_folder$ + "/" + basename$ + ".Pitch"
 
     # Intensity (dB) over the same recording. Shinytone\'s Inspect tab uses
     # this to flag low-energy frames, where f0 estimates are unreliable
@@ -319,7 +320,7 @@ appendInfoLine: "  Combined CSV: ", csv_path$
         tags$li(tags$strong("Familiar workflow."),
                 " Most phoneticians already run Praat scripts; the output formats are well documented."),
         tags$li(tags$strong("All candidates preserved."),
-                " The binary ", tags$code(".Pitch"), " files contain every candidate frequency and ",
+                " The ", tags$code(".Pitch"), " files contain every candidate frequency and ",
                 "strength per frame, which Shinytone's F0 Correction tab uses to draw the top-3 ",
                 "candidate markers on the plot.")
       ),
@@ -329,7 +330,7 @@ appendInfoLine: "  Combined CSV: ", csv_path$
         tags$li("Reads every ", tags$code(".wav"), " file in the input folder."),
         tags$li("Runs the chosen pitch-extraction method (default: ",
                 tags$code("filtered ac"), ", Praat 6.4+)."),
-        tags$li("Saves a binary ", tags$code("<basename>.Pitch"),
+        tags$li("Saves a text ", tags$code("<basename>.Pitch"),
                 " file per recording into the output folder."),
         tags$li("Writes a single ", tags$code("f0_long.csv"),
                 " with columns ", tags$code("token, time, f0, intensity"),

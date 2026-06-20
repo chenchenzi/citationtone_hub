@@ -20,7 +20,7 @@ tg_interval_tiers <- function(tg_paths, max_read = 12) {
   tg_paths <- utils::head(unique(tg_paths), max_read)
   nms <- character(0)
   for (p in tg_paths) {
-    tg <- tryCatch(rPraat::tg.read(p), error = function(e) NULL)
+    tg <- suppressWarnings(tryCatch(rPraat::tg.read(p), error = function(e) NULL))
     if (is.null(tg)) next
     for (ti in tg) {
       if (!is.null(ti$type) && ti$type == "interval" && !is.null(ti$name))
@@ -113,7 +113,7 @@ attach_landmarks <- function(df, audio, tier_names, strip_ext = TRUE) {
     rows <- which(out$token == tok)
     ai <- match(norm(tok), audio_key)
     if (is.na(ai) || is.na(audio$tg_path[ai])) next
-    tg <- tryCatch(rPraat::tg.read(audio$tg_path[ai]), error = function(e) NULL)
+    tg <- suppressWarnings(tryCatch(rPraat::tg.read(audio$tg_path[ai]), error = function(e) NULL))
     if (is.null(tg)) next
     for (j in seq_along(tier_names)) {
       tn <- tier_names[j]; p <- prefixes[j]
