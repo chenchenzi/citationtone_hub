@@ -104,6 +104,73 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
         tags$li(HTML("<strong>Number of groups.</strong> The silhouette (Rousseeuw, 1987), gap statistic (Tibshirani et al., 2001) and a minimum-description-length information cost (Kaland &amp; Ellison, 2023) each suggest a value of k.")),
         tags$li(HTML("<strong>Token map.</strong> Tokens are projected to two dimensions with PCA (Jolliffe, 2002) or UMAP (McInnes et al., 2018)."))
       ),
+      # --- Collapsible illustrated guide: clustering by landmark unit ---
+      tags$details(class = "msg-route",
+        tags$style(HTML("
+          details.msg-route{background:#f3f8fc;border:1px solid #cfe2f1;border-radius:8px;padding:7px 14px 11px;margin:12px 0 4px;}
+          .msg-route>summary{cursor:pointer;font-weight:700;color:#2c5d80;font-size:0.92rem;list-style:none;padding:1px 0;}
+          .msg-route>summary::-webkit-details-marker{display:none;}
+          .msg-route>summary::before{content:'\\25B8';color:#5b9bd5;display:inline-block;margin-right:8px;transition:transform .15s ease;}
+          .msg-route[open]>summary::before{transform:rotate(90deg);}
+          .msg-hint{color:#7aa6cc;font-weight:400;font-size:0.78rem;margin-left:6px;}
+          .msg-route[open] .msg-hint{display:none;}
+          .msg-intro{color:#3f5a72;font-size:0.83rem;line-height:1.5;margin:9px 0 0;}
+          .cl-illus{margin:11px 0 3px;}
+          .cl-illus svg{width:100%;height:auto;display:block;}
+          .msg-flow{display:flex;align-items:stretch;gap:9px;margin-top:11px;flex-wrap:wrap;}
+          .msg-step{flex:1 1 165px;background:#fff;border:1px solid #e1e9f2;border-radius:7px;padding:8px 12px;}
+          .msg-step-here{border-color:#78c2ad;box-shadow:0 0 0 2px rgba(120,194,173,0.18);}
+          .msg-shead{display:flex;align-items:center;gap:7px;margin-bottom:3px;flex-wrap:wrap;}
+          .msg-badge{width:20px;height:20px;border-radius:50%;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;font-size:0.72rem;font-weight:700;color:#fff;}
+          .msg-num{background:#aab9c6;}
+          .msg-here{background:#d9534f;font-size:0.5rem;}
+          .msg-stitle{font-weight:700;color:#2c5f4f;font-size:0.86rem;}
+          .msg-tab{display:inline-block;background:#e8f5f0;color:#2c5f4f;padding:1px 7px;border-radius:10px;font-size:0.66rem;font-weight:600;font-family:'SFMono-Regular',Menlo,Consolas,monospace;white-space:nowrap;}
+          .msg-swhy{font-size:0.76rem;color:#5f6b66;line-height:1.4;margin-top:2px;}
+          .msg-arrow{display:flex;align-items:center;color:#9fbbd6;font-size:1.3rem;}
+          @media (max-width:760px){.msg-arrow{display:none;}}
+          .msg-tip{font-size:0.78rem;color:#33536f;background:#eaf3fb;border:1px solid #d3e6f5;border-radius:6px;padding:6px 11px;margin-top:11px;line-height:1.5;}
+          .msg-tip .fa,.msg-tip svg{color:#5b9bd5;margin-right:4px;}
+        ")),
+        tags$summary(icon("layer-group"), " Clustering multisyllabic words, or just the vowel or rhyme?",
+                     tags$span(class = "msg-hint", "(click to expand)")),
+        tags$p(class = "msg-intro",
+          "Cluster whatever unit you mark in a TextGrid. Prepare it once, then the time column you pick here decides what gets clustered and how it lines up."),
+        tags$div(class = "cl-illus", HTML('<svg width="100%" viewBox="0 0 680 172" role="img" xmlns="http://www.w3.org/2000/svg"><title>Raw time, landmark _tseq, and landmark _t01 for clustering</title><desc>Raw time leaves boundaries misaligned; _tseq lays a whole word out in sequence; _t01 puts each part in its own 0 to 1 box.</desc><line x1="235" y1="12" x2="259" y2="12" stroke="#3a7ca5" stroke-width="2.5"/><text x="263" y="16" font-size="12" fill="#1f4e6b">token A</text><line x1="335" y1="12" x2="359" y2="12" stroke="#2f9e79" stroke-width="2.5"/><text x="363" y="16" font-size="12" fill="#1c5d47">token B</text><text x="120" y="36" font-size="13" font-weight="600" fill="#2c5d80" text-anchor="middle">Raw time</text><text x="315" y="36" font-size="13" font-weight="600" fill="#2c5d80" text-anchor="middle">&lt;tier&gt;_tseq</text><text x="530" y="36" font-size="13" font-weight="600" fill="#2c5d80" text-anchor="middle">&lt;tier&gt;_t01</text><rect x="40" y="46" width="160" height="82" fill="none" stroke="#b8d2e8" stroke-width="1"/><polyline points="40,104 80,72 120,62 160,98 200,116" fill="none" stroke="#3a7ca5" stroke-width="2.5"/><polyline points="40,108 96,74 152,64 176,100 200,114" fill="none" stroke="#2f9e79" stroke-width="2.5"/><line x1="120" y1="46" x2="120" y2="128" stroke="#3a7ca5" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.7"/><line x1="152" y1="46" x2="152" y2="128" stroke="#2f9e79" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.7"/><text x="120" y="148" font-size="12" fill="#5f6b66" text-anchor="middle">boundaries wander</text><rect x="235" y="46" width="160" height="82" fill="none" stroke="#b8d2e8" stroke-width="1"/><polyline points="235,104 275,72 315,62 355,98 395,116" fill="none" stroke="#3a7ca5" stroke-width="2.5"/><polyline points="235,108 275,75 315,65 355,101 395,114" fill="none" stroke="#2f9e79" stroke-width="2.5"/><line x1="315" y1="46" x2="315" y2="128" stroke="#9fbbd6" stroke-width="1.5" stroke-dasharray="4,3"/><text x="275" y="123" font-size="11" fill="#5f6b66" text-anchor="middle">&#963;1</text><text x="355" y="123" font-size="11" fill="#5f6b66" text-anchor="middle">&#963;2</text><text x="315" y="148" font-size="12" fill="#5f6b66" text-anchor="middle">whole word, in sequence</text><rect x="430" y="46" width="95" height="82" fill="none" stroke="#b8d2e8" stroke-width="1"/><rect x="535" y="46" width="95" height="82" fill="none" stroke="#b8d2e8" stroke-width="1"/><polyline points="430,102 454,84 478,72 502,64 525,60" fill="none" stroke="#3a7ca5" stroke-width="2.5"/><polyline points="430,106 454,88 478,76 502,68 525,64" fill="none" stroke="#2f9e79" stroke-width="2.5"/><polyline points="535,62 559,82 583,98 607,110 630,116" fill="none" stroke="#3a7ca5" stroke-width="2.5"/><polyline points="535,66 559,86 583,101 607,112 630,118" fill="none" stroke="#2f9e79" stroke-width="2.5"/><text x="477" y="123" font-size="11" fill="#5f6b66" text-anchor="middle">&#963;1</text><text x="582" y="123" font-size="11" fill="#5f6b66" text-anchor="middle">&#963;2</text><text x="530" y="148" font-size="12" fill="#5f6b66" text-anchor="middle">each part, own 0&#8211;1</text></svg>')),
+        tags$div(class = "msg-flow",
+          tags$div(class = "msg-step",
+            tags$div(class = "msg-shead",
+              tags$span(class = "msg-badge msg-num", "1"),
+              tags$span(class = "msg-stitle", "Prepare TextGrid")),
+            tags$div(class = "msg-swhy",
+              "Before the app, mark your unit (a word, syllable, vowel, or rhyme) as an interval tier.")),
+          tags$div(class = "msg-arrow", HTML("&#10132;")),
+          tags$div(class = "msg-step",
+            tags$div(class = "msg-shead",
+              tags$span(class = "msg-badge msg-num", "2"),
+              tags$span(class = "msg-stitle", "Extract"),
+              tags$span(class = "msg-tab", "F0 Extraction")),
+            tags$div(class = "msg-swhy",
+              "Pick that tier to attach per-part timestamps to every f0 frame.")),
+          tags$div(class = "msg-arrow", HTML("&#10132;")),
+          tags$div(class = "msg-step",
+            tags$div(class = "msg-shead",
+              tags$span(class = "msg-badge msg-num", "3"),
+              tags$span(class = "msg-stitle", "Normalise time"),
+              tags$span(class = "msg-tab", "Normalise")),
+            tags$div(class = "msg-swhy",
+              HTML("Normalise by the tier: adds <code>&lt;tier&gt;_t01</code> (each part 0&ndash;1) and <code>&lt;tier&gt;_tseq</code> (whole word)."))),
+          tags$div(class = "msg-arrow", HTML("&#10132;")),
+          tags$div(class = "msg-step msg-step-here",
+            tags$div(class = "msg-shead",
+              tags$span(class = "msg-badge msg-here", HTML("&#9679;")),
+              tags$span(class = "msg-stitle", "Cluster")),
+            tags$div(class = "msg-swhy",
+              HTML("You are here. Set the <strong>Time variable</strong> to <code>&lt;tier&gt;_tseq</code> for the whole word, or <code>&lt;tier&gt;_t01</code> for a single unit.")))
+        ),
+        tags$div(class = "msg-tip",
+          icon("lightbulb"), HTML(" Cluster words with the same number of syllables together (disyllabic apart from trisyllabic), so the boundary lands in the same place."))
+      ),
       tags$details(style = "margin-top: 6px;",
         tags$summary(style = "cursor:pointer; font-size:0.82rem; color:#4a7868; font-weight:600;",
                      "References"),
@@ -162,6 +229,10 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
                         choices = setNames(vars, var_types), selected = guess_var(vars, var_patterns$f0, 2)),
             selectInput("cluster_time_var", "Time variable:",
                         choices = setNames(vars, var_types), selected = guess_var(vars, var_patterns$time, 3)),
+            tags$div(style = "color:#888; font-size:0.72rem; margin-top:-6px;",
+                     "Normalised time by a tier? Pick that column here (e.g. ",
+                     tags$code("<tier>_tseq"),
+                     "). See the multisyllabic guide for the full workflow."),
             selectInput("cluster_speaker_var", "Speaker variable (optional):",
                         choices = setNames(vars, var_types), selected = guess_var(vars, var_patterns$speaker, 4)),
             selectInput("cluster_tone_var", "Reference tone labels (optional, for validation):",
