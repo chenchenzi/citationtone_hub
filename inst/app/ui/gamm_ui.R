@@ -4,6 +4,21 @@
 
 gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_data = NULL, curated_data = NULL, cluster_data = NULL) {
 
+  # GAMM is the right tab for multisyllabic words, so the only thing to catch
+  # here is picking the wrong landmark column: the within-segment 0-1 axis
+  # (_t01) resets each segment and is not a valid model time axis. The
+  # sequential _tseq column is the one to use.
+  output$gamm_multisyl_note <- renderUI({
+    tv <- input$gamm_time_var
+    if (is.null(tv) || !grepl("_t01$", tv)) return(NULL)
+    tags$div(
+      style = paste("background-color:#fff8e1; border-left:4px solid #e0a800;",
+                    "padding:10px 14px; margin:8px 0; border-radius:4px;",
+                    "color:#7a5d00; font-size:0.9rem;"),
+      tags$span(style = "color:#c0392b;", icon("triangle-exclamation")),
+      HTML(sprintf(" <code>%s</code> rescales time to 0&ndash;1 <em>within</em> each segment, so it resets at every boundary and is <strong>not a valid model time axis</strong>. Use the sequential <code>&hellip;_tseq</code> column instead.", tv)))
+  })
+
   # --- Guide text ---
   output$gamm_guide <- renderUI({
     code_style <- "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;"
@@ -55,6 +70,67 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
           tags$li(tags$strong("Basis type:"), " tp (thin plate regression spline, general-purpose default), cr (cubic regression spline, faster for large data), cc (cyclic cubic spline, for periodic contours)."),
           tags$li(tags$strong("AR1:"), " Corrects for temporal autocorrelation in the residuals. Fits an initial model, estimates the autocorrelation parameter rho, then refits with the correction.")
         )
+      ),
+      # --- Collapsible illustrated guide for multisyllabic words ---
+      tags$details(class = "msg-route",
+        tags$style(HTML("
+          details.msg-route{background:#f3f8fc;border:1px solid #cfe2f1;border-radius:8px;padding:7px 14px 11px;margin:12px 0 0;}
+          .msg-route>summary{cursor:pointer;font-weight:700;color:#2c5d80;font-size:0.92rem;list-style:none;padding:1px 0;}
+          .msg-route>summary::-webkit-details-marker{display:none;}
+          .msg-route>summary::before{content:'\\25B8';color:#5b9bd5;display:inline-block;margin-right:8px;transition:transform .15s ease;}
+          .msg-route[open]>summary::before{transform:rotate(90deg);}
+          .msg-hint{color:#7aa6cc;font-weight:400;font-size:0.78rem;margin-left:6px;}
+          .msg-route[open] .msg-hint{display:none;}
+          .msg-intro{color:#3f5a72;font-size:0.83rem;line-height:1.5;margin:9px 0 0;}
+          .msg-flow{display:flex;align-items:stretch;gap:9px;margin-top:11px;flex-wrap:wrap;}
+          .msg-step{flex:1 1 185px;background:#fff;border:1px solid #e1e9f2;border-radius:7px;padding:8px 12px;}
+          .msg-step-here{border-color:#78c2ad;box-shadow:0 0 0 2px rgba(120,194,173,0.18);}
+          .msg-shead{display:flex;align-items:center;gap:7px;margin-bottom:3px;flex-wrap:wrap;}
+          .msg-badge{width:20px;height:20px;border-radius:50%;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;font-size:0.72rem;font-weight:700;color:#fff;}
+          .msg-num{background:#aab9c6;}
+          .msg-here{background:#d9534f;font-size:0.5rem;}
+          .msg-stitle{font-weight:700;color:#2c5f4f;font-size:0.86rem;}
+          .msg-tab{display:inline-block;background:#e8f5f0;color:#2c5f4f;padding:1px 7px;border-radius:10px;font-size:0.66rem;font-weight:600;font-family:'SFMono-Regular',Menlo,Consolas,monospace;white-space:nowrap;}
+          .msg-swhy{font-size:0.76rem;color:#5f6b66;line-height:1.4;margin-top:2px;}
+          .msg-arrow{display:flex;align-items:center;color:#9fbbd6;font-size:1.3rem;}
+          @media (max-width:760px){.msg-arrow{display:none;}}
+          .msg-tip{font-size:0.78rem;color:#33536f;background:#eaf3fb;border:1px solid #d3e6f5;border-radius:6px;padding:6px 11px;margin-top:11px;line-height:1.5;}
+          .msg-tip .fa,.msg-tip svg{color:#5b9bd5;margin-right:4px;}
+        ")),
+        tags$summary(icon("music"), " Working with multisyllabic words?",
+                     tags$span(class = "msg-hint", "(click to expand)")),
+        tags$p(class = "msg-intro",
+          "Fit a disyllabic (or longer) word as one curve on a syllable-aligned time axis. GAMM handles the extra shape complexity that polynomials and GCA cannot summarise with a few interpretable terms."),
+        tags$div(class = "msg-flow",
+          tags$div(class = "msg-step",
+            tags$div(class = "msg-shead",
+              tags$span(class = "msg-badge msg-num", "1"),
+              tags$span(class = "msg-stitle", "Extract"),
+              tags$span(class = "msg-tab", "F0 Extraction")),
+            tags$div(class = "msg-swhy",
+              "Add a landmark tier (e.g. syllable) so every f0 frame carries its segment boundaries.")),
+          tags$div(class = "msg-arrow", HTML("&#10132;")),
+          tags$div(class = "msg-step",
+            tags$div(class = "msg-shead",
+              tags$span(class = "msg-badge msg-num", "2"),
+              tags$span(class = "msg-stitle", "Normalise time"),
+              tags$span(class = "msg-tab", "Normalise")),
+            tags$div(class = "msg-swhy",
+              HTML("Time Normalisation options: pick the tier to add a sequential time axis (<code>&lt;tier&gt;_tseq</code>)."))),
+          tags$div(class = "msg-arrow", HTML("&#10132;")),
+          tags$div(class = "msg-step msg-step-here",
+            tags$div(class = "msg-shead",
+              tags$span(class = "msg-badge msg-here", HTML("&#9679;")),
+              tags$span(class = "msg-stitle", "GAMM")),
+            tags$div(class = "msg-swhy",
+              HTML("You are here. Set the <strong>Time</strong> variable to <code>&lt;tier&gt;_tseq</code> and fit one smooth across the whole word.")))
+        ),
+        tags$div(class = "msg-tip",
+          icon("lightbulb"), HTML(" <strong>For this workflow:</strong>"),
+          tags$ul(style = "margin:4px 0 0 0; padding-left:18px;",
+            tags$li(HTML("<strong>Tone category</strong> = the per-word <strong>tone-sequence label</strong> (e.g. <code>H.L</code>), one per token; not a per-syllable tone.")),
+            tags$li(HTML("Raise the <strong>basis dimension k</strong> so the smooth can capture every syllable's shape (penalisation keeps the effective complexity in check).")),
+            tags$li(HTML("Use a batch with a <strong>uniform syllable count</strong>, so segment boundaries line up across tokens."))))
       )
     )
   })
@@ -120,9 +196,9 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
         selectInput("gamm_f0_var", "Select f0 variable (normalised f0 recommended):",
                     choices = setNames(vars, var_types),
                     selected = guess_var(vars, var_patterns$f0, 2)),
-        selectInput("gamm_time_var", "Select Time variable:",
+        selectInput("gamm_time_var", "Select Time variable:",  # auto-prefers <tier>_tseq
                     choices = setNames(vars, var_types),
-                    selected = guess_var(vars, var_patterns$time, 3)),
+                    selected = guess_time_var(vars, 3)),
         selectInput("gamm_speaker_var", "Select Speaker variable:",
                     choices = setNames(vars, var_types),
                     selected = guess_var(vars, var_patterns$speaker, 4)),

@@ -4,6 +4,20 @@
 
 gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_data = NULL, curated_data = NULL, cluster_data = NULL) {
 
+  # On a landmark (multisyllabic) time axis, GCA's interpretable low-order terms
+  # stop meaning much, so just nudge to GAMM. The _t01-vs-_tseq distinction is
+  # handled on the GAMM tab, where the right column actually matters.
+  output$gca_multisyl_note <- renderUI({
+    tv <- input$gca_time_var
+    if (is.null(tv) || !grepl("_(tseq|t01)$", tv)) return(NULL)
+    tags$div(
+      style = paste("background-color:#fff8e1; border-left:4px solid #e0a800;",
+                    "padding:10px 14px; margin:8px 0; border-radius:4px;",
+                    "color:#7a5d00; font-size:0.9rem;"),
+      tags$span(style = "color:#e0a800;", icon("wand-magic-sparkles")),
+      " You're modelling on a landmark (multisyllabic) time axis. Polynomial/GCA coefficients here summarise single-syllable shapes; for multisyllabic words, consider GAMM for these contours.")
+  })
+
   # --- Guide text ---
   output$gca_guide <- renderUI({
     code_style <- "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;"
@@ -102,9 +116,9 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
         selectInput("gca_f0_var", "Select f0 variable (normalised f0 recommended):",
                     choices = setNames(vars, var_types),
                     selected = guess_var(vars, var_patterns$f0, 2)),
-        selectInput("gca_time_var", "Select Time variable:",
+        selectInput("gca_time_var", "Select Time variable:",  # auto-prefers <tier>_tseq
                     choices = setNames(vars, var_types),
-                    selected = guess_var(vars, var_patterns$time, 3)),
+                    selected = guess_time_var(vars, 3)),
         selectInput("gca_speaker_var", "Select Speaker variable:",
                     choices = setNames(vars, var_types),
                     selected = guess_var(vars, var_patterns$speaker, 4)),

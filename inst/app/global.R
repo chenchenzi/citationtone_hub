@@ -91,6 +91,17 @@ vis_token_col <- function(vars) {
   NULL
 }
 
+# Smart default for a model's Time variable: prefer a landmark sequential-time
+# column (<tier>_tseq) when one exists, so multisyllabic data lands on the
+# syllable-aligned axis automatically; otherwise fall back to the usual time
+# guess. (Not the within-segment <tier>_t01, which is non-monotonic and invalid
+# as a model time axis.)
+guess_time_var <- function(vars, fallback_idx = 1) {
+  tseq <- grep("_tseq$", vars, value = TRUE)
+  if (length(tseq)) return(tseq[1])
+  guess_var(vars, var_patterns$time, fallback_idx)
+}
+
 # ---------------------------------------------------------------------------
 # Pretty y-axis label for an f0 column. Maps the column *name* to a typeset
 # label with a subscript zero (f0 -> f₀):

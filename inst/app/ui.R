@@ -1766,6 +1766,7 @@ ui <- fluidPage(
                                                uiOutput("curate_log_block")),
                                       tabPanel("Model: Polynomials",
                                                uiOutput("model_guide"),
+                                               uiOutput("model_multisyl_note"),
                                                tags$div(class = "plot-spinner-wrap",
                                                  uiOutput("model_summary"),
                                                  tags$div(class = "plot-spinner")
@@ -1775,6 +1776,7 @@ ui <- fluidPage(
                                                uiOutput("model_r_code")),
                                       tabPanel("Model: GCA",
                                                uiOutput("gca_guide"),
+                                               uiOutput("gca_multisyl_note"),
                                                tags$div(class = "plot-spinner-wrap",
                                                  uiOutput("gca_summary"),
                                                  plotOutput("gca_plot", height = "500px", width = "800px"),
@@ -1783,6 +1785,7 @@ ui <- fluidPage(
                                                uiOutput("gca_r_code")),
                                       tabPanel("Model: GAMM",
                                                uiOutput("gamm_guide"),
+                                               uiOutput("gamm_multisyl_note"),
                                                tags$div(class = "plot-spinner-wrap",
                                                  uiOutput("gamm_summary"),
                                                  plotOutput("gamm_plot", height = "500px", width = "800px"),
