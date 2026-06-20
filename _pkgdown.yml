@@ -30,21 +30,53 @@ reference:
     contents:
       - run_app
 
-  - title: f0 normalisation
-    desc: By-speaker semitone or z-score normalisation.
+  - title: Normalisation
+    desc: >
+      By-speaker semitone or z-score f0 normalisation, plus landmark-based
+      time normalisation for multisyllabic words.
     contents:
       - normalise_f0
+      - normalise_time_landmarks
+
+  - title: TextGrid landmarks
+    desc: >
+      Read interval tiers from Praat TextGrids and attach per-frame segment
+      labels and boundaries (e.g. syllables) to long-format f0 data.
+    contents:
+      - tg_interval_tiers
+      - assign_tier_landmarks
+      - attach_landmarks
 
   - title: Outlier and artefact inspection
     desc: >
       Token-level outlier detection by speaker z-score and by
       speaker x tone level, plus sample-level pitch-tracking artefacts
-      (Sundberg 1973, Steffman & Cole 2022).
+      and a low-intensity check (Sundberg 1973, Steffman & Cole 2022).
     contents:
       - inspect_f0
       - flag_outliers
       - flag_level_outliers
+      - flag_low_intensity
       - flag_pitch_jumps
+
+  - title: Contour clustering
+    desc: >
+      Unsupervised grouping of tokens by f0-contour shape to discover
+      candidate tone categories when the number of tones is unknown
+      (Kaland 2023), with feature extraction and a choice of how many groups.
+    contents:
+      - cluster_f0
+      - cluster_features
+      - choose_k_f0
+      - cluster_mdl
+      - cluster_agreement
+
+  - title: Curate tone labels
+    desc: >
+      Re-label tone-category variants or exclude tokens, without overwriting
+      the original labels.
+    contents:
+      - apply_relabels
 
   - title: Contour modelling
     desc: >
