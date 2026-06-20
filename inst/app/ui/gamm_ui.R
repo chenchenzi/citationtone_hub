@@ -130,7 +130,7 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
           tags$ul(style = "margin:4px 0 0 0; padding-left:18px;",
             tags$li(HTML("<strong>Tone category</strong> = the per-word <strong>tone-sequence label</strong> (e.g. <code>H.L</code>), one per token; not a per-syllable tone.")),
             tags$li(HTML("Raise the <strong>basis dimension k</strong> so the smooth can capture every syllable's shape (penalisation keeps the effective complexity in check).")),
-            tags$li(HTML("Use a batch with a <strong>uniform syllable count</strong>, so segment boundaries line up across tokens."))))
+            tags$li(HTML("Use a batch with a <strong>uniform syllable count</strong>, so segment boundaries line up across tokens (e.g. a disyllabic batch, then a trisyllabic batch, as separate runs)."))))
       )
     )
   })

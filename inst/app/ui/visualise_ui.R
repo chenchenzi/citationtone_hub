@@ -69,9 +69,9 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
         selectInput("speaker_var", "Select Speaker variable:",
                     choices = setNames(vars, var_types),
                     selected = guess_var(vars, var_patterns$speaker, 4), multiple = FALSE),
+        tags$hr(),
         if (length(lm_sets) > 0) tagList(
-          tags$hr(),
-          selectInput("vis_align_by", "Align time by landmark:",
+          selectInput("vis_align_by", "Align time by landmark (optional):",
                       choices = c("(raw X axis)" = "__none__",
                                   stats::setNames(names(lm_sets), names(lm_sets))),
                       selected = "__none__"),
@@ -87,6 +87,12 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
               tags$em("Side by side"), " lines up segment 1 of every token, then segment 2, and so on ",
               "(syllable by syllable); ", tags$em("Overlaid"), " stacks every segment on one 0–1 axis.")
           )
+        ) else tagList(
+          tags$div(style = "font-weight:700; font-size:0.85rem; margin-bottom:3px;",
+                   "Align time by landmark ",
+                   tags$span(style = "font-weight:400; color:#888; font-size:0.8rem;", "(optional)")),
+          tags$div(style = "color:#999; font-size:0.78rem; font-style:italic;",
+            "No landmark columns in this dataset. Add them in F0 Extraction (choose TextGrid tiers) to enable alignment.")
         ),
         tags$hr(),
         h5("Graph options"),
