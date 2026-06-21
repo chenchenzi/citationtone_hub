@@ -15,7 +15,7 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
                     "padding:10px 14px; margin:8px 0; border-radius:4px;",
                     "color:#7a5d00; font-size:0.9rem;"),
       tags$span(style = "color:#e0a800;", icon("wand-magic-sparkles")),
-      " You're modelling on a landmark (multisyllabic) time axis. Polynomial/GCA coefficients here summarise single-syllable shapes; for multisyllabic words, consider GAMM for these contours.")
+      " Are you modelling a multisyllabic time axis? Polynomial/GCA coefficients here summarise single-syllable shapes; for multisyllabic words, consider GAMM for these contours.")
   })
 
   # --- Guide text ---

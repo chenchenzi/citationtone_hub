@@ -18,8 +18,9 @@ normalised_ui <- function(input, output, session, dataset, normalised_data) {
         tags$ul(style = "margin-bottom: 8px; padding-left: 18px;",
           tags$li(tags$strong("Z-score:"), " ", tags$code(style = "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;", "z = (f0 \u2212 \u03bc) / \u03c3"), " Centres f0 on 0 and scales by speaker variability."),
           tags$li(tags$strong("Semitone:"), " ", tags$code(style = "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;", "ST = 12 \u00d7 log\u2082(f0 / \u03bc)"), " Converts Hz to a perceptually uniform scale referenced on each speaker's mean.")
-        ),
-        # --- Collapsible illustrated guide for time normalisation ---
+        )
+      ),
+        # --- Collapsible illustrated guide, shown below the green guide ---
         tags$details(class = "msg-route",
           tags$style(HTML("
             details.msg-route{background:#f3f8fc;border:1px solid #cfe2f1;border-radius:8px;padding:7px 14px 11px;margin:6px 0 0;}
@@ -59,7 +60,6 @@ normalised_ui <- function(input, output, session, dataset, normalised_data) {
             icon("lightbulb"),
             HTML(' Use the new column as the X axis in <span class="msg-tab">Visualise</span> or the Time variable in the <span class="msg-tab">Model</span>. Frames <strong>outside the chosen region</strong> (or before the first landmark) are <code>NA</code> on this axis, so they drop out of any downstream plot, clustering, or model that uses it.'))
         )
-      )
     )
   })
 

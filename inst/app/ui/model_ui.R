@@ -15,7 +15,7 @@ model_ui <- function(input, output, session, dataset, normalised_data, curated_d
                     "padding:10px 14px; margin:8px 0; border-radius:4px;",
                     "color:#7a5d00; font-size:0.9rem;"),
       tags$span(style = "color:#e0a800;", icon("wand-magic-sparkles")),
-      " You're modelling on a landmark (multisyllabic) time axis. Polynomial/GCA coefficients here summarise single-syllable shapes; for multisyllabic words, consider GAMM for these contours.")
+      " Are you modelling a multisyllabic time axis? Polynomial/GCA coefficients here summarise single-syllable shapes; for multisyllabic words, consider GAMM for these contours.")
   })
 
   # --- Guide text ---
@@ -32,13 +32,7 @@ model_ui <- function(input, output, session, dataset, normalised_data, curated_d
           tags$li(tags$strong("Time:"),
             " The time variable that orders f0 samples within each token. Each token's time is rescaled to ",
             tags$strong("[-1, 1]"),
-            " internally before fitting (the Legendre basis below is defined on that range), so you do not pre-scale it yourself. Any axis works as long as it ",
-            tags$strong("increases monotonically"), " within a token: real time, ",
-            tags$code(style = code_style, "<tier>_tseq"), " (sequential) and whole-token ",
-            tags$code(style = code_style, "token_t01"), " are all fine. ",
-            tags$code(style = code_style, "<tier>_t01"), " is ", tags$strong("not"),
-            ", because it resets to 0 in each segment (non-monotonic), which folds the syllables on top of each other. For a multisyllabic word, use ",
-            tags$code(style = code_style, "<tier>_tseq"), "."),
+            " internally before fitting (the Legendre basis below is defined on that range)."),
           tags$li(tags$strong("Speaker / Tone category:"), " Meta information to keep in the output.")
         ),
         tags$strong("Legendre polynomial basis on [-1, 1]:"),

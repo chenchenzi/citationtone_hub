@@ -80,7 +80,7 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
 
   # --- guide ---
   output$cluster_guide <- renderUI({
-    guide_box("Tone clustering guide",
+    tagList(guide_box("Tone clustering guide",
       tags$p(style = "margin: 4px 0 8px 0;", HTML(paste(
         "Don't know how many tones a language has? Group tokens by the",
         "<strong>shape</strong> of their f0 contour and let the data reveal the number",
@@ -103,8 +103,9 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
         tags$li(HTML("<strong>Clustering algorithms.</strong> k-means (Hartigan &amp; Wong, 1979), hierarchical agglomerative clustering with Ward linkage (Ward, 1963), and Gaussian mixture models selected by BIC (Scrucca et al., 2016).")),
         tags$li(HTML("<strong>Number of groups.</strong> The silhouette (Rousseeuw, 1987), gap statistic (Tibshirani et al., 2001) and a minimum-description-length information cost (Kaland &amp; Ellison, 2023) each suggest a value of k.")),
         tags$li(HTML("<strong>Token map.</strong> Tokens are projected to two dimensions with PCA (Jolliffe, 2002) or UMAP (McInnes et al., 2018)."))
+      )
       ),
-      # --- Collapsible illustrated guide: clustering by landmark unit ---
+      # --- Collapsible illustrated guide, shown below the green guide ---
       tags$details(class = "msg-route",
         tags$style(HTML("
           details.msg-route{background:#f3f8fc;border:1px solid #cfe2f1;border-radius:8px;padding:7px 14px 11px;margin:12px 0 4px;}
