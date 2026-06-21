@@ -52,11 +52,15 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
   })
   using_normalised <- reactive(active_source() == "normalised")
 
-  cvar <- reactive({
+  # Debounced: on first paint the four variable selectors send their values in a
+  # quick burst, each invalidating cvar(). Without debouncing, the plot region
+  # (and its amber Inspect note) re-renders several times in a row, which read as
+  # a yellow flash on entry. A short debounce coalesces the burst into one render.
+  cvar <- debounce(reactive({
     req(dataset())
     list(token = input$curate_token_var, tone = input$curate_tone_var,
          speaker = input$curate_speaker_var, f0 = input$curate_f0_var)
-  })
+  }), 120)
 
   lex_col <- reactive({
     d <- dataset(); if (is.null(d)) return(NULL)
