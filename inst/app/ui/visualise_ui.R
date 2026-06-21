@@ -23,7 +23,7 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
             HTML(paste0(
               " Appears when the data carries landmark columns (e.g. ",
               "<code>syllable_start</code> / <code>syllable_end</code>, added by the ",
-              "F0 Extraction TextGrid step). It renormalises time within each segment so ",
+              "F0 Extraction TextGrid step). It renormalises time within each part so ",
               "contours line up. For multi-syllable words, <em>side by side</em> aligns them ",
               "syllable by syllable.")))
         )
@@ -71,26 +71,27 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
                     selected = guess_var(vars, var_patterns$speaker, 4), multiple = FALSE),
         tags$hr(),
         if (length(lm_sets) > 0) tagList(
-          selectInput("vis_align_by", "Align time by landmark (optional):",
+          h5("Align time by landmark ",
+             tags$span(style = "font-weight:400; color:#888; font-size:0.8rem;", "(optional)")),
+          selectInput("vis_align_by", NULL,
                       choices = c("(raw X axis)" = "__none__",
                                   stats::setNames(names(lm_sets), names(lm_sets))),
                       selected = "__none__"),
           conditionalPanel(
             "input.vis_align_by && input.vis_align_by != '__none__'",
             radioButtons("vis_align_layout", NULL,
-                         choices = c("Side by side (segment by segment)" = "sequential",
-                                     "Overlaid (all segments at 0–1)" = "overlay"),
+                         choices = c("Side by side (part by part)" = "sequential",
+                                     "Overlaid (all parts at 0–1)" = "overlay"),
                          selected = "sequential"),
             tags$div(style = "color:#888; font-size:0.76rem; margin-top:-6px;",
-              "Time is renormalised within each segment using the chosen ",
+              "Time is renormalised within each part using the chosen ",
               tags$strong("X (time)"), " variable. ",
-              tags$em("Side by side"), " lines up segment 1 of every token, then segment 2, and so on ",
-              "(syllable by syllable); ", tags$em("Overlaid"), " stacks every segment on one 0–1 axis.")
+              tags$em("Side by side"), " lines up part 1 of every token, then part 2, and so on ",
+              "(syllable by syllable); ", tags$em("Overlaid"), " stacks every part on one 0–1 axis.")
           )
         ) else tagList(
-          tags$div(style = "font-weight:700; font-size:0.85rem; margin-bottom:3px;",
-                   "Align time by landmark ",
-                   tags$span(style = "font-weight:400; color:#888; font-size:0.8rem;", "(optional)")),
+          h5("Align time by landmark ",
+             tags$span(style = "font-weight:400; color:#888; font-size:0.8rem;", "(optional)")),
           tags$div(style = "color:#999; font-size:0.78rem; font-style:italic;",
             "No landmark columns in this dataset. Add them in F0 Extraction (choose TextGrid tiers) to enable alignment.")
         ),
@@ -139,10 +140,10 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
     }
 
     # ---- Optional landmark alignment ----------------------------------------
-    # Renormalise the X (time) variable within each segment of a landmark set
-    # (X_start / X_end). "sequential" lays segments side by side (segment index
+    # Renormalise the X (time) variable within each part of a landmark set
+    # (X_start / X_end). "sequential" lays parts side by side (part index
     # i -> x in [i-1, i]) so multi-syllable words align syllable by syllable;
-    # "overlay" maps every segment onto a single 0-1 axis.
+    # "overlay" maps every part onto a single 0-1 axis.
     align_by <- input$vis_align_by
     aligned  <- !is.null(align_by) && nzchar(align_by) && align_by != "__none__" &&
                 all(c(paste0(align_by, "_start"), paste0(align_by, "_end")) %in% names(plot_data))
@@ -167,11 +168,11 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
       }
       plot_data <- plot_data[is.finite(plot_data$.aligned_x), , drop = FALSE]
       x_aes <- ".aligned_x"
-      x_lab <- if (seq_layout) sprintf("%s (segment by segment)", align_by)
+      x_lab <- if (seq_layout) sprintf("%s (part by part)", align_by)
                else sprintf("normalised time within %s (0–1)", align_by)
       # Grouping for the connecting line: by token when laid side by side (one
-      # continuous contour across segments); by token + segment when overlaid,
-      # so a line doesn't wrap from the end of one segment back to 0.
+      # continuous contour across parts); by token + part when overlaid,
+      # so a line doesn't wrap from the end of one part back to 0.
       tok_col <- vis_token_col(names(plot_data))
       if (!is.null(tok_col)) {
         plot_data$.grp <- if (!seq_layout && ic %in% names(plot_data))
@@ -189,7 +190,7 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
     else
       ggplot(plot_data, aes(x = .data[[x_aes]], y = .data[[input$y_var]]))
 
-    # Dashed segment boundaries when laying segments side by side.
+    # Dashed part boundaries when laying parts side by side.
     if (seq_layout && is.finite(max_i) && max_i > 1) {
       p <- p + geom_vline(xintercept = seq_len(max_i - 1), linetype = "dashed",
                           colour = "grey75", linewidth = 0.4)
@@ -352,7 +353,7 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
       seqL  <- identical(layout, "sequential") && has_i
       base_norm <- paste0("pmin(pmax((dat$", input$x_var, " - dat$", sc, ") / (dat$", ec, " - dat$", sc, "), 0), 1)")
       code_lines <- c(code_lines,
-        paste0("# Renormalise time within each ", align_by, " segment"),
+        paste0("# Renormalise time within each ", align_by, " part"),
         if (seqL) paste0("dat$aligned_x <- (dat$", ic, " - 1) + ", base_norm)
         else      paste0("dat$aligned_x <- ", base_norm),
         "dat <- dat[is.finite(dat$aligned_x), ]")
@@ -363,7 +364,7 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
       }
       code_lines <- c(code_lines, "")
       x_code     <- "aligned_x"
-      x_lab_code <- if (seqL) paste0(align_by, " (segment by segment)")
+      x_lab_code <- if (seqL) paste0(align_by, " (part by part)")
                     else      paste0("normalised time within ", align_by, " (0-1)")
       if (seqL) n_seg <- suppressWarnings(max(as.integer(vis_dataset()[[ic]]), na.rm = TRUE))
     }

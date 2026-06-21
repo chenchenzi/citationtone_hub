@@ -103,6 +103,22 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
         tags$li(HTML("<strong>Clustering algorithms.</strong> k-means (Hartigan &amp; Wong, 1979), hierarchical agglomerative clustering with Ward linkage (Ward, 1963), and Gaussian mixture models selected by BIC (Scrucca et al., 2016).")),
         tags$li(HTML("<strong>Number of groups.</strong> The silhouette (Rousseeuw, 1987), gap statistic (Tibshirani et al., 2001) and a minimum-description-length information cost (Kaland &amp; Ellison, 2023) each suggest a value of k.")),
         tags$li(HTML("<strong>Token map.</strong> Tokens are projected to two dimensions with PCA (Jolliffe, 2002) or UMAP (McInnes et al., 2018)."))
+      ),
+      tags$details(style = "margin-top: 6px;",
+        tags$summary(style = "cursor:pointer; font-size:0.82rem; color:#4a7868; font-weight:600;",
+                     "References"),
+        tags$ol(style = "margin: 6px 0 0 0; padding-left: 20px; font-size: 0.76rem; color:#666; line-height:1.55;",
+          tags$li(HTML("Hartigan, J. A., &amp; Wong, M. A. (1979). Algorithm AS 136: A k-means clustering algorithm. <em>Journal of the Royal Statistical Society: Series C (Applied Statistics)</em>, 28(1), 100&ndash;108.")),
+          tags$li(HTML("Jolliffe, I. T. (2002). <em>Principal Component Analysis</em> (2nd ed.). Springer.")),
+          tags$li(HTML("Kaland, C. (2023a). Contour clustering: A field-data-driven approach for documenting and analysing prototypical f0 contours. <em>Journal of the International Phonetic Association</em>, 53(1), 159&ndash;188.")),
+          tags$li(HTML("Kaland, C. (2023b). Intonation contour similarity: f0 representations and distance measures compared to human perception in two languages. <em>The Journal of the Acoustical Society of America</em>, 154(1), 95&ndash;107.")),
+          tags$li(HTML("Kaland, C., &amp; Ellison, T. M. (2023). Evaluating cluster analysis on f0 contours: An information theoretic approach on three languages. In <em>Proceedings of the 20th International Congress of Phonetic Sciences</em> (pp. 3448&ndash;3452).")),
+          tags$li(HTML("McInnes, L., Healy, J., &amp; Melville, J. (2018). UMAP: Uniform manifold approximation and projection for dimension reduction. <em>arXiv:1802.03426</em>.")),
+          tags$li(HTML("Rousseeuw, P. J. (1987). Silhouettes: A graphical aid to the interpretation and validation of cluster analysis. <em>Journal of Computational and Applied Mathematics</em>, 20, 53&ndash;65.")),
+          tags$li(HTML("Scrucca, L., Fop, M., Murphy, T. B., &amp; Raftery, A. E. (2016). mclust 5: Clustering, classification and density estimation using Gaussian finite mixture models. <em>The R Journal</em>, 8(1), 289&ndash;317.")),
+          tags$li(HTML("Tibshirani, R., Walther, G., &amp; Hastie, T. (2001). Estimating the number of clusters in a data set via the gap statistic. <em>Journal of the Royal Statistical Society: Series B (Statistical Methodology)</em>, 63(2), 411&ndash;423.")),
+          tags$li(HTML("Ward, J. H. (1963). Hierarchical grouping to optimize an objective function. <em>Journal of the American Statistical Association</em>, 58(301), 236&ndash;244."))
+        )
       )
       ),
       # --- Collapsible illustrated guide, shown below the green guide ---
@@ -171,22 +187,6 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
         ),
         tags$div(class = "msg-tip",
           icon("lightbulb"), HTML(" Cluster words with the same number of syllables together (disyllabic apart from trisyllabic), so the boundary lands in the same place."))
-      ),
-      tags$details(style = "margin-top: 6px;",
-        tags$summary(style = "cursor:pointer; font-size:0.82rem; color:#4a7868; font-weight:600;",
-                     "References"),
-        tags$ol(style = "margin: 6px 0 0 0; padding-left: 20px; font-size: 0.76rem; color:#666; line-height:1.55;",
-          tags$li(HTML("Hartigan, J. A., &amp; Wong, M. A. (1979). Algorithm AS 136: A k-means clustering algorithm. <em>Journal of the Royal Statistical Society: Series C (Applied Statistics)</em>, 28(1), 100&ndash;108.")),
-          tags$li(HTML("Jolliffe, I. T. (2002). <em>Principal Component Analysis</em> (2nd ed.). Springer.")),
-          tags$li(HTML("Kaland, C. (2023a). Contour clustering: A field-data-driven approach for documenting and analysing prototypical f0 contours. <em>Journal of the International Phonetic Association</em>, 53(1), 159&ndash;188.")),
-          tags$li(HTML("Kaland, C. (2023b). Intonation contour similarity: f0 representations and distance measures compared to human perception in two languages. <em>The Journal of the Acoustical Society of America</em>, 154(1), 95&ndash;107.")),
-          tags$li(HTML("Kaland, C., &amp; Ellison, T. M. (2023). Evaluating cluster analysis on f0 contours: An information theoretic approach on three languages. In <em>Proceedings of the 20th International Congress of Phonetic Sciences</em> (pp. 3448&ndash;3452).")),
-          tags$li(HTML("McInnes, L., Healy, J., &amp; Melville, J. (2018). UMAP: Uniform manifold approximation and projection for dimension reduction. <em>arXiv:1802.03426</em>.")),
-          tags$li(HTML("Rousseeuw, P. J. (1987). Silhouettes: A graphical aid to the interpretation and validation of cluster analysis. <em>Journal of Computational and Applied Mathematics</em>, 20, 53&ndash;65.")),
-          tags$li(HTML("Scrucca, L., Fop, M., Murphy, T. B., &amp; Raftery, A. E. (2016). mclust 5: Clustering, classification and density estimation using Gaussian finite mixture models. <em>The R Journal</em>, 8(1), 289&ndash;317.")),
-          tags$li(HTML("Tibshirani, R., Walther, G., &amp; Hastie, T. (2001). Estimating the number of clusters in a data set via the gap statistic. <em>Journal of the Royal Statistical Society: Series B (Statistical Methodology)</em>, 63(2), 411&ndash;423.")),
-          tags$li(HTML("Ward, J. H. (1963). Hierarchical grouping to optimize an objective function. <em>Journal of the American Statistical Association</em>, 58(301), 236&ndash;244."))
-        )
       )
     )
   })
