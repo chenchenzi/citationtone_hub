@@ -19,13 +19,46 @@ normalised_ui <- function(input, output, session, dataset, normalised_data) {
           tags$li(tags$strong("Z-score:"), " ", tags$code(style = "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;", "z = (f0 \u2212 \u03bc) / \u03c3"), " Centres f0 on 0 and scales by speaker variability."),
           tags$li(tags$strong("Semitone:"), " ", tags$code(style = "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;", "ST = 12 \u00d7 log\u2082(f0 / \u03bc)"), " Converts Hz to a perceptually uniform scale referenced on each speaker's mean.")
         ),
-        tags$strong("Time normalisation (optional):"),
-        tags$p(style = "margin: 4px 0 0 0;",
-          HTML(paste0(
-            "For multisyllabic words with landmark columns (from F0 Extraction), rescale time ",
-            "within each segment. Adds <code>&lt;tier&gt;_t01</code> (0&ndash;1 within each segment, ",
-            "for overlaying segments) and <code>&lt;tier&gt;_tseq</code> (sequential, for a ",
-            "word-level time axis). Either can then be the X variable in Visualise.")))
+        # --- Collapsible illustrated guide for time normalisation ---
+        tags$details(class = "msg-route",
+          tags$style(HTML("
+            details.msg-route{background:#f3f8fc;border:1px solid #cfe2f1;border-radius:8px;padding:7px 14px 11px;margin:6px 0 0;}
+            .msg-route>summary{cursor:pointer;font-weight:700;color:#2c5d80;font-size:0.9rem;list-style:none;padding:1px 0;}
+            .msg-route>summary::-webkit-details-marker{display:none;}
+            .msg-route>summary::before{content:'\\25B8';color:#5b9bd5;display:inline-block;margin-right:8px;transition:transform .15s ease;}
+            .msg-route[open]>summary::before{transform:rotate(90deg);}
+            .msg-hint{color:#7aa6cc;font-weight:400;font-size:0.78rem;margin-left:6px;}
+            .msg-route[open] .msg-hint{display:none;}
+            .msg-intro{color:#3f5a72;font-size:0.83rem;line-height:1.5;margin:9px 0 0;}
+            .msg-illus{margin:11px 0 3px;}
+            .msg-illus svg{width:100%;height:auto;display:block;}
+            .msg-opts{display:flex;gap:9px;margin-top:11px;flex-wrap:wrap;}
+            .msg-step{flex:1 1 165px;background:#fff;border:1px solid #e1e9f2;border-radius:7px;padding:8px 12px;}
+            .msg-stitle{font-weight:700;color:#2c5f4f;font-size:0.86rem;}
+            .msg-swhy{font-size:0.76rem;color:#5f6b66;line-height:1.4;margin-top:2px;}
+            .msg-tab{display:inline-block;background:#e8f5f0;color:#2c5f4f;padding:1px 7px;border-radius:10px;font-size:0.72rem;font-weight:600;white-space:nowrap;}
+            .msg-tip{font-size:0.78rem;color:#33536f;background:#eaf3fb;border:1px solid #d3e6f5;border-radius:6px;padding:6px 11px;margin-top:11px;line-height:1.55;}
+            .msg-tip .fa,.msg-tip svg{color:#5b9bd5;margin-right:4px;}
+          ")),
+          tags$summary(icon("ruler-horizontal"), " Multisyllabic or sub-syllabic data?",
+                       tags$span(class = "msg-hint", "(click to expand)")),
+          tags$p(class = "msg-intro",
+            HTML('Add a normalised-time column so contours (e.g. <span style="color:#3a7ca5;font-weight:700;">A</span> / <span style="color:#2f9e79;font-weight:700;">B</span>) share a common axis. Match your data to one of the cases below.')),
+          tags$div(class = "msg-illus", HTML('<svg width="100%" viewBox="0 0 680 150" role="img" xmlns="http://www.w3.org/2000/svg"><title>Single 0 to 1 axis versus multisyllabic _tseq and _t01</title><desc>A single 0 to 1 axis serves a whole monosyllable or one region; a multisyllabic word gives _tseq in sequence and _t01 with each syllable in its own 0 to 1 box.</desc><text x="140" y="16" font-size="12" font-weight="700" fill="#2c5d80" text-anchor="middle">Single 0&#8211;1 axis</text><text x="440" y="16" font-size="12" font-weight="700" fill="#2c5d80" text-anchor="middle">Multisyllabic word</text><line x1="240" y1="9" x2="240" y2="132" stroke="#d9e6f1" stroke-width="1"/><text x="140" y="36" font-size="12" font-weight="600" fill="#48667e" text-anchor="middle">Whole token / region</text><text x="340" y="36" font-size="12" font-weight="600" fill="#48667e" text-anchor="middle">&lt;tier&gt;_tseq</text><text x="540" y="36" font-size="12" font-weight="600" fill="#48667e" text-anchor="middle">&lt;tier&gt;_t01</text><rect x="60" y="46" width="160" height="62" fill="none" stroke="#b8d2e8" stroke-width="1"/><polyline points="60,96 100,70 140,62 180,72 220,96" fill="none" stroke="#3a7ca5" stroke-width="2.5"/><polyline points="60,100 100,76 140,68 180,78 220,100" fill="none" stroke="#2f9e79" stroke-width="2.5"/><line x1="60" y1="108" x2="60" y2="112" stroke="#b8d2e8"/><line x1="220" y1="108" x2="220" y2="112" stroke="#b8d2e8"/><text x="60" y="122" font-size="10" fill="#97a4ac" text-anchor="start">0</text><text x="220" y="122" font-size="10" fill="#97a4ac" text-anchor="end">1</text><text x="140" y="140" font-size="11" fill="#5f6b66" text-anchor="middle">monosyllabic, or one region</text><rect x="260" y="46" width="160" height="62" fill="none" stroke="#b8d2e8" stroke-width="1"/><polyline points="260,96 300,66 340,58 380,84 420,100" fill="none" stroke="#3a7ca5" stroke-width="2.5"/><polyline points="260,100 300,72 340,64 380,88 420,102" fill="none" stroke="#2f9e79" stroke-width="2.5"/><line x1="340" y1="46" x2="340" y2="108" stroke="#9fbbd6" stroke-width="1.5" stroke-dasharray="4,3"/><line x1="260" y1="108" x2="260" y2="112" stroke="#b8d2e8"/><line x1="340" y1="108" x2="340" y2="112" stroke="#b8d2e8"/><line x1="420" y1="108" x2="420" y2="112" stroke="#b8d2e8"/><text x="260" y="122" font-size="10" fill="#97a4ac" text-anchor="start">0</text><text x="340" y="122" font-size="10" fill="#97a4ac" text-anchor="middle">1</text><text x="420" y="122" font-size="10" fill="#97a4ac" text-anchor="end">2</text><text x="340" y="140" font-size="11" fill="#5f6b66" text-anchor="middle">syllables in sequence</text><rect x="460" y="46" width="75" height="62" fill="none" stroke="#b8d2e8" stroke-width="1"/><rect x="545" y="46" width="75" height="62" fill="none" stroke="#b8d2e8" stroke-width="1"/><polyline points="460,94 485,76 510,64 535,58" fill="none" stroke="#3a7ca5" stroke-width="2.5"/><polyline points="460,98 485,80 510,68 535,62" fill="none" stroke="#2f9e79" stroke-width="2.5"/><polyline points="545,58 570,74 595,90 620,100" fill="none" stroke="#3a7ca5" stroke-width="2.5"/><polyline points="545,62 570,78 595,93 620,102" fill="none" stroke="#2f9e79" stroke-width="2.5"/><line x1="460" y1="108" x2="460" y2="112" stroke="#b8d2e8"/><line x1="535" y1="108" x2="535" y2="112" stroke="#b8d2e8"/><line x1="545" y1="108" x2="545" y2="112" stroke="#b8d2e8"/><line x1="620" y1="108" x2="620" y2="112" stroke="#b8d2e8"/><text x="460" y="122" font-size="10" fill="#97a4ac" text-anchor="start">0</text><text x="535" y="122" font-size="10" fill="#97a4ac" text-anchor="end">1</text><text x="545" y="122" font-size="10" fill="#97a4ac" text-anchor="start">0</text><text x="620" y="122" font-size="10" fill="#97a4ac" text-anchor="end">1</text><text x="497" y="140" font-size="11" fill="#5f6b66" text-anchor="middle">&#963;1</text><text x="582" y="140" font-size="11" fill="#5f6b66" text-anchor="middle">&#963;2</text></svg>')),
+          tags$div(class = "msg-opts",
+            tags$div(class = "msg-step", style = "flex:1 1 190px;",
+              tags$div(class = "msg-stitle", "Monosyllabic word, or a sub-syllabic region"),
+              tags$div(class = "msg-swhy",
+                HTML("Pick <code>Whole token (0&ndash;1)</code> for a whole syllable, or a <code>rhyme</code> / <code>vowel</code> tier to normalise just that region. Either gives the single 0&ndash;1 axis (left)."))),
+            tags$div(class = "msg-step", style = "flex:1.7 1 300px;",
+              tags$div(class = "msg-stitle", "Multisyllabic word"),
+              tags$div(class = "msg-swhy",
+                HTML("Pick the <code>syllable</code> tier. <code>syllable_tseq</code> lays syllables end to end (one word axis); <code>syllable_t01</code> puts each syllable in its own 0&ndash;1 box, to overlay and compare.")))
+          ),
+          tags$div(class = "msg-tip",
+            icon("lightbulb"),
+            HTML(' Use the new column as the X axis in <span class="msg-tab">Visualise</span> or the Time variable in the <span class="msg-tab">Model</span>. Frames <strong>outside the chosen region</strong> (or before the first landmark) are <code>NA</code> on this axis, so they drop out of any downstream plot, clustering, or model that uses it.'))
+        )
       )
     )
   })
@@ -62,46 +95,9 @@ normalised_ui <- function(input, output, session, dataset, normalised_data) {
                                     "By-speaker Z-score" = "zscore"),
                      selected = "semitone"),
         tags$hr(),
-        # --- Collapsible illustrated guide for time normalisation ---
-        tags$details(class = "msg-route",
-          tags$style(HTML("
-            details.msg-route{background:#f3f8fc;border:1px solid #cfe2f1;border-radius:8px;padding:7px 12px 10px;margin:0 0 10px;}
-            .msg-route>summary{cursor:pointer;font-weight:700;color:#2c5d80;font-size:0.86rem;list-style:none;padding:1px 0;}
-            .msg-route>summary::-webkit-details-marker{display:none;}
-            .msg-route>summary::before{content:'\\25B8';color:#5b9bd5;display:inline-block;margin-right:7px;transition:transform .15s ease;}
-            .msg-route[open]>summary::before{transform:rotate(90deg);}
-            .msg-hint{color:#7aa6cc;font-weight:400;font-size:0.74rem;margin-left:5px;}
-            .msg-route[open] .msg-hint{display:none;}
-            .msg-intro{color:#3f5a72;font-size:0.78rem;line-height:1.45;margin:8px 0 0;}
-            .msg-flow{display:flex;flex-direction:column;gap:7px;margin-top:9px;}
-            .msg-step{background:#fff;border:1px solid #e1e9f2;border-radius:6px;padding:7px 10px;}
-            .msg-stitle{font-weight:700;color:#2c5f4f;font-size:0.8rem;}
-            .msg-swhy{font-size:0.74rem;color:#5f6b66;line-height:1.4;margin-top:2px;}
-            .msg-tip{font-size:0.74rem;color:#33536f;background:#eaf3fb;border:1px solid #d3e6f5;border-radius:6px;padding:6px 10px;margin-top:9px;line-height:1.45;}
-            .msg-tip .fa,.msg-tip svg{color:#5b9bd5;margin-right:3px;}
-          ")),
-          tags$summary(icon("ruler-horizontal"), " Multisyllabic or sub-syllabic data?",
-                       tags$span(class = "msg-hint", "(click to expand)")),
-          tags$p(class = "msg-intro",
-            "Add a normalised-time column so contours share a common axis. Pick the option that matches your data:"),
-          tags$div(class = "msg-flow",
-            tags$div(class = "msg-step",
-              tags$div(class = "msg-stitle", "Multisyllabic word"),
-              tags$div(class = "msg-swhy",
-                HTML("Pick the <code>syllable</code> tier &rarr; <code>syllable_tseq</code> lays syllables end to end (one word-level axis)."))),
-            tags$div(class = "msg-step",
-              tags$div(class = "msg-stitle", "Within a region"),
-              tags$div(class = "msg-swhy",
-                HTML("Pick a <code>rhyme</code> / <code>vowel</code> / <code>phone</code> tier &rarr; time is normalised inside the marked region only."))),
-            tags$div(class = "msg-step",
-              tags$div(class = "msg-stitle", "Monosyllabic / whole word"),
-              tags$div(class = "msg-swhy",
-                HTML("Pick <code>Whole token (0&ndash;1)</code> &rarr; each token's time is rescaled to 0&ndash;1 (no landmarks needed).")))
-          ),
-          tags$div(class = "msg-tip",
-            icon("lightbulb"),
-            HTML(" <code>&lt;tier&gt;_t01</code> overlays segments on a 0&ndash;1 axis; <code>&lt;tier&gt;_tseq</code> lays them out in sequence."))
-        ),
+        # Pointer to the illustrated time-normalisation guide on the right.
+        tags$div(style = "color:#888; font-size:0.72rem; margin:0 0 4px;",
+                 "Multisyllabic or sub-syllabic data? See the illustrated guide on the right for which option to pick."),
         h5("Time Normalisation options ",
            tags$span(style = "font-weight:400; color:#888; font-size:0.8rem;", "(optional)")),
         uiOutput("norm_time_landmark_ui"),
