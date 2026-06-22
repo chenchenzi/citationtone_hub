@@ -11,6 +11,12 @@
   and a minimum-description-length cost), `cluster_mdl()`, and
   `cluster_agreement()` (adjusted Rand index against provisional labels).
   Surfaced through the new **Cluster** tab.
+* **Contour sonification** (new). `sonify_f0()` renders an f0 contour as an
+  audible waveform: a pure tone, a complex tone (harmonics), or a source-filter
+  synthesised vowel (`a` / `i` / `u`), with the pitch gliding along the contour.
+  The Cluster tab's "Listen to the contours" panel plays each candidate
+  cluster's mean contour back, so prototypical tones can be heard, not only seen
+  (faithful Hz when an Hz column is present, or shape-only on a chosen base pitch).
 * **Curate** (new). `apply_relabels()` re-labels tone-category variants (splits
   or mergers, colloquial vs. literary readings, sandhi) or excludes mis-elicited
   tokens without overwriting the original labels, surfaced through the new

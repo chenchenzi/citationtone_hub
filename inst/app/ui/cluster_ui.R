@@ -95,7 +95,7 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
         tags$li(HTML("<strong>Choose a feature space.</strong> Each contour is summarised as resampled <em>points</em>, compact <em>Legendre</em> / <em>DCT</em> coefficients, or its <em>derivative</em> (movement, discarding height; Kaland, 2023a): this is what gets clustered. Keep the <em>register</em> so high and low level tones separate, or cluster on <em>shape</em> alone.")),
         tags$li(HTML("<strong>Cluster without labels.</strong> An <em>unsupervised</em> algorithm (k-means, hierarchical, or Gaussian mixture) groups tokens purely by contour shape, with no tone labels needed.")),
         tags$li(HTML("<strong>Decide how many groups.</strong> The diagnostics (elbow, silhouette, gap, GMM/BIC, MDL) rarely agree exactly, so read off a plausible <em>range</em>, <em>compare</em> candidate solutions side by side, then set the number of groups with the slider.")),
-        tags$li(HTML("<strong>Inspect, validate, reuse.</strong> Read the candidate-mean contours, the dendrogram (its merge-height axis is square-root scaled so the early, low merges stay legible) and the token map; if you have provisional labels, check agreement (adjusted Rand index); then send the clusters on as candidate tone labels for Curate / Model."))
+        tags$li(HTML("<strong>Inspect, validate, reuse.</strong> Read the candidate-mean contours (or <strong>listen</strong> to them, played back as a pitch glide or synthesised vowel), the dendrogram (its merge-height axis is square-root scaled so the early, low merges stay legible) and the token map; if you have provisional labels, check agreement (adjusted Rand index); then send the clusters on as candidate tone labels for Curate / Model."))
       ),
       tags$p(style = "font-size:0.85rem; color:#444; margin:10px 0 2px 0; font-weight:700;", "Methods"),
       tags$ul(style = "margin-bottom: 8px; padding-left: 18px;",
@@ -334,6 +334,85 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
     if (length(k) != 1 || is.na(k) || k == r$k) return(r$res)   # reuse the run
     cluster_f0(r$feat, method = r$res$method, k = k,
                hclust_method = r$linkage %||% "ward.D2")
+  })
+
+  # --- Sonification: hear each cluster's mean contour --------------------
+  # For the "faithful" pitch mode we re-resample a raw Hz f0 column (the
+  # clustered variable is usually normalised), so users hear the real average
+  # pitch. Returns NULL if the dataset carries no Hz column.
+  hz_col <- reactive({
+    d <- active_data(); if (is.null(d)) return(NULL)
+    v <- input$cluster_f0_var
+    if (!is.null(v) && grepl("(^|[^a-z])hz|^f0$", v, ignore.case = TRUE)) return(v)
+    cand <- grep("^f0$|f0[._-]?hz|(^|[^a-z])hz", names(d), ignore.case = TRUE, value = TRUE)
+    cand <- cand[vapply(cand, function(c) is.numeric(d[[c]]), logical(1))]
+    if (length(cand)) cand[1] else NULL
+  })
+
+  # Per-cluster Hz contour for playback (k x n_points), per the pitch toggle.
+  playback_hz <- reactive({
+    res <- final_res(); req(res)
+    cm <- res$cluster_means                       # clustered units (often normalised)
+    v  <- input$cluster_f0_var
+    unit <- if (!is.null(v) && grepl("semitone|_st$|_st[^a-z]", v)) "st"
+            else if (!is.null(v) && grepl("(^|[^a-z])hz|^f0$", v, ignore.case = TRUE)) "hz"
+            else "z"
+    mode <- input$cluster_sonify_pitch %||% "faithful"
+    base <- input$cluster_sonify_base %||% 150
+
+    if (mode == "faithful") {
+      if (unit == "hz") return(cm)                # already Hz
+      hzc <- hz_col()
+      if (!is.null(hzc)) {
+        d <- active_data()
+        fh <- tryCatch(cluster_features(d, f0 = hzc,
+                         token = input$cluster_token_var, time = input$cluster_time_var,
+                         n_points = ncol(cm), features = "points"),
+                       error = function(e) NULL)
+        if (!is.null(fh)) {
+          asg <- res$assignment
+          out <- t(vapply(seq_len(nrow(cm)), function(g) {
+            toks <- names(asg)[asg == g]
+            idx <- match(toks, fh$tokens); idx <- idx[!is.na(idx)]
+            if (length(idx)) colMeans(fh$contours[idx, , drop = FALSE], na.rm = TRUE)
+            else rep(NA_real_, ncol(cm))
+          }, numeric(ncol(cm))))
+          return(out)
+        }
+      }
+      # no Hz column available -> fall through to shape-only on the base pitch
+    }
+    # shape-only: render each contour's shape (semitone deviation from its own
+    # mean) on the chosen base pitch, so it is audible whatever the units.
+    dev <- t(apply(cm, 1, function(row) {
+      if (unit == "hz")      12 * log2(row / mean(row, na.rm = TRUE))
+      else if (unit == "st") row - mean(row, na.rm = TRUE)
+      else                   (row - mean(row, na.rm = TRUE)) * 2   # z -> ~semitones
+    }))
+    base * 2 ^ (dev / 12)
+  })
+
+  output$cluster_audio <- renderUI({
+    res <- final_res(); req(res)
+    hz <- playback_hz(); req(hz)
+    src <- input$cluster_sonify_source %||% "tone"
+    dur <- input$cluster_sonify_dur %||% 0.7
+    players <- lapply(seq_len(nrow(hz)), function(g) {
+      wav <- tryCatch(sonify_f0(hz[g, ], dur = dur, source = src,
+                                vowel = input$cluster_sonify_vowel %||% "a"),
+                      error = function(e) NULL)
+      if (is.null(wav)) return(NULL)
+      tf <- tempfile(fileext = ".wav")
+      tuneR::writeWave(wav, tf, extensible = FALSE)
+      bin <- readBin(tf, "raw", n = file.info(tf)$size); unlink(tf)
+      uri <- paste0("data:audio/wav;base64,", base64enc::base64encode(bin))
+      tags$div(style = "display:flex; align-items:center; gap:10px; margin-bottom:5px;",
+        tags$span(style = "flex:0 0 78px; font-weight:600; font-size:0.84rem; color:#2c5f4f;",
+                  paste("Cluster", g)),
+        tags$audio(controls = NA, src = uri, type = "audio/wav",
+                   style = "height:32px; vertical-align:middle;"))
+    })
+    tagList(players)
   })
 
   # The 2-D projection depends only on the features + projection choice, not on
@@ -647,6 +726,25 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
         plotOutput("cluster_mean_plot", height = "340px"),
         dlbtn("cluster_mean_dl"),
         uiOutput("cluster_confidence")),
+      sec("Listen to the contours", "headphones",
+        tags$p(style = "color:#666; font-size:0.82rem; margin:0 0 8px;",
+          "Hear each candidate as a pitch glide along its mean contour."),
+        tags$div(style = "display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end; margin-bottom:10px;",
+          radioButtons("cluster_sonify_source", "Timbre",
+                       c("Pure tone" = "tone", "Complex tone" = "complex", "Vowel" = "vowel"),
+                       selected = "tone", inline = TRUE),
+          conditionalPanel("input.cluster_sonify_source == 'vowel'",
+            selectInput("cluster_sonify_vowel", "Vowel",
+                        c("/a/" = "a", "/i/" = "i", "/u/" = "u"), selected = "a", width = "84px")),
+          radioButtons("cluster_sonify_pitch", "Pitch",
+                       c("Faithful (Hz)" = "faithful", "Shape only" = "shape"),
+                       selected = "faithful", inline = TRUE),
+          sliderInput("cluster_sonify_dur", "Duration (s)",
+                      min = 0.3, max = 1.5, value = 0.7, step = 0.1, width = "150px"),
+          conditionalPanel("input.cluster_sonify_pitch == 'shape'",
+            sliderInput("cluster_sonify_base", "Base pitch (Hz)",
+                        min = 80, max = 300, value = 150, step = 10, width = "150px"))),
+        uiOutput("cluster_audio")),
       conditionalPanel("input.cluster_method == 'hclust'",
         sec("Dendrogram (hierarchical merge tree)", "sitemap",
           tags$p(style = "color:#666; font-size:0.82rem; margin:0 0 6px 0;",

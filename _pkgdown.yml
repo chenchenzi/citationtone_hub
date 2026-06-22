@@ -72,6 +72,14 @@ reference:
       - cluster_mdl
       - cluster_agreement
 
+  - title: Sonification
+    desc: >
+      Render an f0 contour as an audible waveform (pure tone, complex tone, or a
+      source-filter synthesised vowel) so prototypical tones can be heard, not
+      only seen.
+    contents:
+      - sonify_f0
+
   - title: Curate tone labels
     desc: >
       Re-label tone-category variants or exclude tokens, without overwriting
