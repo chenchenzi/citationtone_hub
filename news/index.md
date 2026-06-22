@@ -20,6 +20,15 @@
   [`cluster_agreement()`](https://chenchenzi.github.io/citationtone_hub/reference/cluster_agreement.md)
   (adjusted Rand index against provisional labels). Surfaced through the
   new **Cluster** tab.
+- **Contour sonification** (new).
+  [`sonify_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/sonify_f0.md)
+  renders an f0 contour as an audible waveform: a pure tone, a complex
+  tone (harmonics), or a source-filter synthesised vowel (`a` / `i` /
+  `u`), with the pitch gliding along the contour. The Cluster tab’s
+  “Listen to the contours” panel plays each candidate cluster’s mean
+  contour back, so prototypical tones can be heard, not only seen
+  (faithful Hz when an Hz column is present, or shape-only on a chosen
+  base pitch).
 - **Curate** (new).
   [`apply_relabels()`](https://chenchenzi.github.io/citationtone_hub/reference/apply_relabels.md)
   re-labels tone-category variants (splits or mergers, colloquial

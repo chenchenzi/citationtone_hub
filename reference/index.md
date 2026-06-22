@@ -68,6 +68,15 @@ candidate tone categories when the number of tones is unknown (Kaland
 - [`cluster_agreement()`](https://chenchenzi.github.io/citationtone_hub/reference/cluster_agreement.md)
   : Agreement between clusters and known tone labels
 
+## Sonification
+
+Render an f0 contour as an audible waveform (pure tone, complex tone, or
+a source-filter synthesised vowel) so prototypical tones can be heard,
+not only seen.
+
+- [`sonify_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/sonify_f0.md)
+  : Sonify an f0 contour
+
 ## Curate tone labels
 
 Re-label tone-category variants or exclude tokens, without overwriting
