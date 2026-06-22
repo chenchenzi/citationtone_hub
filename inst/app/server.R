@@ -59,19 +59,17 @@ server <- function(input, output, session) {
   # finishes (the front page is already in the browser). Loaded once per
   # process; later sessions hit a warm process where these are no-ops.
   session$onFlushed(function() {
-    # On a warm process (a later session) the packages are already attached,
-    # so there is nothing to load and no toast to show.
-    if ("package:mgcv" %in% search()) return(invisible())
-    # Show the toast, then run the (blocking) load one tick later so the toast
-    # reaches the browser before R becomes busy. The load blocks R for a few
-    # seconds; a navigation click during that simply waits, but the toast
-    # makes the wait visible. Removed when loading finishes.
-    showNotification(
-      tagList(icon("spinner", class = "fa-spin"),
-              " Loading analysis tools (one-time, a few seconds)…"),
-      id = "pkgload", duration = NULL, closeButton = FALSE, session = session)
-    # The later() callback runs outside Shiny's reactive context, so pass
-    # `session` explicitly to any Shiny call inside it (e.g. removeNotification).
+    # The "Loading analysis tools…" toast is shown client-side the instant the
+    # page appears (see shiny:connected in ui.R), so the wait is visible from the
+    # very start. On a warm process (a later session) the packages are already
+    # attached, so there is nothing to load — just clear that toast.
+    if ("package:mgcv" %in% search()) {
+      session$sendCustomMessage("pkgload_done", TRUE)
+      return(invisible())
+    }
+    # Run the blocking load one tick later (the page is already up). The later()
+    # callback runs outside Shiny's reactive context, so pass `session` explicitly
+    # to the sendCustomMessage that clears the toast when loading finishes.
     later::later(function() {
       tryCatch(
         suppressWarnings(suppressPackageStartupMessages({
@@ -90,7 +88,7 @@ server <- function(input, output, session) {
           ggplot2::theme_set(ggplot2::theme_bw(base_size = 16))
         })),
         error = function(e) NULL)
-      removeNotification("pkgload", session = session)
+      session$sendCustomMessage("pkgload_done", TRUE)
     }, delay = 0.25)
   }, once = TRUE)
 

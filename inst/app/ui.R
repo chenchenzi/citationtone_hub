@@ -138,6 +138,20 @@ ui <- fluidPage(
         margin-top: 16px; font-family: 'Open Sans', sans-serif;
         color: #888; font-size: 0.95rem;
       }
+      /* One-time loading-analysis-tools toast, shown the instant the page appears */
+      #pkgload-toast {
+        position: fixed; bottom: 18px; right: 18px; z-index: 10000;
+        background: #fff; color: #444; border: 1px solid #d6e7df;
+        border-left: 4px solid #78c2ad; border-radius: 6px;
+        padding: 10px 16px; font-size: 0.9rem;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.12); transition: opacity 0.4s ease;
+      }
+      #pkgload-toast.fade-out { opacity: 0; }
+      #pkgload-toast .pkgspin {
+        display: inline-block; width: 13px; height: 13px; margin-right: 8px;
+        border: 2px solid #e0e0e0; border-top-color: #78c2ad;
+        border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: -2px;
+      }
       /* Feature cards on the About tab */
       .feature-section { margin-bottom: 28px; }
       .feature-section h3 {
@@ -326,10 +340,26 @@ ui <- fluidPage(
         watchForCode('gamm_r_code');
         watchForCode('summarise_r_code');
       });
-      // Dismiss loading screen once Shiny connects
+      // Dismiss loading screen once Shiny connects, and show the loading-tools
+      // toast immediately so the wait is visible from the very start (the server
+      // clears it via the pkgload_done message when loading is done).
       $(document).on('shiny:connected', function() {
         var el = document.getElementById('loading-screen');
         if (el) { el.classList.add('fade-out'); setTimeout(function(){ el.remove(); }, 500); }
+        if (!document.getElementById('pkgload-toast')) {
+          var t = document.createElement('div'); t.id = 'pkgload-toast';
+          var s = document.createElement('span'); s.className = 'pkgspin'; t.appendChild(s);
+          t.appendChild(document.createTextNode(' Loading analysis tools (one-time, a few seconds)…'));
+          document.body.appendChild(t);
+          window.__pkgloadTimer = setTimeout(function(){
+            var x = document.getElementById('pkgload-toast'); if (x && x.parentNode) x.parentNode.removeChild(x);
+          }, 25000);
+        }
+      });
+      Shiny.addCustomMessageHandler('pkgload_done', function(x) {
+        if (window.__pkgloadTimer) clearTimeout(window.__pkgloadTimer);
+        var t = document.getElementById('pkgload-toast');
+        if (t) { t.classList.add('fade-out'); setTimeout(function(){ if (t.parentNode) t.parentNode.removeChild(t); }, 450); }
       });
       // Scroll smoothly to a target element by id (used by server via
       // session$sendCustomMessage('scroll_to_id', 'some_id')).
