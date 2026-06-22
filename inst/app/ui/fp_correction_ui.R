@@ -950,6 +950,51 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                style = "width: 100%; max-width: 600px;")
   })
 
+  # ---- Sonify the contour: original vs corrected ----
+  # Reuses sonify_f0() to render the f0 numbers as a synthetic glide (complex
+  # tone or a vowel), so the user can *hear* whether an edit fixed the pitch
+  # track. When the token has edits we show an Original/Corrected A/B pair;
+  # otherwise a single player (the two would be identical). Re-renders as the
+  # contour is edited, giving live feedback. Synthesis is cheap (one short wav).
+  output$fp_corr_sonify <- renderUI({
+    req(input$fp_corr_token)
+    cur <- current_f0(); req(cur)
+    src   <- input$fp_corr_sonify_source %||% "complex"
+    dur   <- input$fp_corr_sonify_dur %||% 0.7
+    vowel <- input$fp_corr_sonify_vowel %||% "a"
+
+    make_player <- function(f0_vec, label, colour) {
+      wav <- tryCatch(sonify_f0(f0_vec, dur = dur, source = src, vowel = vowel),
+                      error = function(e) NULL)
+      if (is.null(wav)) {
+        return(tags$div(style = "color:#888; font-style:italic; font-size:0.82rem;",
+          paste0("Could not synthesise the ", tolower(label),
+                 " contour (no usable f0 values).")))
+      }
+      tf <- tempfile(fileext = ".wav")
+      tuneR::writeWave(wav, tf, extensible = FALSE)
+      bin <- readBin(tf, "raw", n = file.info(tf)$size); unlink(tf)
+      uri <- paste0("data:audio/wav;base64,", base64enc::base64encode(bin))
+      tags$div(style = "display:flex; align-items:center; gap:10px; margin-bottom:5px;",
+        tags$span(style = paste0("flex:0 0 84px; font-weight:600; font-size:0.84rem; color:",
+                                 colour, ";"), label),
+        tags$audio(controls = NA, src = uri, type = "audio/wav",
+                   style = "flex:1; max-width:520px;"))
+    }
+
+    if (is.null(edit_diff())) {
+      tagList(
+        make_player(cur$f0, "Contour", "#2c5f4f"),
+        tags$p(style = "color:#888; font-size:0.8rem; font-style:italic; margin:2px 0 0;",
+          "No edits yet, so the original and corrected contours are identical."))
+    } else {
+      orig <- original_f0(); req(orig)
+      tagList(
+        make_player(orig$f0, "Original",  "#999"),
+        make_player(cur$f0,  "Corrected", "#2c5f4f"))
+    }
+  })
+
   # ---- Combined waveform + f0 plot (single plot_ly w/ stacked y-axes) ----
   # Using one plot_ly() with yaxis (f0) + yaxis2 (waveform) avoids the
   # source-ambiguity problem that subplot() introduces, so plotly_click /
@@ -1903,6 +1948,25 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
 
       tags$h4("Audio"),
       uiOutput("fp_corr_audio"),
+      # Sonify the contour so the user can *hear* whether an edit fixed the
+      # pitch track. Synthetic only (complex tone or a vowel) via sonify_f0() --
+      # not the recorded voice. Two timbres kept deliberately, to stay compact.
+      tags$h4(style = "margin-top: 14px;", "Hear the f0 contour"),
+      tags$p(style = "color:#888; font-size:0.82rem; margin:0 0 8px; line-height:1.6;",
+        "A synthesised glide that traces the contour, so you can hear whether an ",
+        "edit fixed the pitch track (e.g. an octave jump or a halving glitch). ",
+        "Not the recorded voice."),
+      tags$div(style = "display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end; margin-bottom:8px;",
+        radioButtons("fp_corr_sonify_source", "Timbre",
+                     c("Complex tone" = "complex", "Vowel" = "vowel"),
+                     selected = "complex", inline = TRUE),
+        conditionalPanel("input.fp_corr_sonify_source == 'vowel'",
+          selectInput("fp_corr_sonify_vowel", "Vowel",
+                      c("/a/" = "a", "/i/" = "i", "/u/" = "u"),
+                      selected = "a", width = "84px")),
+        sliderInput("fp_corr_sonify_dur", "Duration (s)",
+                    min = 0.3, max = 1.5, value = 0.7, step = 0.1, width = "150px")),
+      uiOutput("fp_corr_sonify"),
       tags$h4(style = "margin-top: 14px;", "Waveform + f0"),
       tags$p(style = "color: #888; font-size: 0.82rem; margin: 0 0 6px 0; line-height: 1.7;",
         tags$strong("Plot:"), " mouse wheel or ",
