@@ -22,3 +22,7 @@ rsconnect/
 
 # pkgdown build output (deployed via GitHub Actions, not committed)
 docs/
+
+# Figure/poster rendering build artefacts (headless-Chrome / npm install)
+node_modules/
+.render/
