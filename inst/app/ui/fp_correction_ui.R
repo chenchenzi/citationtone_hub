@@ -960,8 +960,13 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     req(input$fp_corr_token)
     cur <- current_f0(); req(cur)
     src   <- input$fp_corr_sonify_source %||% "complex"
-    dur   <- input$fp_corr_sonify_dur %||% 0.7
     vowel <- input$fp_corr_sonify_vowel %||% "a"
+    # The f0 here is raw Hz, so play it faithfully -- no smoothing. The point is
+    # to *hear* stray frames (and confirm an edit removed them), so every frame
+    # must stay audible. Play at the token's own duration so the timing matches
+    # the recording above.
+    span <- suppressWarnings(diff(range(cur$time, na.rm = TRUE)))
+    dur  <- if (is.finite(span) && span > 0) max(0.15, min(4, span)) else 0.7
 
     make_player <- function(f0_vec, label, colour) {
       wav <- tryCatch(sonify_f0(f0_vec, dur = dur, source = src, vowel = vowel),
@@ -1948,25 +1953,6 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
 
       tags$h4("Audio"),
       uiOutput("fp_corr_audio"),
-      # Sonify the contour so the user can *hear* whether an edit fixed the
-      # pitch track. Synthetic only (complex tone or a vowel) via sonify_f0() --
-      # not the recorded voice. Two timbres kept deliberately, to stay compact.
-      tags$h4(style = "margin-top: 14px;", "Hear the f0 contour"),
-      tags$p(style = "color:#888; font-size:0.82rem; margin:0 0 8px; line-height:1.6;",
-        "A synthesised glide that traces the contour, so you can hear whether an ",
-        "edit fixed the pitch track (e.g. an octave jump or a halving glitch). ",
-        "Not the recorded voice."),
-      tags$div(style = "display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end; margin-bottom:8px;",
-        radioButtons("fp_corr_sonify_source", "Timbre",
-                     c("Complex tone" = "complex", "Vowel" = "vowel"),
-                     selected = "complex", inline = TRUE),
-        conditionalPanel("input.fp_corr_sonify_source == 'vowel'",
-          selectInput("fp_corr_sonify_vowel", "Vowel",
-                      c("/a/" = "a", "/i/" = "i", "/u/" = "u"),
-                      selected = "a", width = "84px")),
-        sliderInput("fp_corr_sonify_dur", "Duration (s)",
-                    min = 0.3, max = 1.5, value = 0.7, step = 0.1, width = "150px")),
-      uiOutput("fp_corr_sonify"),
       tags$h4(style = "margin-top: 14px;", "Waveform + f0"),
       tags$p(style = "color: #888; font-size: 0.82rem; margin: 0 0 6px 0; line-height: 1.7;",
         tags$strong("Plot:"), " mouse wheel or ",
@@ -1983,6 +1969,26 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         tags$kbd(","), " / ", tags$kbd("."), " previous / next token."),
       uiOutput("fp_corr_edit_status"),
       plotly::plotlyOutput("fp_corr_plot", height = "560px"),
+      # Sonify the (edited) contour, placed below the plot so the top stays
+      # uncluttered. Synthetic only (complex tone or vowel) via sonify_f0() --
+      # not the recorded voice. Boxed + lightly tinted to set it apart.
+      tags$div(
+        style = paste0("margin-top: 16px; background:#f4faf8; ",
+                       "border:1px solid #dcebe4; border-radius:8px; padding:12px 16px;"),
+        tags$h4(style = "margin-top: 0;", icon("headphones"), " Hear the f0 contour"),
+        tags$p(style = "color:#777; font-size:0.82rem; margin:0 0 8px; line-height:1.6;",
+          "A synthesised glide that traces the contour above, so you can hear whether ",
+          "your edit fixed the pitch track (e.g. an octave jump or a halving glitch). ",
+          "Not the recorded voice."),
+        tags$div(style = "display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end; margin-bottom:8px;",
+          radioButtons("fp_corr_sonify_source", "Timbre",
+                       c("Complex tone" = "complex", "Vowel" = "vowel"),
+                       selected = "complex", inline = TRUE),
+          conditionalPanel("input.fp_corr_sonify_source == 'vowel'",
+            selectInput("fp_corr_sonify_vowel", "Vowel",
+                        c("/a/" = "a", "/i/" = "i", "/u/" = "u"),
+                        selected = "a", width = "84px"))),
+        uiOutput("fp_corr_sonify")),
       tags$h4(style = "margin-top: 16px;", "Edit log"),
       tags$div(style = "display: flex; align-items: center; gap: 12px; margin-bottom: 4px; flex-wrap: wrap;",
         downloadButton("fp_corr_log_download", "Download edit log (CSV)",
