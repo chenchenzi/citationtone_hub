@@ -13,7 +13,9 @@ sonify_f0(
   n_harmonics = 6L,
   rolloff = 0.7,
   fade = 0.02,
-  amp = 0.9
+  amp = 0.9,
+  intensity = NULL,
+  dyn_range = 30
 )
 }
 \arguments{
@@ -39,6 +41,15 @@ or \code{"u"} (each is a formant set).}
 \item{fade}{Raised-cosine fade in/out duration (s), to avoid clicks.}
 
 \item{amp}{Peak amplitude (0-1).}
+
+\item{intensity}{Optional per-frame intensity (dB), the same length as
+\code{f0_hz}. When supplied, the rendered waveform's loudness follows it
+(\code{dB -> linear amplitude}), so the tone swells and fades like the
+original syllable. \code{NULL} (default) gives a flat amplitude.}
+
+\item{dyn_range}{Loudness range (dB) when \code{intensity} is used: frames
+more than this far below the peak are floored, so quiet frames attenuate
+without becoming inaudible. Default 30.}
 }
 \value{
 A 16-bit mono \code{\link[tuneR]{Wave}} object.

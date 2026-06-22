@@ -24,6 +24,21 @@ test_that("complex source works and NA gaps are handled", {
   expect_error(sonify_f0(c(NA, NA)), "at least 2 finite")
 })
 
+test_that("intensity shapes the loudness envelope (louder where dB is higher)", {
+  f <- rep(200, 40)
+  w  <- sonify_f0(f, fs = 16000, dur = 0.6, source = "tone",
+                  intensity = seq(50, 85, length.out = 40))   # rising loudness
+  x  <- abs(as.numeric(w@left)); n <- length(x)
+  early <- mean(x[round(0.15 * n):round(0.30 * n)])
+  late  <- mean(x[round(0.70 * n):round(0.85 * n)])
+  expect_gt(late, early * 1.5)                                # end is louder
+  # NULL intensity -> roughly flat amplitude across the same windows
+  x0 <- abs(as.numeric(sonify_f0(f, fs = 16000, dur = 0.6, source = "tone")@left))
+  e0 <- mean(x0[round(0.15 * n):round(0.30 * n)])
+  l0 <- mean(x0[round(0.70 * n):round(0.85 * n)])
+  expect_lt(abs(l0 - e0) / max(e0, 1), 0.2)
+})
+
 test_that("vowel source (source-filter) produces a finite Wave for a/i/u", {
   for (vw in c("a", "i", "u")) {
     w <- sonify_f0(c(120, 140, 160, 150, 130), dur = 0.4, source = "vowel", vowel = vw)

@@ -958,6 +958,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   # contour is edited, giving live feedback. Synthesis is cheap (one short wav).
   output$fp_corr_sonify <- renderUI({
     req(input$fp_corr_token)
+    tok <- input$fp_corr_token
     cur <- current_f0(); req(cur)
     src   <- input$fp_corr_sonify_source %||% "complex"
     vowel <- input$fp_corr_sonify_vowel %||% "a"
@@ -967,9 +968,21 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     # the recording above.
     span <- suppressWarnings(diff(range(cur$time, na.rm = TRUE)))
     dur  <- if (is.finite(span) && span > 0) max(0.15, min(4, span)) else 0.7
+    # Per-frame intensity (dB), aligned to the f0 frames, so the synth swells and
+    # fades like the syllable. Same for original/corrected (intensity is not
+    # edited). NULL when the data carries no intensity column.
+    intens <- {
+      raw <- fp_f0_data()
+      if (!is.null(raw) && "intensity" %in% names(raw)) {
+        s <- raw[raw$token == tok, c("time", "intensity")]
+        s[order(s$time), ]$intensity
+      } else NULL
+    }
 
     make_player <- function(f0_vec, label, colour) {
-      wav <- tryCatch(sonify_f0(f0_vec, dur = dur, source = src, vowel = vowel),
+      iv  <- if (!is.null(intens) && length(intens) == length(f0_vec)) intens else NULL
+      wav <- tryCatch(sonify_f0(f0_vec, dur = dur, source = src, vowel = vowel,
+                                intensity = iv),
                       error = function(e) NULL)
       if (is.null(wav)) {
         return(tags$div(style = "color:#888; font-style:italic; font-size:0.82rem;",

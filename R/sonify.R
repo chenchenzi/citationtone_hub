@@ -21,6 +21,13 @@
 #' @param rolloff Per-harmonic amplitude factor for \code{"complex"} (0-1).
 #' @param fade Raised-cosine fade in/out duration (s), to avoid clicks.
 #' @param amp Peak amplitude (0-1).
+#' @param intensity Optional per-frame intensity (dB), the same length as
+#'   \code{f0_hz}. When supplied, the rendered waveform's loudness follows it
+#'   (\code{dB -> linear amplitude}), so the tone swells and fades like the
+#'   original syllable. \code{NULL} (default) gives a flat amplitude.
+#' @param dyn_range Loudness range (dB) when \code{intensity} is used: frames
+#'   more than this far below the peak are floored, so quiet frames attenuate
+#'   without becoming inaudible. Default 30.
 #'
 #' @return A 16-bit mono \code{\link[tuneR]{Wave}} object.
 #'
@@ -34,13 +41,19 @@
 sonify_f0 <- function(f0_hz, fs = 16000, dur = 0.7,
                       source = c("tone", "complex", "vowel"),
                       vowel = c("a", "i", "u"),
-                      n_harmonics = 6L, rolloff = 0.7, fade = 0.02, amp = 0.9) {
+                      n_harmonics = 6L, rolloff = 0.7, fade = 0.02, amp = 0.9,
+                      intensity = NULL, dyn_range = 30) {
   source <- match.arg(source)
   vowel  <- match.arg(vowel)
   f0_hz <- as.numeric(f0_hz)
   fin <- which(is.finite(f0_hz))
   if (length(fin) < 2) stop("`f0_hz` needs at least 2 finite values.", call. = FALSE)
-  f0_hz <- f0_hz[fin[1]:fin[length(fin)]]                 # trim leading/trailing NA
+  keep <- fin[1]:fin[length(fin)]
+  if (!is.null(intensity)) {                              # align to the trimmed f0 frames
+    intensity <- suppressWarnings(as.numeric(intensity))
+    intensity <- if (length(intensity) == length(f0_hz)) intensity[keep] else NULL
+  }
+  f0_hz <- f0_hz[keep]                                    # trim leading/trailing NA
   gap <- !is.finite(f0_hz)
   if (any(gap))                                           # fill internal gaps
     f0_hz[gap] <- stats::approx(which(!gap), f0_hz[!gap], xout = which(gap))$y
@@ -72,6 +85,15 @@ sonify_f0 <- function(f0_hz, fs = 16000, dur = 0.7,
                                      method = "recursive"))
     }
     w[!is.finite(w)] <- 0
+  }
+
+  if (!is.null(intensity) && any(is.finite(intensity))) { # shape loudness by measured dB
+    iv <- intensity
+    iv[!is.finite(iv)] <- min(iv[is.finite(iv)])          # floor unvoiced/NA frames
+    env <- stats::approx(seq(0, 1, length.out = length(iv)), iv,
+                         xout = seq(0, 1, length.out = n))$y
+    rel <- pmax(env - max(env), -abs(dyn_range))          # dB below peak, floored
+    w   <- w * 10 ^ (rel / 20)                            # dB -> linear amplitude
   }
 
   nf <- min(floor(n / 2), max(1L, round(fs * fade)))      # raised-cosine fade
