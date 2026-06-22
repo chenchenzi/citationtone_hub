@@ -34,24 +34,23 @@ fp_praat_script_ui <- function(input, output, session) {
 #      Click OK on each.
 #
 # Outputs (both ready for Shinytone):
-#   * <output_folder>/*.Pitch     -> upload alongside the .wav in
-#                                    F0 Processing > Start, then in
+#   * <input_folder>/*.Pitch      -> written next to each .wav. Upload alongside
+#                                    the .wav in F0 Processing > Start, then in
 #                                    F0 Extraction pick
 #                                    "Use uploaded .Pitch / .PitchTier (Praat)".
-#   * the Output_csv file          -> the combined CSV. Saved inside the output
-#                                    folder by default, or wherever you Browse to.
-#                                    Upload directly in F0 Analysis > Start if you
-#                                    do not need frame-level correction.
+#   * the Output_csv file          -> the combined CSV, saved wherever the
+#                                    Output_csv picker points. Upload directly in
+#                                    F0 Analysis > Start if you do not need
+#                                    frame-level correction.
 ###############################################################
 
 # ============================================================
 # 1) First dialog: basic settings
 # ============================================================
 form Extract f0 with Praat
-  comment === Input / output ===
+  comment === Input (.wav files; the .Pitch files are written here too) ===
   folder Input_folder /path/to/your/wav/files
-  folder Output_folder /path/to/output
-  comment CSV: a bare name is saved inside Output_folder; Browse to put it elsewhere.
+  comment === Combined CSV: Browse to choose where to save it and its name ===
   outfile Output_csv f0_long.csv
 
   comment === Pitch range (Hz) -- tighten to your speakers ===
@@ -126,17 +125,9 @@ if very_accurate
   very_accurate$ = "yes"
 endif
 
-# Make sure the output folder exists
-createFolder: output_folder$
-
-# Where to write the combined CSV: a bare filename goes inside the output
-# folder; a path (e.g. chosen via the Browse button) is used as-is, so the CSV
-# can live anywhere. Praat uses "/" in script paths on every platform.
-if index(output_csv$, "/") = 0
-  csv_path$ = output_folder$ + "/" + output_csv$
-else
-  csv_path$ = output_csv$
-endif
+# The combined CSV is written exactly where the Output_csv picker points (Browse
+# to choose the folder and the name); the picker returns a full path, used as-is.
+csv_path$ = output_csv$
 
 # Open (overwrite) the combined CSV with a header row
 writeFileLine: csv_path$, "token,time,f0,intensity"
@@ -201,7 +192,7 @@ for i to n_files
     # Save the .Pitch as a text file. Text preserves all candidates too, and
     # (unlike binary) it is the format rPraat / Shinytone can read back.
     selectObject: pitch
-    Save as text file: output_folder$ + "/" + basename$ + ".Pitch"
+    Save as text file: input_folder$ + "/" + basename$ + ".Pitch"
 
     # Intensity (dB) over the same recording. Shinytone\'s Inspect tab uses
     # this to flag low-energy frames, where f0 estimates are unreliable
@@ -261,7 +252,7 @@ Remove
 
 appendInfoLine: ""
 appendInfoLine: "Done."
-appendInfoLine: "  ", n_files, " .Pitch file(s) in: ", output_folder$
+appendInfoLine: "  ", n_files, " .Pitch file(s) in: ", input_folder$
 appendInfoLine: "  Combined CSV: ", csv_path$
 '
 
@@ -342,9 +333,9 @@ appendInfoLine: "  Combined CSV: ", csv_path$
         tags$li("Runs the chosen pitch-extraction method (default: ",
                 tags$code("filtered ac"), ", Praat 6.4+)."),
         tags$li("Saves a text ", tags$code("<basename>.Pitch"),
-                " file per recording into the output folder."),
-        tags$li("Writes one combined CSV (you name it; default ",
-                tags$code("f0_long.csv"), ", saved in the output folder or any path you Browse to)",
+                " file next to each recording, in the input folder."),
+        tags$li("Writes one combined CSV (Browse to choose where to save it and ",
+                "its name; default ", tags$code("f0_long.csv"), ")",
                 " with columns ", tags$code("token, time, f0, intensity"),
                 " (long format), one row per frame per token. The ",
                 tags$code("intensity"), " column (dB) lets the ",
@@ -374,7 +365,7 @@ appendInfoLine: "  Combined CSV: ", csv_path$
                 " will appear in sequence:"),
         tags$ul(style = "margin-top: -6px;",
           tags$li(tags$strong("Basic settings:"),
-                  " input / output folders, the CSV name or save path, pitch range, time step, and method."),
+                  " input folder, the CSV save location, pitch range, time step, and method."),
           tags$li(tags$strong("Advanced parameters:"),
                   " silence threshold, voicing threshold, octave costs, etc., ",
                   "pre-filled with Praat's defaults for the method you chose ",
