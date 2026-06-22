@@ -1,5 +1,18 @@
 visualise_ui <- function(input, output, session, dataset, normalised_data) {
 
+  # Tone colour palette: a 12-colour qualitative set matched to the app's minty
+  # theme. It leads with the brand pine-green (#3B8A6E) and coral accent
+  # (#E07A5F) so a typical small tone inventory reads as on-brand, then fans
+  # across the hue wheel at a coordinated medium saturation (greens never
+  # adjacent). Every colour is saturated enough to read as points and thin lines
+  # on the white plot background, replacing brewer "Set3", whose pastel colours
+  # (e.g. the near-white #FFFFB3 yellow) vanished on white. 12 colours match the
+  # `n_tone_lv <= 12` colour-by-tone cap below, so every coloured tone level gets
+  # a distinct, visible colour.
+  vis_tone_palette <- c("#3B8A6E", "#E07A5F", "#4F86B3", "#E0A458",
+                        "#8E6CA8", "#2FA89B", "#CB5E84", "#B5654A",
+                        "#7E9B3E", "#5566A0", "#A88B2D", "#6E7177")
+
   # Active dataset for the Visualise tab (uploaded or normalised)
   vis_dataset <- reactive({
     if (!is.null(input$vis_data_source) && input$vis_data_source == "normalised" && !is.null(normalised_data())) {
@@ -205,7 +218,7 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
     }
     p <- p + (if (colour_by_tone) geom_point(alpha = 0.75)
               else geom_point(colour = one_col, alpha = 0.6))
-    if (colour_by_tone) p <- p + scale_color_brewer(palette = "Set3")
+    if (colour_by_tone) p <- p + scale_color_manual(values = vis_tone_palette)
     p <- p + labs(
       x = x_lab, y = f0_axis_label(input$y_var),
       color = if (colour_by_tone) input$tone_var else NULL)
@@ -390,7 +403,9 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
     code_lines <- c(code_lines,
       if (cbt) "  geom_point(alpha = 0.75) +"
       else     '  geom_point(colour = "#3b8a6e", alpha = 0.6) +')
-    if (cbt) code_lines <- c(code_lines, '  scale_color_brewer(palette = "Set3") +')
+    if (cbt) code_lines <- c(code_lines,
+      paste0('  scale_color_manual(values = c(',
+             paste0('"', vis_tone_palette, '"', collapse = ", "), ')) +'))
     code_lines <- c(code_lines,
       if (cbt) paste0('  labs(x = "', x_lab_code, '", y = "', f0_axis_label(input$y_var), '", color = "', input$tone_var, '")')
       else     paste0('  labs(x = "', x_lab_code, '", y = "', f0_axis_label(input$y_var), '")'))
