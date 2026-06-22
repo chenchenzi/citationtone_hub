@@ -17,7 +17,9 @@ sonify_f0(
   n_harmonics = 6L,
   rolloff = 0.7,
   fade = 0.02,
-  amp = 0.9
+  amp = 0.9,
+  intensity = NULL,
+  dyn_range = 30
 )
 ```
 
@@ -63,6 +65,19 @@ sonify_f0(
 - amp:
 
   Peak amplitude (0-1).
+
+- intensity:
+
+  Optional per-frame intensity (dB), the same length as `f0_hz`. When
+  supplied, the rendered waveform's loudness follows it
+  (`dB -> linear amplitude`), so the tone swells and fades like the
+  original syllable. `NULL` (default) gives a flat amplitude.
+
+- dyn_range:
+
+  Loudness range (dB) when `intensity` is used: frames more than this
+  far below the peak are floored, so quiet frames attenuate without
+  becoming inaudible. Default 30.
 
 ## Value
 
