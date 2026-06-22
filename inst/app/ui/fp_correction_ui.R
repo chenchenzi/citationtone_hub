@@ -1082,20 +1082,48 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     sel_in_plot <- match(sel, plot_idx)
     sel_in_plot <- sel_in_plot[!is.na(sel_in_plot)]
 
+    # --- Dot size encodes per-frame intensity (louder = bigger) ---
+    # Pull the token's intensity (dB) and align it to the plotted frames by time.
+    # Scale to a visible size band; frames with no intensity fall back to the
+    # default size, so behaviour is unchanged when the data has no dB column.
+    intens_plot <- rep(NA_real_, nrow(f0_plot))
+    raw_int <- fp_f0_data()
+    if (!is.null(raw_int) && "intensity" %in% names(raw_int)) {
+      si <- raw_int[raw_int$token == tok, c("time", "intensity")]
+      intens_plot <- si$intensity[match(round(f0_plot$time, 6), round(si$time, 6))]
+    }
+    # Scale finite intensities into [sz_lo, sz_hi]; every NA / no-dB frame keeps
+    # the default size (start from default, then overwrite only finite frames).
+    # The band tops out below the flagged/selected sizes so those stay clearly
+    # larger than even the loudest normal dot (size + colour both signal them).
+    sz_lo <- 4; sz_hi <- 10; sz_default <- 7
+    base_sizes <- rep(sz_default, nrow(f0_plot))
+    if (any(is.finite(intens_plot))) {
+      fin <- is.finite(intens_plot)
+      rng <- range(intens_plot[fin])
+      base_sizes[fin] <- if (diff(rng) > 1e-6)
+        sz_lo + (intens_plot[fin] - rng[1]) / diff(rng) * (sz_hi - sz_lo)
+      else (sz_lo + sz_hi) / 2
+    }
+
     point_colors <- rep("#5cb89a", nrow(f0_plot))
-    point_sizes  <- rep(7L,        nrow(f0_plot))
+    point_sizes  <- base_sizes
     if (length(flagged_in_plot) > 0) {
       point_colors[flagged_in_plot] <- "#d9534f"   # red — Inspect-flagged
-      point_sizes [flagged_in_plot] <- 10L
+      point_sizes [flagged_in_plot] <- 13          # clearly above the intensity band (max 10)
     }
     if (length(sel_in_plot) > 0) {
       point_colors[sel_in_plot] <- "#1f6feb"       # blue — selected (distinct from red flags)
-      point_sizes [sel_in_plot] <- 12L
+      point_sizes [sel_in_plot] <- 16
     }
 
     # Hover text — original frame index, time, f0, and flag note if any
     hover_text <- sprintf("frame %d<br>time: %.3fs<br>f0: %.1f Hz",
                           plot_idx, f0_plot$time, f0_plot$f0)
+    has_int <- is.finite(intens_plot)
+    if (any(has_int))
+      hover_text[has_int] <- sprintf("%s<br>intensity: %.1f dB",
+                                     hover_text[has_int], intens_plot[has_int])
     if (length(flagged_in_plot) > 0) {
       hover_text[flagged_in_plot] <- paste0(hover_text[flagged_in_plot],
                                             "<br><b>⚑ flagged:</b> ",
@@ -1972,6 +2000,8 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         tags$kbd("+"), " / ", tags$kbd("-"), " to zoom, ",
         tags$kbd("←"), " / ", tags$kbd("→"), " to pan, ",
         tags$kbd("0"), " to reset (time axis only).",
+        tags$br(),
+        tags$strong("Dots:"), " size shows intensity (louder = bigger).",
         tags$br(),
         tags$strong("Edits:"), " ",
         tags$kbd("Delete"), " (or ", tags$kbd("Backspace"),
