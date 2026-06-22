@@ -26,3 +26,6 @@ docs/
 # Figure/poster rendering build artefacts (headless-Chrome / npm install)
 node_modules/
 .render/
+
+# Talk slides are kept local, not committed
+slides/
