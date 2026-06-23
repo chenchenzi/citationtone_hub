@@ -7,6 +7,53 @@
 #' The contour has no inherent duration, so it is time-scaled to \code{dur}
 #' seconds. Pitch is rendered by phase accumulation, so the glide is smooth.
 #'
+#' @details
+#' All three timbres share one pitch generator and differ only in spectral shape:
+#'
+#' \enumerate{
+#'   \item \strong{Contour conditioning.} Leading/trailing \code{NA}s are
+#'     trimmed and internal gaps linearly interpolated; the contour is then
+#'     resampled to \code{round(fs * dur)} samples and clamped to 40-2000 Hz.
+#'   \item \strong{Pitch by phase accumulation.} The running phase is
+#'     \code{phase = cumsum(2 * pi * f0 / fs)}, so \code{sin(phase)} has an
+#'     instantaneous frequency equal to the contour at every sample; the pitch
+#'     glides continuously with no discontinuities.
+#'   \item \strong{Source waveform.} \code{"tone"} is the bare sine
+#'     \code{sin(phase)}. \code{"complex"} sums harmonics with a geometric
+#'     roll-off, \code{sum_h rolloff^(h-1) * sin(h * phase)} (\code{n_harmonics}
+#'     terms, capped so the highest stays below the Nyquist frequency).
+#'     \code{"vowel"} uses source-filter synthesis (below).
+#'   \item \strong{Loudness, fade, normalisation.} An optional \code{intensity}
+#'     envelope scales amplitude by \code{10^((dB - max(dB)) / 20)} (floored at
+#'     \code{-dyn_range} dB); a raised-cosine fade removes onset/offset clicks;
+#'     the waveform is peak-normalised to \code{amp} and quantised to 16-bit.
+#' }
+#'
+#' \strong{Vowel (source-filter) synthesis.} Following the linear source-filter
+#' theory of speech production (Fant, 1960), a glottal \emph{source} is passed
+#' through a vocal-tract \emph{filter}. The source is a band-limited harmonic
+#' buzz \code{sum_h (1/h) * sin(h * phase)} (the \code{1/h} roll-off approximates
+#' the spectral tilt of glottal flow). The filter is a cascade of three two-pole
+#' resonators, one per formant, each the recursive difference equation
+#' \code{y[n] = x[n] + 2*r*cos(theta)*y[n-1] - r^2*y[n-2]}, with resonance
+#' \code{theta = 2*pi*F/fs} and bandwidth set by \code{r = exp(-pi*BW/fs)} (poles
+#' at radius \code{r}, angle \code{theta}). The three formant centres (Hz) define
+#' the vowel:
+#' \tabular{llll}{
+#'   \tab \strong{F1} \tab \strong{F2} \tab \strong{F3} \cr
+#'   \code{"a"} \tab 700 \tab 1220 \tab 2600 \cr
+#'   \code{"i"} \tab 300 \tab 2300 \tab 3000 \cr
+#'   \code{"u"} \tab 350 \tab  800 \tab 2400 \cr
+#' }
+#' The formants are static (no transitions) and the result is a stylised vowel
+#' timbre, not a reconstruction of the recording's actual vowel.
+#'
+#' @references
+#' Fant, G. (1960). \emph{Acoustic Theory of Speech Production}. Mouton.
+#'
+#' Klatt, D. H. (1980). Software for a cascade/parallel formant synthesiser.
+#' \emph{Journal of the Acoustical Society of America}, 67(3), 971-995.
+#'
 #' @param f0_hz Numeric vector of f0 values in Hz (the contour to play). Leading
 #'   and trailing \code{NA}s are trimmed; internal \code{NA}s are interpolated.
 #' @param fs Output sample rate (Hz). Default 16000.
