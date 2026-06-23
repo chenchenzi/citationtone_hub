@@ -1096,7 +1096,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     # the default size (start from default, then overwrite only finite frames).
     # The band tops out below the flagged/selected sizes so those stay clearly
     # larger than even the loudest normal dot (size + colour both signal them).
-    sz_lo <- 4; sz_hi <- 10; sz_default <- 7
+    sz_lo <- 8; sz_hi <- 14; sz_default <- 8
     base_sizes <- rep(sz_default, nrow(f0_plot))
     if (any(is.finite(intens_plot))) {
       fin <- is.finite(intens_plot)
@@ -1109,12 +1109,12 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     point_colors <- rep("#5cb89a", nrow(f0_plot))
     point_sizes  <- base_sizes
     if (length(flagged_in_plot) > 0) {
+      # Colour only — keep the intensity-driven size; red already marks the flag.
       point_colors[flagged_in_plot] <- "#d9534f"   # red — Inspect-flagged
-      point_sizes [flagged_in_plot] <- 13          # clearly above the intensity band (max 10)
     }
     if (length(sel_in_plot) > 0) {
-      point_colors[sel_in_plot] <- "#1f6feb"       # blue — selected (distinct from red flags)
-      point_sizes [sel_in_plot] <- 16
+      point_colors[sel_in_plot] <- "#1f6feb"       # blue — selected
+      point_sizes [sel_in_plot] <- 16              # a touch above the band (max 14)
     }
 
     # Hover text — original frame index, time, f0, and flag note if any
@@ -2001,7 +2001,12 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         tags$kbd("←"), " / ", tags$kbd("→"), " to pan, ",
         tags$kbd("0"), " to reset (time axis only).",
         tags$br(),
-        tags$strong("Dots:"), " size shows intensity (louder = bigger).",
+        tags$span(style = "display:inline-flex; align-items:center; gap:6px; vertical-align:middle;",
+          tags$strong("Dot size = intensity:"),
+          tags$span(style = "display:inline-block; width:8px; height:8px; border-radius:50%; background:#5cb89a; border:1px solid #2c5f4f;"),
+          tags$span(style = "display:inline-block; width:11px; height:11px; border-radius:50%; background:#5cb89a; border:1px solid #2c5f4f;"),
+          tags$span(style = "display:inline-block; width:14px; height:14px; border-radius:50%; background:#5cb89a; border:1px solid #2c5f4f;"),
+          tags$span("quieter → louder, scaled within each token (hover for dB)")),
         tags$br(),
         tags$strong("Edits:"), " ",
         tags$kbd("Delete"), " (or ", tags$kbd("Backspace"),
@@ -2020,23 +2025,26 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                        "border:1px solid #dcebe4; border-radius:8px; padding:12px 16px;"),
         tags$h4(style = "margin-top: 0;", icon("headphones"), " Hear the f0 contour"),
         tags$p(style = "color:#777; font-size:0.82rem; margin:0 0 8px; line-height:1.6;",
-          "A synthesised glide that traces the contour above, so you can hear whether ",
-          "your edit fixed the pitch track (e.g. an octave jump or a halving glitch). ",
-          "Not the recorded voice."),
-        tags$div(style = "display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end; margin-bottom:8px;",
-          radioButtons("fp_corr_sonify_source", "Timbre",
-                       c("Complex tone" = "complex", "Vowel" = "vowel"),
-                       selected = "complex", inline = TRUE),
+          "A synthesised glide that traces the contour and intensity above, so you can ",
+          "hear whether your edit improved the pitch track. Not the recorded voice."),
+        tags$div(style = "display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:8px;",
+          tags$strong(style = "font-size:0.86rem;", "Timbre:"),
+          tags$div(style = "margin-bottom:-1rem;",      # cancel radioButtons' bottom margin
+            radioButtons("fp_corr_sonify_source", NULL,
+                         c("Complex tone" = "complex", "Vowel" = "vowel"),
+                         selected = "complex", inline = TRUE)),
           conditionalPanel("input.fp_corr_sonify_source == 'vowel'",
-            selectInput("fp_corr_sonify_vowel", "Vowel",
-                        c("/a/" = "a", "/i/" = "i", "/u/" = "u"),
-                        selected = "a", width = "84px"))),
+            tags$div(style = "margin-bottom:-1rem;",
+              selectInput("fp_corr_sonify_vowel", NULL,
+                          c("/a/" = "a", "/i/" = "i", "/u/" = "u"),
+                          selected = "a", width = "84px")))),
         uiOutput("fp_corr_sonify")),
       tags$h4(style = "margin-top: 16px;", "Edit log"),
       tags$div(style = "display: flex; align-items: center; gap: 12px; margin-bottom: 4px; flex-wrap: wrap;",
         downloadButton("fp_corr_log_download", "Download edit log (CSV)",
                        icon = icon("download")),
-        actionButton("fp_corr_log_clear", "Clear log", icon = icon("eraser")),
+        actionButton("fp_corr_log_clear", "Clear log", icon = icon("eraser"),
+                     class = "btn-sm"),
         tags$span(style = "color: #888; font-size: 0.8rem; font-style: italic;",
                   "Chronological record of every edit applied in this session.")
       ),
