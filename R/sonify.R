@@ -41,7 +41,7 @@
 sonify_f0 <- function(f0_hz, fs = 16000, dur = 0.7,
                       source = c("tone", "complex", "vowel"),
                       vowel = c("a", "i", "u"),
-                      n_harmonics = 6L, rolloff = 0.7, fade = 0.02, amp = 0.9,
+                      n_harmonics = 12L, rolloff = 0.7, fade = 0.02, amp = 0.9,
                       intensity = NULL, dyn_range = 30) {
   source <- match.arg(source)
   vowel  <- match.arg(vowel)
@@ -67,8 +67,9 @@ sonify_f0 <- function(f0_hz, fs = 16000, dur = 0.7,
   if (source == "tone") {
     w <- sin(phase)
   } else if (source == "complex") {
+    nh <- max(1L, min(as.integer(n_harmonics), floor((fs / 2) / max(cont))))  # cap below Nyquist
     w <- numeric(n)
-    for (h in seq_len(as.integer(n_harmonics)))
+    for (h in seq_len(nh))
       w <- w + (rolloff^(h - 1)) * sin(h * phase)
   } else {                                                  # vowel: source-filter
     nh <- max(1L, min(30L, floor((fs / 2) / max(cont))))    # band-limited glottal source

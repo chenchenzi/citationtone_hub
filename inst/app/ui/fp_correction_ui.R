@@ -1004,11 +1004,11 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       tagList(
         make_player(cur$f0, "Contour", "#2c5f4f"),
         tags$p(style = "color:#888; font-size:0.8rem; font-style:italic; margin:2px 0 0;",
-          "No edits yet, so the original and corrected contours are identical."))
+          "No edits yet, so the extracted and corrected contours are identical."))
     } else {
       orig <- original_f0(); req(orig)
       tagList(
-        make_player(orig$f0, "Original",  "#999"),
+        make_player(orig$f0, "Extracted", "#999"),
         make_player(cur$f0,  "Corrected", "#2c5f4f"))
     }
   })
@@ -2001,20 +2001,20 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         tags$kbd("←"), " / ", tags$kbd("→"), " to pan, ",
         tags$kbd("0"), " to reset (time axis only).",
         tags$br(),
-        tags$span(style = "display:inline-flex; align-items:center; gap:6px; vertical-align:middle;",
-          tags$strong("Dot size = intensity:"),
-          tags$span(style = "display:inline-block; width:8px; height:8px; border-radius:50%; background:#5cb89a; border:1px solid #2c5f4f;"),
-          tags$span(style = "display:inline-block; width:11px; height:11px; border-radius:50%; background:#5cb89a; border:1px solid #2c5f4f;"),
-          tags$span(style = "display:inline-block; width:14px; height:14px; border-radius:50%; background:#5cb89a; border:1px solid #2c5f4f;"),
-          tags$span("quieter → louder, scaled within each token (hover for dB)")),
-        tags$br(),
         tags$strong("Edits:"), " ",
         tags$kbd("Delete"), " (or ", tags$kbd("Backspace"),
         ") mark selected frames as NA, ",
         tags$kbd("Cmd"), "+", tags$kbd("Z"),
         " / ", tags$kbd("Ctrl"), "+", tags$kbd("Z"),
         " undo the last edit, ",
-        tags$kbd(","), " / ", tags$kbd("."), " previous / next token."),
+        tags$kbd(","), " / ", tags$kbd("."), " previous / next token.",
+        tags$br(),
+        tags$span(style = "display:inline-flex; align-items:center; gap:6px; vertical-align:middle;",
+          tags$strong("Dot size = intensity:"),
+          tags$span(style = "display:inline-block; width:8px; height:8px; border-radius:50%; background:#5cb89a; border:1px solid #2c5f4f;"),
+          tags$span(style = "display:inline-block; width:11px; height:11px; border-radius:50%; background:#5cb89a; border:1px solid #2c5f4f;"),
+          tags$span(style = "display:inline-block; width:14px; height:14px; border-radius:50%; background:#5cb89a; border:1px solid #2c5f4f;"),
+          tags$span("quieter → louder, scaled within each token (hover for dB)"))),
       uiOutput("fp_corr_edit_status"),
       plotly::plotlyOutput("fp_corr_plot", height = "560px"),
       # Sonify the (edited) contour, placed below the plot so the top stays
@@ -2028,7 +2028,11 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           "A synthesised glide that traces the contour and intensity above, so you can ",
           "hear whether your edit improved the pitch track. Not the recorded voice."),
         tags$div(style = "display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:8px;",
-          tags$strong(style = "font-size:0.86rem;", "Timbre:"),
+          tags$strong(style = "font-size:0.86rem; cursor:help;",
+            title = paste("Complex tone: a buzzy harmonic tone (12 harmonics,",
+                          "amplitude roll-off 0.7). Vowel: source-filter synthesis (/a/, /i/, /u/).",
+                          "Both glide along the f0; only the timbre differs."),
+            "Timbre:"),
           tags$div(style = "margin-bottom:-1rem;",      # cancel radioButtons' bottom margin
             radioButtons("fp_corr_sonify_source", NULL,
                          c("Complex tone" = "complex", "Vowel" = "vowel"),
@@ -2048,12 +2052,11 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         tags$span(style = "color: #888; font-size: 0.8rem; font-style: italic;",
                   "Chronological record of every edit applied in this session.")
       ),
-      tags$div(style = "display: flex; align-items: center; gap: 10px; margin-bottom: 6px; max-width: 480px;",
-        tags$span(style = "color:#555; font-size:0.82rem; white-space:nowrap;",
-                  "Restore a saved log:"),
-        tags$div(style = "flex: 1; min-width: 220px;",
-          fileInput("fp_corr_log_upload", NULL, accept = ".csv",
-                    buttonLabel = "Upload edit log", placeholder = "edit_log_....csv"))
+      tags$div(style = "margin-bottom: 6px; max-width: 420px;",
+        tags$div(style = "color:#333; font-size:0.82rem; font-weight:500; margin-bottom:4px;",
+                 "Restore a saved log:"),
+        fileInput("fp_corr_log_upload", NULL, accept = ".csv",
+                  buttonLabel = "Upload edit log", placeholder = "edit_log_....csv")
       ),
       DT::dataTableOutput("fp_corr_edits_table")
     )

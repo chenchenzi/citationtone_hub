@@ -10,7 +10,7 @@ sonify_f0(
   dur = 0.7,
   source = c("tone", "complex", "vowel"),
   vowel = c("a", "i", "u"),
-  n_harmonics = 6L,
+  n_harmonics = 12L,
   rolloff = 0.7,
   fade = 0.02,
   amp = 0.9,
