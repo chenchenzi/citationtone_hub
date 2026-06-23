@@ -1,6 +1,9 @@
-# shinytone (development version)
+# shinytone 1.0.0
 
-## shinytone 0.1.3
+First stable release. The Shiny app covers the citation-tone workflow end to end
+(collect, extract, inspect, correct, curate, normalise, cluster, visualise,
+model, Chao numerals), and the analytical functions behind each step are
+exported and documented. Highlights since the 0.1.x line:
 
 * **Contour clustering** (new). An unsupervised "tone discovery" workflow that
   groups tokens by f0-contour shape when the number of tone categories is
@@ -12,11 +15,20 @@
   `cluster_agreement()` (adjusted Rand index against provisional labels).
   Surfaced through the new **Cluster** tab.
 * **Contour sonification** (new). `sonify_f0()` renders an f0 contour as an
-  audible waveform: a pure tone, a complex tone (harmonics), or a source-filter
-  synthesised vowel (`a` / `i` / `u`), with the pitch gliding along the contour.
-  The Cluster tab's "Listen to the contours" panel plays each candidate
-  cluster's mean contour back, so prototypical tones can be heard, not only seen
-  (faithful Hz when an Hz column is present, or shape-only on a chosen base pitch).
+  audible waveform: a pure tone, a complex tone (12 harmonics, band-limited below
+  Nyquist), or a source-filter synthesised vowel (`a` / `i` / `u`), with the
+  pitch gliding along the contour. An optional `intensity` argument shapes the
+  loudness envelope from per-frame dB. The Cluster tab's "Listen to the contours"
+  panel plays each candidate cluster's mean contour back, so prototypical tones
+  can be heard, not only seen (faithful Hz when an Hz column is present, or
+  shape-only on a chosen base pitch).
+* **Hear your corrections** (new). The F0 Correction tab sonifies the contour you
+  are editing as an *Extracted vs Corrected* A/B pair, played at the token's own
+  duration with loudness following the measured intensity, so you can hear
+  whether an edit fixed the pitch track.
+* **Intensity made visible** (new). In F0 Correction, the f0 dots are sized by
+  per-frame intensity (louder = bigger), with a size legend and per-frame dB on
+  hover.
 * **Curate** (new). `apply_relabels()` re-labels tone-category variants (splits
   or mergers, colloquial vs. literary readings, sandhi) or excludes mis-elicited
   tokens without overwriting the original labels, surfaced through the new
@@ -38,6 +50,15 @@
 * **F0 Processing.** The Start preview now flags audio files too short to yield
   an f0 frame and skips them during extraction. `flag_low_intensity()` (the
   intensity-based inspection check) is now exported and documented.
+* **Visualise palette** (new). The tone colour scale is a 12-colour set matched
+  to the app theme, replacing the pale default so every tone reads clearly on a
+  white background.
+* **Faster start-up** (new). A one-time "loading analysis tools" toast appears
+  the instant the page connects while the heavy analysis packages load in the
+  background, so the landing page paints immediately.
+* **Praat extraction script** (new). The bundled script writes readable text
+  `.Pitch` files, samples per-frame intensity into the CSV, and resolves the
+  chosen CSV output path correctly on Windows.
 
 ## shinytone 0.1.2
 

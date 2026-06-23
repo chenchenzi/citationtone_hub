@@ -1,6 +1,6 @@
 Package: shinytone
 Title: A Citation Tone Research Hub
-Version: 0.1.3
+Version: 1.0.0
 Authors@R: c(
     person("Chenzi", "Xu",
            email = "chenzi.xu@ntu.edu.sg",

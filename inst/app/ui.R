@@ -1454,7 +1454,7 @@ ui <- fluidPage(
                         tags$div(class = "rpkg-body",
                           tags$h3("shinytone ", tags$span(
                             style = "font-weight: 500; color: #78c2ad; font-size: 0.92rem; vertical-align: middle; margin-left: 6px;",
-                            "v0.1.1"
+                            "v1.0.0"
                           )),
                           tags$p(class = "rpkg-sub",
                             "An R package for citation tone research — ",
@@ -1689,7 +1689,7 @@ ui <- fluidPage(
                             tags$blockquote(style = "border-left: 3px solid #78c2ad; padding-left: 12px; color: #555; font-size: 0.88rem;",
                               "Xu, C., & Zhang, C. (2026). ",
                               tags$em("shinytone: A citation tone research hub"),
-                              ". R package version 0.1.1. ",
+                              ". R package version 1.0.0. ",
                               tags$a(href = "https://chenchenzi.github.io/citationtone_hub/",
                                      target = "_blank", "chenchenzi.github.io/citationtone_hub")
                             ),
