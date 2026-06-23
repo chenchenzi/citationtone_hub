@@ -133,6 +133,40 @@ without becoming inaudible. Default 30.</p></dd>
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>The contour has no inherent duration, so it is time-scaled to <code>dur</code>
 seconds. Pitch is rendered by phase accumulation, so the glide is smooth.</p>
+<p>All three timbres share one pitch generator and differ only in spectral shape:</p>
+<ol><li><p><strong>Contour conditioning.</strong> Leading/trailing <code>NA</code>s are
+trimmed and internal gaps linearly interpolated; the contour is then
+resampled to <code>round(fs * dur)</code> samples and clamped to 40-2000 Hz.</p></li>
+<li><p><strong>Pitch by phase accumulation.</strong> The running phase is
+<code>phase = cumsum(2 * pi * f0 / fs)</code>, so <code>sin(phase)</code> has an
+instantaneous frequency equal to the contour at every sample; the pitch
+glides continuously with no discontinuities.</p></li>
+<li><p><strong>Source waveform.</strong> <code>"tone"</code> is the bare sine
+<code>sin(phase)</code>. <code>"complex"</code> sums harmonics with a geometric
+roll-off, <code>sum_h rolloff^(h-1) * sin(h * phase)</code> (<code>n_harmonics</code>
+terms, capped so the highest stays below the Nyquist frequency).
+<code>"vowel"</code> uses source-filter synthesis (below).</p></li>
+<li><p><strong>Loudness, fade, normalisation.</strong> An optional <code>intensity</code>
+envelope scales amplitude by <code>10^((dB - max(dB)) / 20)</code> (floored at
+<code>-dyn_range</code> dB); a raised-cosine fade removes onset/offset clicks;
+the waveform is peak-normalised to <code>amp</code> and quantised to 16-bit.</p></li>
+</ol><p><strong>Vowel (source-filter) synthesis.</strong> Following the linear source-filter
+theory of speech production (Fant, 1960), a glottal <em>source</em> is passed
+through a vocal-tract <em>filter</em>. The source is a band-limited harmonic
+buzz <code>sum_h (1/h) * sin(h * phase)</code> (the <code>1/h</code> roll-off approximates
+the spectral tilt of glottal flow). The filter is a cascade of three two-pole
+resonators, one per formant, each the recursive difference equation
+<code>y[n] = x[n] + 2*r*cos(theta)*y[n-1] - r^2*y[n-2]</code>, with resonance
+<code>theta = 2*pi*F/fs</code> and bandwidth set by <code>r = exp(-pi*BW/fs)</code> (poles
+at radius <code>r</code>, angle <code>theta</code>). The three formant centres (Hz) define
+the vowel:</p><table class="table table"><tr><td></td><td><strong>F1</strong></td><td><strong>F2</strong></td><td><strong>F3</strong></td></tr><tr><td><code>"a"</code></td><td>700</td><td>1220</td><td>2600</td></tr><tr><td><code>"i"</code></td><td>300</td><td>2300</td><td>3000</td></tr><tr><td><code>"u"</code></td><td>350</td><td>800</td><td>2400</td></tr></table><p>The formants are static (no transitions) and the result is a stylised vowel
+timbre, not a reconstruction of the recording's actual vowel.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a></h2>
+    <p>Fant, G. (1960). <em>Acoustic Theory of Speech Production</em>. Mouton.</p>
+<p>Klatt, D. H. (1980). Software for a cascade/parallel formant synthesiser.
+<em>Journal of the Acoustical Society of America</em>, 67(3), 971-995.</p>
     </div>
 
     <div class="section level2">
