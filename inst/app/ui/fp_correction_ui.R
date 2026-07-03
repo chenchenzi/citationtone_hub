@@ -978,6 +978,12 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         s[order(s$time), ]$intensity
       } else NULL
     }
+    # sonify_f0() expects dB. .Pitch-frame intensity is Praat's relative 0-1
+    # scale, so convert it to dB below peak; CSV intensity is already dB.
+    if (!is.null(intens) && any(is.finite(intens)) &&
+        max(intens[is.finite(intens)]) <= 1.5) {
+      intens <- 20 * log10(pmax(intens, 1e-3))
+    }
 
     make_player <- function(f0_vec, label, colour) {
       iv  <- if (!is.null(intens) && length(intens) == length(f0_vec)) intens else NULL
@@ -1120,10 +1126,14 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     # Hover text — original frame index, time, f0, and flag note if any
     hover_text <- sprintf("frame %d<br>time: %.3fs<br>f0: %.1f Hz",
                           plot_idx, f0_plot$time, f0_plot$f0)
+    # CSV intensity is dB; .Pitch-frame intensity is Praat's relative 0-1 scale.
     has_int <- is.finite(intens_plot)
-    if (any(has_int))
-      hover_text[has_int] <- sprintf("%s<br>intensity: %.1f dB",
-                                     hover_text[has_int], intens_plot[has_int])
+    if (any(has_int)) {
+      hover_text[has_int] <- if (max(intens_plot[has_int]) > 1.5)
+        sprintf("%s<br>intensity: %.1f dB", hover_text[has_int], intens_plot[has_int])
+      else
+        sprintf("%s<br>intensity: %.2f (relative)", hover_text[has_int], intens_plot[has_int])
+    }
     if (length(flagged_in_plot) > 0) {
       hover_text[flagged_in_plot] <- paste0(hover_text[flagged_in_plot],
                                             "<br><b>⚑ flagged:</b> ",
@@ -1143,10 +1153,11 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       )
     }
 
-    # --- Praat top-N pitch candidates as grey markers (under main f0) ---
+    # --- Praat alternative pitch candidates as grey markers (under main f0) ---
     # Only when the current token came from a .Pitch file (so per-frame
     # candidates exist) AND the user has the toggle on.
-    # Rank is encoded by both size and opacity (more prominent = more likely).
+    # Rank is carried by the printed number plus opacity (size is reserved for
+    # intensity on this plot).
     # Each marker carries customdata of the form "cand_<frame_idx>_<freq>" so
     # the click handler below can route it to the same Pick-candidate logic
     # that the sidebar list uses (skipping the "select frame first" step).
@@ -1157,24 +1168,30 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       if (!is.null(cands_list) && length(cands_list) == nrow(f0_df)) {
         n_top <- 3L
         cand_x <- numeric(0); cand_y <- numeric(0); cand_rank <- integer(0)
-        cand_str <- numeric(0); cand_frame <- integer(0)
+        cand_str <- numeric(0); cand_frame <- integer(0); cand_live <- logical(0)
         for (i in seq_along(cands_list)) {
           cs <- cands_list[[i]]
           if (is.null(cs) || nrow(cs) == 0) next
           # Drop the 0 Hz unvoiced placeholder BEFORE ranking: Praat swaps the
           # path winner into slot 1, which usually parks the unvoiced candidate
-          # in slot 2 of voiced frames. Numbering the remaining (plottable)
-          # candidates keeps the 1/2/3 labels consecutive; in voiced frames
-          # rank 1 is still Praat's chosen pitch. Alternatives are stored
-          # strongest-first, so file order is already strength order.
+          # in slot 2 of voiced frames; numbering the remainder keeps the 1/2/3
+          # labels consecutive, with rank 1 = Praat's chosen pitch (the row of
+          # "1"s shows the contour follows the top candidate). A candidate that
+          # COINCIDES with the frame's current value (normally that rank-1
+          # winner) is drawn label-only -- no hover, no click -- because it sits
+          # under the green dot, and a click there must select the frame, not
+          # re-apply the same value (junk edit-log rows).
           voiced <- cs[is.finite(cs$frequency) & cs$frequency > 0, , drop = FALSE]
+          cur_v <- f0_df$f0[i]
           n_show <- min(n_top, nrow(voiced))
           for (j in seq_len(n_show)) {
+            freq <- voiced$frequency[j]
             cand_x     <- c(cand_x, f0_df$time[i])
-            cand_y     <- c(cand_y, voiced$frequency[j])
+            cand_y     <- c(cand_y, freq)
             cand_rank  <- c(cand_rank, j)
             cand_str   <- c(cand_str, voiced$strength[j])
             cand_frame <- c(cand_frame, i)
+            cand_live  <- c(cand_live, !(is.finite(cur_v) && abs(freq - cur_v) <= 0.5))
           }
         }
         if (length(cand_x) > 0) {
@@ -1185,7 +1202,10 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           # Uniform size: on this plot size means intensity (main f0 dots), so
           # candidates must not reuse it for rank. 6 px sits below the intensity
           # band's 8 px minimum, keeping candidates visually subordinate. Rank is
-          # carried by the printed 1/2/3 label plus opacity.
+          # carried by the printed 1/2/3 label plus opacity. Coincident points
+          # (cand_live = FALSE) keep their label but are inert: per-point
+          # hoverinfo "skip" removes them from hover AND click eventing, and
+          # their customdata is blanked as a second guard.
           opacity_by_rank <- c(0.75, 0.55, 0.40)
           cand_sizes      <- rep(6L, length(cand_rank))
           cand_opacities  <- opacity_by_rank[cand_rank]
@@ -1200,35 +1220,44 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
             text = as.character(cand_rank),            # tiny "1" / "2" / "3" label
             textposition = "top right",
             textfont = list(size = 9, color = "#888888"),
-            hovertext = cand_hover, hoverinfo = "text",
-            customdata = sprintf("cand_%d_%.4f", cand_frame, cand_y),
+            hovertext = cand_hover,
+            hoverinfo = ifelse(cand_live, "text", "skip"),
+            customdata = ifelse(cand_live,
+                                sprintf("cand_%d_%.4f", cand_frame, cand_y), ""),
             showlegend = FALSE
           )
         }
       }
     }
 
-    # --- Edited-frame ring -------------------------------------------------
+    # --- Edited-frame halo ---------------------------------------------------
     # Mark every frame whose value changed this session (or via a re-uploaded
-    # corrected CSV) with an amber outline. edit_diff() is action-agnostic, so
-    # Halve/Double/Set/Smooth/Interpolate/Pick-candidate all qualify, including
-    # values ADDED where the original was NA (which get no ghost marker). Fill
-    # colour still encodes state and size still encodes intensity; only the
-    # outline changes.
-    ring_colors <- rep("#2c5f4f", nrow(f0_plot))
-    ring_widths <- rep(1, nrow(f0_plot))
+    # corrected CSV) with a soft amber halo drawn UNDERNEATH the dot.
+    # edit_diff() is action-agnostic, so Halve/Double/Set/Smooth/Interpolate/
+    # Pick-candidate all qualify, including values ADDED where the original was
+    # NA (which get no ghost marker). Fill colour still encodes state and size
+    # still encodes intensity; the halo is a separate layer.
     ediff <- edit_diff()
     if (!is.null(ediff)) {
       ed_pos <- match(ediff$idx, plot_idx)
       keep_ed <- !is.na(ed_pos)
       if (any(keep_ed)) {
         pos <- ed_pos[keep_ed]
-        ring_colors[pos] <- "#e0a800"
-        ring_widths[pos] <- 2.5
         was <- ediff$original_f0[keep_ed]
         hover_text[pos] <- paste0(
           hover_text[pos], "<br><b>✎ edited:</b> ",
           ifelse(is.na(was), "added (was unvoiced/NA)", sprintf("was %.1f Hz", was)))
+        p <- plotly::add_trace(
+          p,
+          x = f0_plot$time[pos], y = f0_plot$f0[pos],
+          type = "scatter", mode = "markers",
+          yaxis = "y",
+          marker = list(size = point_sizes[pos] + 8,
+                        color = "rgba(230, 160, 0, 0.40)",
+                        line = list(width = 0)),
+          hoverinfo = "skip",
+          showlegend = FALSE
+        )
       }
     }
 
@@ -1238,7 +1267,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       type = "scatter", mode = "markers+lines",
       yaxis = "y",
       marker = list(size = point_sizes, color = point_colors,
-                    line = list(width = ring_widths, color = ring_colors)),
+                    line = list(width = 1, color = "#2c5f4f")),
       line = list(color = "#5cb89a", width = 1),
       customdata = plot_idx,               # original frame index
       text = hover_text, hoverinfo = "text",
@@ -2045,8 +2074,10 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           tags$span(style = "display:inline-block; width:8px; height:8px; border-radius:50%; background:#5cb89a; border:1px solid #2c5f4f;"),
           tags$span(style = "display:inline-block; width:11px; height:11px; border-radius:50%; background:#5cb89a; border:1px solid #2c5f4f;"),
           tags$span(style = "display:inline-block; width:14px; height:14px; border-radius:50%; background:#5cb89a; border:1px solid #2c5f4f;"),
-          tags$span("quieter → louder, scaled within each token (hover for dB)"),
-          tags$span(style = "display:inline-block; width:10px; height:10px; border-radius:50%; background:#5cb89a; border:2px solid #e0a800; margin-left:6px;"),
+          tags$span("quieter → louder, scaled within each token (hover for value)"),
+          tags$span(style = paste0("display:inline-block; width:9px; height:9px; border-radius:50%; ",
+                                   "background:#5cb89a; border:1px solid #2c5f4f; ",
+                                   "box-shadow: 0 0 0 3px rgba(230,160,0,0.4); margin-left:8px; margin-right:2px;")),
           tags$span("edited frame"))),
       uiOutput("fp_corr_edit_status"),
       plotly::plotlyOutput("fp_corr_plot", height = "560px"),
@@ -2399,6 +2430,14 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   observeEvent(input$fp_corr_pick_candidate, {
     v <- suppressWarnings(as.numeric(input$fp_corr_pick_candidate))
     if (is.na(v)) return()
+    # No-op when the pick equals the frame's current value (or both are
+    # unvoiced/NA): no edit, no log row, no false "edited" mark.
+    idx <- selected_indices(); cur <- current_f0()
+    if (length(idx) == 1 && !is.null(cur)) {
+      cur_v <- cur$f0[idx]
+      if ((v == 0 && is.na(cur_v)) ||
+          (v > 0 && is.finite(cur_v) && abs(cur_v - v) < 0.05)) return()
+    }
     apply_edit(function(df, idx) {
       # Praat unvoiced is freq = 0 → write NA
       df$f0[idx] <- if (v == 0) NA_real_ else v
@@ -2430,6 +2469,11 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     tok <- input$fp_corr_token
     cur <- current_f0()
     if (is.null(cur) || frame_idx < 1 || frame_idx > nrow(cur)) return()
+    # No-op when the pick equals the frame's current value (or both are
+    # unvoiced/NA): no edit, no log row, no false "edited" mark.
+    cur_v <- cur$f0[frame_idx]
+    if ((freq == 0 && is.na(cur_v)) ||
+        (freq > 0 && is.finite(cur_v) && abs(cur_v - freq) < 0.05)) return()
     push_history(tok, cur)
     cur$f0[frame_idx] <- if (freq == 0) NA_real_ else freq
     corr <- fp_corrections()

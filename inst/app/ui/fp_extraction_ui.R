@@ -394,9 +394,15 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           if (nrow(c) == 0) NA_real_ else c$frequency[1]
         }, numeric(1))
         f0[f0 == 0] <- NA_real_
+        # Per-frame intensity from the Pitch frames (Praat stores a RELATIVE
+        # 0-1 value, not dB). Drives the Correction plot's dot sizing and the
+        # sonification loudness envelope.
+        intens <- vapply(parsed$frame, function(fr) {
+          if (is.null(fr$intensity)) NA_real_ else as.numeric(fr$intensity)
+        }, numeric(1))
         return(list(
           df = data.frame(token = basename, time = t, f0 = f0,
-                          stringsAsFactors = FALSE),
+                          intensity = intens, stringsAsFactors = FALSE),
           candidates = cands_list
         ))
       }
@@ -405,8 +411,10 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       parsed <- suppressWarnings(tryCatch(rPraat::pt.read(pitchtier_path), error = function(e) NULL))
       if (!is.null(parsed)) {
         return(list(
+          # intensity = NA keeps columns identical to the .Pitch branch, so a
+          # run mixing .Pitch and .PitchTier files rbinds cleanly.
           df = data.frame(token = basename, time = parsed$t, f0 = parsed$f,
-                          stringsAsFactors = FALSE),
+                          intensity = NA_real_, stringsAsFactors = FALSE),
           candidates = NULL
         ))
       }
