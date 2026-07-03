@@ -1161,14 +1161,19 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         for (i in seq_along(cands_list)) {
           cs <- cands_list[[i]]
           if (is.null(cs) || nrow(cs) == 0) next
-          n_show <- min(n_top, nrow(cs))
+          # Drop the 0 Hz unvoiced placeholder BEFORE ranking: Praat swaps the
+          # path winner into slot 1, which usually parks the unvoiced candidate
+          # in slot 2 of voiced frames. Numbering the remaining (plottable)
+          # candidates keeps the 1/2/3 labels consecutive; in voiced frames
+          # rank 1 is still Praat's chosen pitch. Alternatives are stored
+          # strongest-first, so file order is already strength order.
+          voiced <- cs[is.finite(cs$frequency) & cs$frequency > 0, , drop = FALSE]
+          n_show <- min(n_top, nrow(voiced))
           for (j in seq_len(n_show)) {
-            freq <- cs$frequency[j]
-            if (is.na(freq) || freq == 0) next      # skip unvoiced
             cand_x     <- c(cand_x, f0_df$time[i])
-            cand_y     <- c(cand_y, freq)
+            cand_y     <- c(cand_y, voiced$frequency[j])
             cand_rank  <- c(cand_rank, j)
-            cand_str   <- c(cand_str, cs$strength[j])
+            cand_str   <- c(cand_str, voiced$strength[j])
             cand_frame <- c(cand_frame, i)
           }
         }
