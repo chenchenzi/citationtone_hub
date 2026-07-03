@@ -1182,10 +1182,12 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
             "candidate %d  (click to apply)<br>time: %.3fs<br>f0: %.1f Hz<br>strength: %.2f",
             cand_rank, cand_x, cand_y, cand_str
           )
-          # Rank-based size + opacity: more visible = higher rank (Praat-likelier)
-          size_by_rank    <- c(7L, 6L, 5L)
+          # Uniform size: on this plot size means intensity (main f0 dots), so
+          # candidates must not reuse it for rank. 6 px sits below the intensity
+          # band's 8 px minimum, keeping candidates visually subordinate. Rank is
+          # carried by the printed 1/2/3 label plus opacity.
           opacity_by_rank <- c(0.75, 0.55, 0.40)
-          cand_sizes      <- size_by_rank[cand_rank]
+          cand_sizes      <- rep(6L, length(cand_rank))
           cand_opacities  <- opacity_by_rank[cand_rank]
           p <- plotly::add_trace(
             p,
@@ -1206,13 +1208,37 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       }
     }
 
+    # --- Edited-frame ring -------------------------------------------------
+    # Mark every frame whose value changed this session (or via a re-uploaded
+    # corrected CSV) with an amber outline. edit_diff() is action-agnostic, so
+    # Halve/Double/Set/Smooth/Interpolate/Pick-candidate all qualify, including
+    # values ADDED where the original was NA (which get no ghost marker). Fill
+    # colour still encodes state and size still encodes intensity; only the
+    # outline changes.
+    ring_colors <- rep("#2c5f4f", nrow(f0_plot))
+    ring_widths <- rep(1, nrow(f0_plot))
+    ediff <- edit_diff()
+    if (!is.null(ediff)) {
+      ed_pos <- match(ediff$idx, plot_idx)
+      keep_ed <- !is.na(ed_pos)
+      if (any(keep_ed)) {
+        pos <- ed_pos[keep_ed]
+        ring_colors[pos] <- "#e0a800"
+        ring_widths[pos] <- 2.5
+        was <- ediff$original_f0[keep_ed]
+        hover_text[pos] <- paste0(
+          hover_text[pos], "<br><b>✎ edited:</b> ",
+          ifelse(is.na(was), "added (was unvoiced/NA)", sprintf("was %.1f Hz", was)))
+      }
+    }
+
     p <- plotly::add_trace(
       p,
       x = f0_plot$time, y = f0_plot$f0,
       type = "scatter", mode = "markers+lines",
       yaxis = "y",
       marker = list(size = point_sizes, color = point_colors,
-                    line = list(width = 1, color = "#2c5f4f")),
+                    line = list(width = ring_widths, color = ring_colors)),
       line = list(color = "#5cb89a", width = 1),
       customdata = plot_idx,               # original frame index
       text = hover_text, hoverinfo = "text",
@@ -2019,7 +2045,9 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           tags$span(style = "display:inline-block; width:8px; height:8px; border-radius:50%; background:#5cb89a; border:1px solid #2c5f4f;"),
           tags$span(style = "display:inline-block; width:11px; height:11px; border-radius:50%; background:#5cb89a; border:1px solid #2c5f4f;"),
           tags$span(style = "display:inline-block; width:14px; height:14px; border-radius:50%; background:#5cb89a; border:1px solid #2c5f4f;"),
-          tags$span("quieter → louder, scaled within each token (hover for dB)"))),
+          tags$span("quieter → louder, scaled within each token (hover for dB)"),
+          tags$span(style = "display:inline-block; width:10px; height:10px; border-radius:50%; background:#5cb89a; border:2px solid #e0a800; margin-left:6px;"),
+          tags$span("edited frame"))),
       uiOutput("fp_corr_edit_status"),
       plotly::plotlyOutput("fp_corr_plot", height = "560px"),
       # Sonify the (edited) contour, placed below the plot so the top stays
