@@ -393,7 +393,16 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         f0 <- vapply(cands_list, function(c) {
           if (nrow(c) == 0) NA_real_ else c$frequency[1]
         }, numeric(1))
-        f0[f0 == 0] <- NA_real_
+        # Praat semantics: frequency 0 OR at/above the analysis ceiling means
+        # voiceless (the ceiling is stored in the .Pitch file). Praat's own
+        # editor never draws the >= ceiling placeholders, so drop them from the
+        # stored candidates too; otherwise they skew the Correction plot
+        # (e.g. 17 kHz "candidates" in unvoiced edge frames). 0 Hz stays in the
+        # candidate lists: it is the legitimate "unvoiced" pick option.
+        ceil <- if (!is.null(parsed$ceiling)) as.numeric(parsed$ceiling) else Inf
+        f0[f0 == 0 | f0 >= ceil] <- NA_real_
+        cands_list <- lapply(cands_list, function(c)
+          c[c$frequency < ceil, , drop = FALSE])
         # Per-frame intensity from the Pitch frames (Praat stores a RELATIVE
         # 0-1 value, not dB). Drives the Correction plot's dot sizing and the
         # sonification loudness envelope.

@@ -1463,17 +1463,19 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     xr <- isolate(fp_xrange())
     if (!is.null(xr) && identical(xr$token, tok)) xaxis_def$range <- xr$range
 
-    # f0-panel y-range: frame the real (voiced) contour, not tracking artefacts.
-    # In unvoiced edge frames Praat stores junk high-frequency candidates (e.g.
-    # 5-15 kHz) that would autoscale the axis and squash the meaningful part.
-    # Anchor on the plotted f0 values, include candidates within ~1 octave up/
-    # down (useful for correction), and clip anything wilder.
+    # f0-panel y-range: frame the real (voiced) contour, not stray extremes.
+    # Extraction already drops Praat's voiceless placeholders (candidates at or
+    # above the analysis ceiling), so this is just tight framing: anchor on the
+    # plotted f0 values and include candidates up to ~1 octave up (doubling
+    # errors) and ~x3 down (the f0/2 and f0/3 subharmonic rows Praat shows).
+    # A fixed floor-to-ceiling axis like Praat's editor would flatten the
+    # contour; the editing task wants the shape readable.
     f0_vals <- f0_plot$f0[is.finite(f0_plot$f0)]
     yaxis_f0 <- list(title = "f0 (Hz)", domain = f0_dom, fixedrange = TRUE)
     if (length(f0_vals) > 0) {
       f0_hi <- max(f0_vals); f0_lo <- min(f0_vals)
       cy <- if (exists("cand_y", inherits = FALSE)) cand_y else numeric(0)
-      near <- cy[is.finite(cy) & cy <= f0_hi * 2.2 & cy >= f0_lo / 2.2]
+      near <- cy[is.finite(cy) & cy <= f0_hi * 2.5 & cy >= f0_lo / 3.3]
       top <- max(c(f0_vals, near)); bot <- min(c(f0_vals, near))
       yaxis_f0$range <- c(max(0, bot * 0.85), top * 1.12)
     }
