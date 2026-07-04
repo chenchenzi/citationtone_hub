@@ -1,5 +1,13 @@
 # Changelog
 
+## shinytone (development version)
+
+- [`run_app()`](https://chenchenzi.github.io/citationtone_hub/reference/run_app.md)
+  now checks GitHub once per launch for a newer shinytone release
+  (2-second timeout, silent when offline) and, when one exists, prints
+  the update command in the console and shows a one-time notification in
+  the app. Disable with `options(shinytone.check_updates = FALSE)`.
+
 ## shinytone 1.0.0
 
 First stable release. The Shiny app covers the citation-tone workflow

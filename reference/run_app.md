@@ -24,6 +24,16 @@ run_app(...)
 
 Does not return; runs until the app is stopped.
 
+## Details
+
+GitHub-installed packages have no
+[`update.packages()`](https://rdrr.io/r/utils/update.packages.html)
+channel, so on launch `run_app()` quietly checks the package repository
+for a newer shinytone release (2-second timeout; skipped silently when
+offline). If one exists, a reminder with the update command is printed
+to the console and shown once inside the app. Disable the check with
+`options(shinytone.check_updates = FALSE)`.
+
 ## Examples
 
 ``` r

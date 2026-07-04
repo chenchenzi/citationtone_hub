@@ -74,6 +74,15 @@ audio / CSV files never leave your computer.</p>
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>Does not return; runs until the app is stopped.</p>
     </div>
+    <div class="section level2">
+    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
+    <p>GitHub-installed packages have no <code><a href="https://rdrr.io/r/utils/update.packages.html" class="external-link">update.packages()</a></code> channel, so on launch
+<code>run_app()</code> quietly checks the package repository for a newer shinytone
+release (2-second timeout; skipped silently when offline). If one exists, a
+reminder with the update command is printed to the console and shown once
+inside the app. Disable the check with
+<code>options(shinytone.check_updates = FALSE)</code>.</p>
+    </div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>

@@ -40,6 +40,11 @@
     </div>
 
     <div class="section level2">
+<h2 class="pkg-version" data-toc-text="development version" id="shinytone-development-version">shinytone (development version)<a class="anchor" aria-label="anchor" href="#shinytone-development-version"></a></h2>
+<ul><li>
+<code><a href="../reference/run_app.html">run_app()</a></code> now checks GitHub once per launch for a newer shinytone release (2-second timeout, silent when offline) and, when one exists, prints the update command in the console and shows a one-time notification in the app. Disable with <code>options(shinytone.check_updates = FALSE)</code>.</li>
+</ul></div>
+    <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.0.0" id="shinytone-100">shinytone 1.0.0<a class="anchor" aria-label="anchor" href="#shinytone-100"></a></h2>
 <p>First stable release. The Shiny app covers the citation-tone workflow end to end (collect, extract, inspect, correct, curate, normalise, cluster, visualise, model, Chao numerals), and the analytical functions behind each step are exported and documented. Highlights since the 0.1.x line:</p>
 <ul><li>
