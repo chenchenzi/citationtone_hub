@@ -28,6 +28,10 @@ fp_praat_script_ui <- function(input, output, session) {
 #   2. Open this file.
 #   3. Run the script (Ctrl/Cmd + R). TWO dialogs appear:
 #        (a) basic settings: folders, pitch range, time step, method.
+#            Tip on pitch range: with the default "filtered ac" method a
+#            wide range (Praat standard: 50-800 Hz) usually needs no
+#            per-speaker tuning; with the raw ac / raw cc methods, tighten
+#            the range to your speakers to avoid octave errors.
 #        (b) method-specific advanced parameters (silence threshold,
 #            voicing threshold, octave costs, ...) pre-filled with the
 #            Praat default values for the method you chose.
@@ -53,9 +57,9 @@ form Extract f0 with Praat
   comment === Combined CSV: Browse to choose where to save it and its name ===
   outfile Output_csv f0_long.csv
 
-  comment === Pitch range (Hz) -- tighten to your speakers ===
-  positive F0_min 75
-  positive F0_max 600
+  comment === Pitch range (Hz); 50-800 suits the default filtered ac ===
+  positive F0_min 50
+  positive F0_max 800
 
   comment === Time step (s) -- 0 means Praat default (~0.0025 s) ===
   positive Time_step 0.010
@@ -377,7 +381,7 @@ appendInfoLine: "  Combined CSV: ", csv_path$
       ),
       tags$p(style = "font-size: 0.85rem; color: #6b6b6b; margin-top: 6px;",
              icon("circle-info"),
-             HTML(" <strong>Very short sounds are handled automatically.</strong> A token shorter than the pitch-analysis window (about 3 / pitch-floor seconds) is logged as <code>SKIPPED</code> and omitted; a token long enough for f0 but shorter than the intensity window (6.4 / pitch-floor seconds, e.g. about 0.085 s at a 75 Hz floor) keeps its f0 with <code>intensity = NA</code>. The batch always finishes instead of stopping on one clip.")),
+             HTML(" <strong>Very short sounds are handled automatically.</strong> A token shorter than the pitch-analysis window (about 3 / pitch-floor seconds) is logged as <code>SKIPPED</code> and omitted; a token long enough for f0 but shorter than the intensity window (6.4 / pitch-floor seconds, e.g. about 0.13 s at a 50 Hz floor) keeps its f0 with <code>intensity = NA</code>. The batch always finishes instead of stopping on one clip.")),
 
       h4("Tuning advanced parameters"),
       tags$p("The second dialog exposes the same parameters as Praat's native ",
