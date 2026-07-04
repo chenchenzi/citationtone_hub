@@ -59,6 +59,17 @@ server <- function(input, output, session) {
   # finishes (the front page is already in the browser). Loaded once per
   # process; later sessions hit a warm process where these are no-ops.
   session$onFlushed(function() {
+    # Update reminder: run_app() sets this option when a newer shinytone
+    # release exists on GitHub. Deployed instances never set it (run_app is
+    # not called there), so this is a local-install-only nudge.
+    upd <- getOption("shinytone.update_available")
+    if (!is.null(upd)) {
+      tryCatch(showNotification(
+        HTML(paste0("shinytone ", upd, " is available. Update with<br>",
+                    "<code>remotes::install_github(\"chenchenzi/citationtone_hub\")</code>")),
+        type = "message", duration = 15, session = session),
+        error = function(e) NULL)
+    }
     # The "Loading analysis tools…" toast is shown client-side the instant the
     # page appears (see shiny:connected in ui.R), so the wait is visible from the
     # very start. On a warm process (a later session) the packages are already

@@ -9,6 +9,14 @@
 #' @param ... Additional arguments forwarded to [shiny::runApp()] — e.g.
 #'   `port = 4321`, `launch.browser = FALSE`, `host = "0.0.0.0"`.
 #'
+#' @details
+#' GitHub-installed packages have no `update.packages()` channel, so on launch
+#' `run_app()` quietly checks the package repository for a newer shinytone
+#' release (2-second timeout; skipped silently when offline). If one exists, a
+#' reminder with the update command is printed to the console and shown once
+#' inside the app. Disable the check with
+#' `options(shinytone.check_updates = FALSE)`.
+#'
 #' @return Does not return; runs until the app is stopped.
 #'
 #' @examples
@@ -64,5 +72,44 @@ run_app <- function(...) {
          "`remotes::install_github(\"chenchenzi/citationtone_hub\")` and ",
          "try again.", call. = FALSE)
   }
+
+  # One quiet update check per launch (see @details). Sets an option the app's
+  # server reads to show an in-app notification; cleared when up to date so a
+  # stale value never survives an update within the same R session.
+  upd <- check_for_update()
+  if (!is.null(upd)) {
+    message(
+      "shinytone ", upd, " is available (you have ",
+      utils::packageVersion("shinytone"), "). Update with:\n",
+      "  remotes::install_github(\"chenchenzi/citationtone_hub\")\n",
+      "Disable this check with options(shinytone.check_updates = FALSE).")
+    options(shinytone.update_available = as.character(upd))
+  } else {
+    options(shinytone.update_available = NULL)
+  }
+
   shiny::runApp(app_dir, ...)
+}
+
+# Latest shinytone version on GitHub (parsed from the DESCRIPTION on the
+# default branch) when it is newer than the installed one, else NULL. Also
+# NULL when offline, opted out via options(shinytone.check_updates = FALSE),
+# or on any parse problem. Never signals a condition; capped by `timeout_s`.
+check_for_update <- function(timeout_s = 2) {
+  if (!isTRUE(getOption("shinytone.check_updates", TRUE))) return(NULL)
+  desc_url <- paste0("https://raw.githubusercontent.com/",
+                     "chenchenzi/citationtone_hub/main/DESCRIPTION")
+  old_timeout <- getOption("timeout")
+  on.exit(options(timeout = old_timeout), add = TRUE)
+  options(timeout = timeout_s)
+  lines <- tryCatch(suppressWarnings(readLines(desc_url, n = 25L, warn = FALSE)),
+                    error = function(e) NULL)
+  if (is.null(lines)) return(NULL)
+  vline <- grep("^Version:", lines, value = TRUE)
+  if (length(vline) != 1L) return(NULL)
+  remote <- trimws(sub("^Version:", "", vline[1]))
+  newer <- tryCatch(
+    package_version(remote) > utils::packageVersion("shinytone"),
+    error = function(e) FALSE)
+  if (isTRUE(newer)) remote else NULL
 }

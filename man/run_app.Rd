@@ -20,6 +20,14 @@ package. Equivalent to the hosted version at
 machine, so it has no file-size, memory, or session limits and your
 audio / CSV files never leave your computer.
 }
+\details{
+GitHub-installed packages have no \code{update.packages()} channel, so on launch
+\code{run_app()} quietly checks the package repository for a newer shinytone
+release (2-second timeout; skipped silently when offline). If one exists, a
+reminder with the update command is printed to the console and shown once
+inside the app. Disable the check with
+\code{options(shinytone.check_updates = FALSE)}.
+}
 \examples{
 \dontrun{
   shinytone::run_app()
