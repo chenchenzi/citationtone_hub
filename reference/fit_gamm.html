@@ -165,8 +165,10 @@ ordered <code>tone_ord</code> to factors with treatment contrasts.</p></li>
 <li><p>Fit with <code><a href="https://rdrr.io/pkg/mgcv/man/bam.html" class="external-link">mgcv::bam()</a></code> using <code>discrete = TRUE</code> for speed on large
 datasets, capturing warnings.</p></li>
 <li><p>If <code>use_ar1 = TRUE</code>, estimate <code>rho</code> from the lag-1 autocorrelation
-of the residuals and refit with that <code>rho</code> plus per-token
-<code>AR.start</code> to correct for within-token correlation.</p></li>
+of the residuals computed <em>within</em> tokens (pooling only genuine
+within-token neighbours, not across token boundaries), then refit
+with that <code>rho</code> plus per-token <code>AR.start</code> to correct for
+within-token correlation.</p></li>
 </ol></div>
 
 <div class="section">

@@ -116,8 +116,10 @@ An S3 object of class `"shinytone_gamm"`, a list with:
     warnings.
 
 5.  If `use_ar1 = TRUE`, estimate `rho` from the lag-1 autocorrelation
-    of the residuals and refit with that `rho` plus per-token `AR.start`
-    to correct for within-token correlation.
+    of the residuals computed *within* tokens (pooling only genuine
+    within-token neighbours, not across token boundaries), then refit
+    with that `rho` plus per-token `AR.start` to correct for
+    within-token correlation.
 
 ### Choosing `smooth_type`
 

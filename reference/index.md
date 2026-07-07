@@ -88,7 +88,8 @@ the original labels.
 ## Contour modelling
 
 Token-level polynomial fits, mixed-effects growth-curve analysis, and
-GAMMs over tone contours.
+GAMMs over tone contours, with AR1 correction and model-checking
+diagnostics.
 
 - [`fit_polynomial()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_polynomial.md)
   : Fit Legendre polynomials to f0 contours, token by token
@@ -100,6 +101,8 @@ GAMMs over tone contours.
   : Fit a Generalised Additive Mixed Model (GAMM) to f0 contours
 - [`predict_gamm()`](https://chenchenzi.github.io/citationtone_hub/reference/predict_gamm.md)
   : Predict population-level f0 smooth curves from a GAMM fit
+- [`diagnose_gamm()`](https://chenchenzi.github.io/citationtone_hub/reference/diagnose_gamm.md)
+  : Diagnose a fitted GAMM
 
 ## Chao tone numerals
 

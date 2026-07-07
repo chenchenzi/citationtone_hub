@@ -42,6 +42,9 @@
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="development version" id="shinytone-development-version">shinytone (development version)<a class="anchor" aria-label="anchor" href="#shinytone-development-version"></a></h2>
 <ul><li>
+<strong>GAMM diagnostics</strong> (new). <code><a href="../reference/diagnose_gamm.html">diagnose_gamm()</a></code> and a “Model diagnostics” section on the GAMM tab: after fitting, one click reports the basis-dimension check (k’, edf, k-index, p-value, flagging under-resourced time smooths), the four <code>gam.check()</code> residual panels (Q–Q, residuals vs fitted, histogram, observed vs fitted), the residual ACF, and the concurvity table, with a text download of all diagnostics. The ACF is computed per token (in the spirit of <code>itsadug::acf_resid()</code>) and AR1-whitened when the fit used an AR1 correction, so it shows whether the correction actually worked.</li>
+<li>The GAMM tab’s <strong>AR1 correction is now on by default</strong>: densely-sampled f0 frames are strongly autocorrelated, so smooth p-values are anticonservative without it. <code><a href="../reference/fit_gamm.html">fit_gamm()</a></code> (whose <code>use_ar1</code> argument still defaults to <code>FALSE</code>) now estimates <code>rho</code> from the lag-1 autocorrelation <em>within</em> tokens rather than across the flat concatenation, so token boundaries no longer bias the estimate.</li>
+<li>
 <code><a href="../reference/run_app.html">run_app()</a></code> now checks GitHub once per launch for a newer shinytone release (2-second timeout, silent when offline) and, when one exists, prints the update command in the console and shows a one-time notification in the app. Disable with <code>options(shinytone.check_updates = FALSE)</code>.</li>
 </ul></div>
     <div class="section level2">

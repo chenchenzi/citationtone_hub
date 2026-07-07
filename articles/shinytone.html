@@ -279,12 +279,49 @@ structures, call <code><a href="https://rdrr.io/pkg/lme4/man/lmer.html" class="e
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_path.html" class="external-link">geom_line</a></span><span class="op">(</span>linewidth <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
+<h2 id="fit-a-gamm-and-check-its-diagnostics">Fit a GAMM and check its diagnostics<a class="anchor" aria-label="anchor" href="#fit-a-gamm-and-check-its-diagnostics"></a>
+</h2>
+<p><code><a href="../reference/fit_gamm.html">fit_gamm()</a></code> wraps <code><a href="https://rdrr.io/pkg/mgcv/man/bam.html" class="external-link">mgcv::bam()</a></code> with the
+smooth structure recommended for tone contours (Sóskuthy 2017): a
+reference smooth plus per-tone difference smooths, by-speaker random
+smooths, and an optional AR1 correction for the strong within-token
+autocorrelation of densely-sampled f0 (<code>use_ar1 = TRUE</code>; the
+app’s GAMM tab enables it by default). The AR1 parameter rho is
+estimated from the lag-1 autocorrelation of the residuals
+<em>within</em> tokens, so token boundaries do not bias it.
+<code><a href="../reference/diagnose_gamm.html">diagnose_gamm()</a></code> then answers the model-checking questions
+in one call: is the basis dimension <code>k</code> large enough, are the
+residuals well-behaved, and did the AR1 correction actually remove the
+autocorrelation.</p>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># (Skipped on package build for speed; uncomment to run locally.)</span></span>
+<span><span class="va">gamm</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/fit_gamm.html">fit_gamm</a></span><span class="op">(</span><span class="va">normed</span>,</span>
+<span>                 f0      <span class="op">=</span> <span class="st">"f0_st"</span>,</span>
+<span>                 time    <span class="op">=</span> <span class="st">"time"</span>,</span>
+<span>                 token   <span class="op">=</span> <span class="st">"token"</span>,</span>
+<span>                 tone    <span class="op">=</span> <span class="st">"tone"</span>,</span>
+<span>                 speaker <span class="op">=</span> <span class="st">"speaker"</span>,</span>
+<span>                 item    <span class="op">=</span> <span class="st">"char"</span>,</span>
+<span>                 use_ar1 <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Population-level per-tone curves, same schema as predict_gca()</span></span>
+<span><span class="va">preds</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/predict_gamm.html">predict_gamm</a></span><span class="op">(</span><span class="va">gamm</span>, n <span class="op">=</span> <span class="fl">100</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="va">preds</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span><span class="va">time</span>, <span class="va">f0_predicted</span>, colour <span class="op">=</span> <span class="va">tone</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_path.html" class="external-link">geom_line</a></span><span class="op">(</span>linewidth <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Model checking: basis-dimension (k) check, residual panels, per-token</span></span>
+<span><span class="co"># residual ACF (AR1-whitened when use_ar1 = TRUE), and concurvity</span></span>
+<span><span class="va">diag</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/diagnose_gamm.html">diagnose_gamm</a></span><span class="op">(</span><span class="va">gamm</span><span class="op">)</span></span>
+<span><span class="va">diag</span><span class="op">$</span><span class="va">k_check</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">diag</span><span class="op">$</span><span class="va">acf</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level2">
 <h2 id="convert-to-chao-tone-numerals">Convert to Chao tone numerals<a class="anchor" aria-label="anchor" href="#convert-to-chao-tone-numerals"></a>
 </h2>
 <p><code><a href="../reference/contour_to_chao.html">contour_to_chao()</a></code> reduces per-tone mean (or
 model-predicted) contours into Chao numerals — 5-level digit strings
 like <code>55</code>, <code>35</code>, or <code>214</code>.</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Pre-aggregate into a per-tone mean contour over all speakers</span></span>
 <span><span class="va">mean_contour</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/compute_mean_contour.html">compute_mean_contour</a></span><span class="op">(</span><span class="va">sample_f0</span>,</span>
 <span>                                     token <span class="op">=</span> <span class="st">"token"</span>, f0 <span class="op">=</span> <span class="st">"f0_Hz"</span>,</span>
@@ -335,6 +372,9 @@ that uses it.</li>
 <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a>
 </h2>
 <ul>
+<li><p>Sóskuthy, M. (2017). Generalised additive mixed models for
+dynamic analysis in linguistics: A practical introduction.
+arXiv:1703.05339.</p></li>
 <li><p>Steffman, J., &amp; Cole, J. (2022). Pitch tracking artefacts and
 the detection of voicing errors in spontaneous speech.</p></li>
 <li><p>Sundberg, J. (1973). The acoustics of the singing voice.

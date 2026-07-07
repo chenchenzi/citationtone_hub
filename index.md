@@ -42,7 +42,9 @@ lexical tone production.
   by speaker.
 - 📊 **Model**: per-token Legendre polynomials, growth-curve analysis
   (GCA) on orthogonal polynomials, and generalised additive mixed models
-  (GAMM) with optional AR1 correction.
+  (GAMM) with AR1 correction (on by default in the app) and one-click
+  model diagnostics — basis-dimension check, residual panels, per-token
+  residual ACF, and concurvity.
 - 🧮 **Summarise**: convert contours into Chao tone numerals using three
   FOR methods (reference-line, interval, robust).
 
