@@ -1821,6 +1821,7 @@ ui <- fluidPage(
                                                  plotOutput("gamm_plot", height = "500px", width = "800px"),
                                                  tags$div(class = "plot-spinner")
                                                ),
+                                               uiOutput("gamm_diagnostics"),
                                                uiOutput("gamm_r_code")),
                                       tabPanel("Summarise",
                                                uiOutput("summarise_guide"),

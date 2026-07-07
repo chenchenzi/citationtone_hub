@@ -68,7 +68,14 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
         tags$ul(style = "margin-bottom: 0; padding-left: 18px;",
           tags$li(tags$strong("Basis dimension k:"), " Controls the maximum wiggliness of the smooth. Higher k allows more complex curves, but k must be less than the number of unique data points per smooth. The actual complexity is determined by the data via penalisation."),
           tags$li(tags$strong("Basis type:"), " tp (thin plate regression spline, general-purpose default), cr (cubic regression spline, faster for large data), cc (cyclic cubic spline, for periodic contours)."),
-          tags$li(tags$strong("AR1:"), " Corrects for temporal autocorrelation in the residuals. Fits an initial model, estimates the autocorrelation parameter rho, then refits with the correction.")
+          tags$li(tags$strong("AR1:"), " Corrects for temporal autocorrelation in the residuals. Fits an initial model, estimates the autocorrelation parameter rho (from the lag-1 correlation ",
+            tags$em("within"), " each token), then refits with the correction. ",
+            tags$strong("On by default:"), " densely-sampled f0 frames are strongly autocorrelated, so without it the smooth p-values are anticonservative. Uncheck it for a quick exploratory fit (it doubles fitting time, since rho needs an initial fit).",
+            tags$br(),
+            tags$span(style = "color: #7a5d00;",
+              "AR1 assumes ", tags$strong("evenly-spaced frames within each token."),
+              " It is robust to the occasional dropped frame, but treat rho with more caution for contours with long voiceless gaps (e.g. a medial voiceless consonant). Use the ",
+              tags$strong("Diagnose model"), " ACF panel to check the correction worked."))
         )
       ),
       # --- Collapsible illustrated guide for multisyllabic words ---
@@ -240,13 +247,14 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
                      selected = "ref_diff"),
         tags$hr(),
         tags$strong("Autocorrelation:"),
-        checkboxInput("gamm_ar1", "Include AR1 correction", value = FALSE),
+        checkboxInput("gamm_ar1", "Include AR1 correction", value = TRUE),
         tags$hr(),
         uiOutput("gamm_warning"),
         actionButton("gamm_button", "Fit GAMM"),
         div(style = "margin-top: 4px;",
           actionButton("gamm_show_code", "Show R code", icon = icon("code"))
         ),
+        uiOutput("gamm_diagnose_ui"),
         tags$hr(),
         h5("Download"),
         textInput("gamm_filename", "Enter filename (without extension):",
@@ -311,12 +319,14 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
 
   # --- Result storage ---
   gamm_model <- reactiveVal(NULL)
+  gamm_fit_obj <- reactiveVal(NULL)   # full shinytone_gamm object (for diagnostics)
   gamm_summary_data <- reactiveVal(NULL)
   gamm_convergence_warning <- reactiveVal(NULL)
   gamm_plot_data <- reactiveVal(NULL)
   gamm_formula_str <- reactiveVal(NULL)
   gamm_rho_val <- reactiveVal(NULL)
   gamm_fitting <- reactiveVal(FALSE)
+  gamm_diag_data <- reactiveVal(NULL)  # NULL until the user clicks "Diagnose model"
 
   # --- Core computation ---
   observeEvent(input$gamm_button, {
@@ -334,6 +344,7 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
 
     gamm_convergence_warning(NULL)
     gamm_rho_val(NULL)
+    gamm_diag_data(NULL)   # stale diagnostics belong to the previous fit
 
     # Map the radio-button random-smooth strategy onto the package API.
     rs_type    <- input$gamm_rs_type
@@ -387,6 +398,7 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
 
     gamm_formula_str(fit$formula_str)
     gamm_model(model)
+    gamm_fit_obj(fit)
 
     # --- Extract summary tables ---
     # Name-cleaning back to user's column names is UI-specific so it stays
@@ -417,6 +429,323 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
     gamm_plot_data(plot_df)
     if (!is.null(gamm_pred_data)) gamm_pred_data(plot_df)
   })
+
+  # ==========================================================================
+  # Model diagnostics
+  # --------------------------------------------------------------------------
+  # After a model is fit, offer a "Diagnose model" button. Diagnostics mirror
+  # mgcv::gam.check(): residual behaviour (Q-Q, residuals vs fitted, histogram,
+  # observed vs fitted), the basis-dimension (k) check, and residual
+  # autocorrelation (which motivates the AR1 option). The heavy lifting lives
+  # in the package function diagnose_gamm() (R/gamm.R); this section only turns
+  # its numeric output into tables and ggplots.
+  # ==========================================================================
+
+  # --- Sidebar button (only appears once a model exists) ---
+  output$gamm_diagnose_ui <- renderUI({
+    if (is.null(gamm_model())) return(NULL)
+    tagList(
+      tags$hr(),
+      tags$strong("Model diagnostics:"),
+      tags$p(style = "font-size: 0.8rem; color: #555; margin: 4px 0 8px;",
+        "Check whether the fit is trustworthy: residual normality, whether the ",
+        "basis dimension ", tags$em("k"), " is large enough, and leftover ",
+        "autocorrelation."),
+      actionButton("gamm_diagnose", "Diagnose model", icon = icon("stethoscope")),
+      if (!is.null(gamm_diag_data())) {
+        div(style = "margin-top: 6px;",
+          downloadButton("gamm_diag_download", "Download diagnostics"))
+      }
+    )
+  })
+
+  # --- Compute diagnostics on demand ---
+  observeEvent(input$gamm_diagnose, {
+    req(gamm_fit_obj())
+    progress_id <- showNotification(
+      tagList(icon("spinner", class = "fa-spin"), " Computing diagnostics..."),
+      duration = NULL, closeButton = FALSE, type = "message"
+    )
+    on.exit(removeNotification(progress_id), add = TRUE)
+
+    diag <- tryCatch(
+      diagnose_gamm(gamm_fit_obj()),
+      error = function(e) {
+        showNotification(paste("Diagnostics error:", e$message),
+                         type = "error", duration = 10)
+        NULL
+      }
+    )
+    gamm_diag_data(diag)
+  })
+
+  # --- Shared ggplot builders (used by both the on-screen plots and the
+  #     downloaded image) ---
+  gamm_diag_resid_grobs <- function(diag) {
+    rdf <- diag$resid_df
+    base_theme <- theme_bw(base_size = 12) +
+      theme(plot.title = element_text(face = "bold", size = 12))
+    pt_col <- "#2c6e91"; line_col <- "#c0392b"
+
+    p_qq <- ggplot(rdf, aes(sample = residual)) +
+      stat_qq(size = 0.7, alpha = 0.45, colour = pt_col) +
+      stat_qq_line(colour = line_col, linewidth = 0.7) +
+      labs(title = "Q–Q plot of residuals",
+           x = "Theoretical quantiles", y = "Deviance residuals") +
+      base_theme
+    p_rf <- ggplot(rdf, aes(x = fitted, y = residual)) +
+      geom_hline(yintercept = 0, colour = line_col, linewidth = 0.6) +
+      geom_point(size = 0.7, alpha = 0.35, colour = pt_col) +
+      labs(title = "Residuals vs fitted",
+           x = "Fitted values", y = "Deviance residuals") +
+      base_theme
+    p_hist <- ggplot(rdf, aes(x = residual)) +
+      geom_histogram(bins = 40, fill = "#78c2ad", colour = "white",
+                     linewidth = 0.2) +
+      labs(title = "Histogram of residuals",
+           x = "Deviance residuals", y = "Count") +
+      base_theme
+    p_of <- ggplot(rdf, aes(x = fitted, y = observed)) +
+      geom_abline(slope = 1, intercept = 0, colour = line_col, linewidth = 0.6) +
+      geom_point(size = 0.7, alpha = 0.35, colour = pt_col) +
+      labs(title = "Observed vs fitted",
+           x = "Fitted values", y = "Observed values") +
+      base_theme
+    list(p_qq, p_rf, p_hist, p_of)
+  }
+
+  gamm_diag_acf_ggplot <- function(diag) {
+    adf <- diag$acf
+    ci  <- diag$acf_ci
+    title <- if (isTRUE(diag$acf_whitened))
+               "ACF of AR1-whitened residuals (per token)"
+             else if (isTRUE(diag$acf_grouped))
+               "Autocorrelation of residuals (per token)"
+             else
+               "Autocorrelation of residuals (ACF)"
+    p <- ggplot(adf, aes(x = lag, y = acf)) +
+      geom_hline(yintercept = 0, colour = "#888", linewidth = 0.5) +
+      geom_segment(aes(xend = lag, yend = 0), colour = "#2c6e91", linewidth = 0.8) +
+      labs(title = title, x = "Lag", y = "ACF") +
+      theme_bw(base_size = 12) +
+      theme(plot.title = element_text(face = "bold", size = 12))
+    if (!is.na(ci)) {
+      p <- p + geom_hline(yintercept = c(-ci, ci), linetype = "dashed",
+                          colour = "#c0392b", linewidth = 0.6)
+    }
+    p
+  }
+
+  # --- Residual panel (2x2 grid) ---
+  output$gamm_diag_resid_plot <- renderPlot({
+    req(gamm_diag_data())
+    gridExtra::grid.arrange(grobs = gamm_diag_resid_grobs(gamm_diag_data()),
+                            ncol = 2)
+  }, width = 800, height = 560)
+
+  # --- Residual ACF ---
+  output$gamm_diag_acf_plot <- renderPlot({
+    req(gamm_diag_data())
+    gamm_diag_acf_ggplot(gamm_diag_data())
+  }, width = 800, height = 260)
+
+  # --- Diagnostics main-panel container (tables + plot slots + guide) ---
+  output$gamm_diagnostics <- renderUI({
+    diag <- gamm_diag_data()
+    if (is.null(diag)) return(NULL)
+
+    th_style   <- "padding: 4px 10px; border-bottom: 2px solid #ddd; text-align: center;"
+    td_style   <- "padding: 4px 10px; text-align: center;"
+    td_left    <- "padding: 4px 10px; text-align: left; font-family: monospace; font-size: 0.82rem;"
+
+    # ---- Basis-dimension (k) check table ----
+    kc <- diag$k_check
+    k_block <- if (is.null(kc)) {
+      tags$p(style = "color: #777; font-size: 0.86rem;",
+        "The basis-dimension check could not be computed for this model.")
+    } else {
+      disp_cols <- intersect(c("k'", "edf", "k-index", "p-value"), names(kc))
+      fmt_k <- function(cn, val) {
+        if (is.na(val)) return("–")
+        if (cn == "k'") return(formatC(round(as.numeric(val)), format = "d"))
+        if (cn == "edf") return(formatC(as.numeric(val), format = "f", digits = 2))
+        if (cn == "p-value") {
+          v <- as.numeric(val)
+          return(if (v < 0.0001) formatC(v, format = "e", digits = 2)
+                 else formatC(v, format = "f", digits = 4))
+        }
+        formatC(as.numeric(val), format = "f", digits = 3)
+      }
+      header <- tags$tr(
+        tags$th(style = paste0(th_style, "text-align:left;"), "Smooth"),
+        lapply(disp_cols, function(cn) {
+          nm <- if (cn == "p-value") "p-value" else cn
+          tags$th(style = th_style, nm)
+        }),
+        tags$th(style = th_style, "flag")
+      )
+      body <- lapply(seq_len(nrow(kc)), function(i) {
+        row  <- kc[i, ]
+        flag <- row$k_flag
+        row_bg  <- if (identical(flag, "low")) "background-color: #fdecea;" else ""
+        txt_col <- if (identical(flag, "na")) "color: #9a9a9a;" else ""
+        tags$tr(style = row_bg,
+          tags$td(style = paste0(td_left, txt_col), as.character(row$Smooth)),
+          lapply(disp_cols, function(cn)
+            tags$td(style = paste0(td_style, txt_col), fmt_k(cn, row[[cn]]))),
+          tags$td(style = td_style,
+            if (identical(flag, "low"))
+              tags$span(style = "color: #c0392b; font-weight: 600;",
+                        icon("triangle-exclamation"), " k low?")
+            else if (identical(flag, "ok"))
+              tags$span(style = "color: #2e7d32;", icon("check"))
+            else tags$span(style = "color: #bbb;", "–"))
+        )
+      })
+      any_low <- any(kc$k_flag == "low", na.rm = TRUE)
+      tagList(
+        tags$table(
+          style = "margin-top: 6px; border-collapse: collapse; font-size: 0.86rem; width: 100%;",
+          tags$thead(header),
+          tags$tbody(body)
+        ),
+        if (any_low) {
+          tags$div(
+            style = "background-color: #fdecea; border: 1px solid #e6a9a1; padding: 6px 10px; border-radius: 4px; margin-top: 8px; font-size: 0.84rem;",
+            icon("triangle-exclamation"),
+            HTML(" One or more time smooths look under-resourced: a <strong>k-index below 1</strong> with a <strong>small p-value</strong> means the basis dimension <em>k</em> may be too low. Raise <em>k</em> in the sidebar and refit, then diagnose again."))
+        } else {
+          tags$div(
+            style = "background-color: #eafaf1; border: 1px solid #b7e4c7; padding: 6px 10px; border-radius: 4px; margin-top: 8px; font-size: 0.84rem;",
+            icon("check"),
+            HTML(" Basis dimensions look adequate: no time smooth combines a k-index below 1 with a significant p-value."))
+        }
+      )
+    }
+
+    # ---- Concurvity table (advanced, collapsible) ----
+    cc <- diag$concurvity
+    conc_block <- if (is.null(cc)) {
+      NULL
+    } else {
+      term_cols <- setdiff(names(cc), "Measure")
+      colour_cell <- function(v) {
+        vn <- suppressWarnings(as.numeric(v))
+        col <- if (is.na(vn)) "" else if (vn >= 0.8) "color:#c0392b; font-weight:600;"
+               else if (vn >= 0.5) "color:#c07a00;" else "color:#2e7d32;"
+        list(txt = if (is.na(vn)) "–" else formatC(vn, format = "f", digits = 2),
+             style = col)
+      }
+      header <- tags$tr(
+        tags$th(style = paste0(th_style, "text-align:left;"), "Measure"),
+        lapply(term_cols, function(cn) tags$th(style = th_style, cn))
+      )
+      body <- lapply(seq_len(nrow(cc)), function(i) {
+        row <- cc[i, ]
+        tags$tr(
+          tags$td(style = td_left, as.character(row$Measure)),
+          lapply(term_cols, function(cn) {
+            cell <- colour_cell(row[[cn]])
+            tags$td(style = paste0(td_style, cell$style), cell$txt)
+          })
+        )
+      })
+      tags$details(
+        style = "margin-top: 14px; background: #f7f9fb; border: 1px solid #e1e9f2; border-radius: 6px; padding: 6px 12px 10px;",
+        tags$summary(style = "cursor: pointer; font-weight: 700; color: #2c5d80;",
+                     "Concurvity (advanced)"),
+        tags$p(style = "font-size: 0.83rem; color: #555; margin: 8px 0 4px;",
+          HTML("Concurvity is the smooth-term analogue of collinearity (0 = independent, 1 = fully confounded). Values near 1 mean a smooth is nearly reproducible from the others, so its individual estimate and p-value are unreliable. High concurvity between the population time smooths and the by-speaker random smooths is common and usually harmless; treat it as a caution, not a failure.")),
+        tags$div(style = "overflow-x: auto;",
+          tags$table(
+            style = "margin-top: 4px; border-collapse: collapse; font-size: 0.84rem; width: 100%;",
+            tags$thead(header),
+            tags$tbody(body)))
+      )
+    }
+
+    # ---- ACF section note (AR1- and grouping-aware) ----
+    acf_note <- if (isTRUE(diag$acf_whitened)) {
+      tags$div(
+        style = "font-size: 0.84rem; color: #555; margin: 2px 0 8px;",
+        HTML(sprintf("An AR1 correction was applied (rho = %s). The ACF below is computed on the <strong>AR1-whitened residuals, per token</strong>, so it shows whether the correction worked: if it did, the lag-1 bar should now sit <em>inside</em> the dashed band. Bars still poking well outside it mean autocorrelation remains &mdash; consider a different structure.",
+                     formatC(diag$rho, format = "f", digits = 3))))
+    } else if (isTRUE(diag$acf_grouped)) {
+      tags$div(
+        style = "font-size: 0.84rem; color: #555; margin: 2px 0 8px;",
+        HTML("Computed <strong>per token</strong> (within-token autocorrelation pooled across tokens, so token boundaries don't distort the low lags &mdash; the same idea as <code>itsadug::acf_resid</code>). Bars decaying slowly across lags (rather than dropping inside the dashed band after lag 1) indicate temporal autocorrelation; enable <strong>AR1 correction</strong> in the sidebar and refit."))
+    } else {
+      tags$div(
+        style = "font-size: 0.84rem; color: #555; margin: 2px 0 8px;",
+        HTML("Bars decaying slowly across lags (rather than dropping inside the dashed band after lag 1) indicate temporal autocorrelation. If you see that, enable <strong>AR1 correction</strong> in the sidebar and refit."))
+    }
+
+    tagList(
+      tags$hr(),
+      tags$h4(icon("stethoscope"), " Model diagnostics"),
+
+      guide_box("How to read these diagnostics",
+        tags$ul(style = "margin-bottom: 0; padding-left: 18px;",
+          tags$li(tags$strong("Basis dimension (k):"),
+            " the key check. If a time smooth has a k-index below 1 and a small p-value, its ",
+            tags$em("k"), " is likely too low — most convincingly when its ",
+            tags$em("edf"), " is also close to ", tags$em("k'"),
+            ". Raise ", tags$em("k"),
+            " and refit. Random-effect terms (by-speaker / by-item) are not checked this way."),
+          tags$li(tags$strong("Q–Q plot:"),
+            " residuals should fall along the red line. Systematic curvature at the tails signals non-normal residuals."),
+          tags$li(tags$strong("Residuals vs fitted:"),
+            " should be a flat, patternless band around zero. A funnel shape means non-constant variance."),
+          tags$li(tags$strong("Histogram:"),
+            " should look roughly bell-shaped and centred on zero."),
+          tags$li(tags$strong("Observed vs fitted:"),
+            " points should hug the red 1:1 line; scatter reflects unexplained variation."),
+          tags$li(tags$strong("Residual ACF:"),
+            " checks for leftover temporal autocorrelation, computed per token. Without AR1 it motivates turning the correction on; with AR1 it shows the whitened residuals so you can confirm the correction worked.")),
+        open = FALSE),
+
+      tags$h5(style = "margin-top: 14px;", "Basis dimension check (k)"),
+      k_block,
+
+      tags$h5(style = "margin-top: 16px;", "Residual checks"),
+      tags$div(class = "plot-spinner-wrap",
+        plotOutput("gamm_diag_resid_plot", height = "560px", width = "800px"),
+        tags$div(class = "plot-spinner")
+      ),
+
+      tags$h5(style = "margin-top: 16px;", "Residual autocorrelation"),
+      acf_note,
+      tags$div(class = "plot-spinner-wrap",
+        plotOutput("gamm_diag_acf_plot", height = "260px", width = "800px"),
+        tags$div(class = "plot-spinner")
+      ),
+
+      conc_block
+    )
+  })
+
+  # --- Download handler (diagnostics image: 4 residual panels + ACF) ---
+  output$gamm_diag_download <- downloadHandler(
+    filename = function() {
+      base <- if (!is.null(input$gamm_filename) && nzchar(input$gamm_filename))
+                input$gamm_filename else "gamm"
+      paste0(base, "_diagnostics.png")
+    },
+    content = function(file) {
+      req(gamm_diag_data())
+      diag  <- gamm_diag_data()
+      grobs <- gamm_diag_resid_grobs(diag)
+      acf_p <- gamm_diag_acf_ggplot(diag)
+      grDevices::png(file, width = 9, height = 11, units = "in", res = 200)
+      on.exit(grDevices::dev.off(), add = TRUE)
+      gridExtra::grid.arrange(
+        grobs = c(grobs, list(acf_p)),
+        layout_matrix = rbind(c(1, 2), c(3, 4), c(5, 5)),
+        heights = c(1, 1, 0.8)
+      )
+      showNotification("Diagnostics image saved.", type = "message", duration = 4)
+    }
+  )
 
   # --- Summary box ---
   output$gamm_summary <- renderUI({
@@ -769,7 +1098,33 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
 
     code_text <- paste0(code_text,
       '# View results\n',
-      'summary(model)\n\n',
+      'summary(model)\n\n')
+
+    # Diagnostics block — mirrors the app's "Diagnose model" panel so the
+    # exported script reproduces it. Points at the standard packages.
+    acf_line <- if (use_ar1) {
+      paste0('acf_resid(model)   # AR1 fit: uses the stored AR.start/rho to\n',
+             '                   # show the whitened residuals (did AR1 work?)\n')
+    } else {
+      paste0('acf_resid(model, split_pred = list(dat$', token_var, '))  # per-token ACF\n')
+    }
+    code_text <- paste0(code_text,
+      '# --- Model diagnostics ---\n',
+      '# Base mgcv checks: residual plots (Q-Q, residuals vs linear predictor,\n',
+      '# histogram, response vs fitted) and basis-dimension (k) adequacy.\n',
+      'par(mfrow = c(2, 2))\n',
+      'gam.check(model)\n',
+      'k.check(model)                 # k-index < 1 with small p-value => raise k, refit\n',
+      'concurvity(model, full = TRUE) # smooth-term collinearity (0 = independent, 1 = confounded)\n\n',
+      '# Residual autocorrelation, respecting token boundaries (the app\'s ACF panel).\n',
+      '# itsadug::acf_resid is the standard tool in phonetics GAMM workflows:\n',
+      '#   install.packages("itsadug")\n',
+      'library(itsadug)\n',
+      acf_line,
+      '\n# gratia gives ggplot-based equivalents if you prefer:\n',
+      '#   gratia::appraise(model); gratia::draw(model)\n\n')
+
+    code_text <- paste0(code_text,
       '# Predict population-level smooth curves\n',
       'tone_levels <- levels(dat$', tone_var_pred, ')\n',
       'newdat <- expand.grid(\n',

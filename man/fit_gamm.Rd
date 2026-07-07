@@ -84,8 +84,10 @@ ordered \code{tone_ord} to factors with treatment contrasts.
 \item Fit with \code{\link[mgcv:bam]{mgcv::bam()}} using \code{discrete = TRUE} for speed on large
 datasets, capturing warnings.
 \item If \code{use_ar1 = TRUE}, estimate \code{rho} from the lag-1 autocorrelation
-of the residuals and refit with that \code{rho} plus per-token
-\code{AR.start} to correct for within-token correlation.
+of the residuals computed \emph{within} tokens (pooling only genuine
+within-token neighbours, not across token boundaries), then refit
+with that \code{rho} plus per-token \code{AR.start} to correct for
+within-token correlation.
 }
 }
 

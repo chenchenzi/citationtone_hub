@@ -37,8 +37,10 @@
 #' 4. Fit with [mgcv::bam()] using `discrete = TRUE` for speed on large
 #'    datasets, capturing warnings.
 #' 5. If `use_ar1 = TRUE`, estimate `rho` from the lag-1 autocorrelation
-#'    of the residuals and refit with that `rho` plus per-token
-#'    `AR.start` to correct for within-token correlation.
+#'    of the residuals computed *within* tokens (pooling only genuine
+#'    within-token neighbours, not across token boundaries), then refit
+#'    with that `rho` plus per-token `AR.start` to correct for
+#'    within-token correlation.
 #'
 #' ## Choosing `smooth_type`
 #'
@@ -257,7 +259,20 @@ fit_gamm <- function(data,
 
   rho_val <- NULL
   if (use_ar1) {
-    rho_val <- stats::acf(stats::resid(model), plot = FALSE)$acf[2]
+    # Estimate rho from the lag-1 autocorrelation *within* tokens, not across
+    # the flat concatenation: a plain acf() would count every token boundary as
+    # an adjacent pair and bias rho. grouped_acf() pools only genuine
+    # within-token neighbours (the same series bam's AR.start whitens).
+    init_res <- stats::resid(model)
+    init_tok <- as.character(dat$.token)
+    if (!is.null(model$na.action)) {
+      init_tok <- init_tok[-as.integer(model$na.action)]
+    }
+    rho_val <- if (length(init_tok) == length(init_res) && !anyNA(init_res)) {
+      grouped_acf(init_res, init_tok, max_lag = 1)$acf[2]
+    } else {
+      stats::acf(init_res, plot = FALSE, na.action = stats::na.pass)$acf[2]
+    }
     model <- withCallingHandlers(
       mgcv::bam(stats::as.formula(formula_str), data = dat,
                 rho = rho_val, AR.start = dat$.start_event, discrete = TRUE),
@@ -447,4 +462,254 @@ predict_gamm <- function(gamm_obj, n = 200) {
   }
 
   do.call(rbind, plot_rows)
+}
+
+
+# Back-map the internal dotted term names (.time_norm, .tone_ord, .speaker, ...)
+# used inside the fitted model onto the user's original column names, so
+# diagnostic tables read in the same vocabulary as the rest of the app. Order
+# matters: the compound tokens (.tone_ord, .speaker_tone) must be substituted
+# before their prefixes (.tone, .speaker). Internal helper for diagnose_gamm().
+# Per-token residual autocorrelation, the way dynamic-speech GAMM workflows
+# want it (cf. itsadug::acf_resid). Plain stats::acf() on the fitted residuals
+# would treat the whole dataset as one series and let every token boundary
+# contaminate the low lags — badly so for short tokens. Instead we split the
+# residuals by token and pool the within-token lag products, so only genuinely
+# adjacent frames contribute. When the model was fit with an AR1 correction we
+# first whiten each token series (e_i - rho * e_{i-1}, reset at each token
+# start, exactly as bam's AR.start does), so the plot shows whether the AR1
+# term actually removed the autocorrelation. Internal helper for
+# diagnose_gamm().
+grouped_acf <- function(res, tok, rho = NULL, max_lag = 40) {
+  groups <- split(res, tok)
+  if (!is.null(rho) && is.finite(rho)) {
+    groups <- lapply(groups, function(e) {
+      if (length(e) < 2) e else c(e[1], e[-1] - rho * e[-length(e)])
+    })
+  }
+  res2 <- unlist(groups, use.names = FALSE)
+  gm   <- mean(res2)
+  den  <- sum((res2 - gm)^2)
+  lens <- vapply(groups, length, integer(1))
+  max_lag <- max(1L, min(as.integer(max_lag), max(lens) - 1L))
+
+  acf_vals <- numeric(max_lag + 1L)
+  acf_vals[1] <- 1  # lag 0
+  for (L in seq_len(max_lag)) {
+    num <- 0
+    for (e in groups) {
+      n <- length(e)
+      if (n > L) num <- num + sum((e[seq_len(n - L)] - gm) * (e[(1 + L):n] - gm))
+    }
+    acf_vals[L + 1L] <- if (den > 0) num / den else NA_real_
+  }
+  data.frame(lag = 0:max_lag, acf = acf_vals)
+}
+
+
+backmap_gamm_terms <- function(x, col_names) {
+  x <- gsub("\\.time_norm",    col_names$time,                                x)
+  x <- gsub("\\.tone_ord",     paste0(col_names$tone, ".ord"),                x)
+  x <- gsub("\\.tone",         col_names$tone,                                x)
+  x <- gsub("\\.speaker_tone", paste0(col_names$speaker, ".", col_names$tone), x)
+  x <- gsub("\\.speaker",      col_names$speaker,                             x)
+  x <- gsub("\\.item",         col_names$item,                                x)
+  if (!is.null(col_names$duration)) {
+    x <- gsub("\\.duration", col_names$duration, x)
+  }
+  x
+}
+
+
+#' Diagnose a fitted GAMM
+#'
+#' @description
+#' Extracts the standard model-checking diagnostics for a fitted
+#' [fit_gamm()] object, packaged as plain numeric tables and data frames
+#' so a caller (e.g. the Shiny app) can render them however it likes.
+#' Mirrors what [mgcv::gam.check()] reports, but returns the pieces as
+#' data rather than drawing base-graphics plots.
+#'
+#' @details
+#' The returned diagnostics answer the three questions that decide
+#' whether a GAMM fit can be trusted:
+#'
+#' * **Are the residuals well-behaved?** `resid_df` holds the deviance
+#'   residuals, fitted values, and observed response, enough to draw a
+#'   Q-Q plot, a residuals-vs-fitted plot, a residual histogram, and an
+#'   observed-vs-fitted plot.
+#' * **Is the basis dimension `k` large enough?** `k_check` is
+#'   [mgcv::k.check()]'s table (k', edf, k-index, p-value) with the term
+#'   names mapped back to the user's columns. A `k_flag` column marks the
+#'   spline smooths where a low k-index together with a small p-value
+#'   suggests `k` is too low and the model should be refitted with a
+#'   larger `k`. Random-effect terms (by-speaker / by-item) are flagged
+#'   `"na"` because the k-index is not a meaningful check for them.
+#' * **Is there leftover temporal autocorrelation?** `acf` is the lag /
+#'   autocorrelation of the residuals with the white-noise band in
+#'   `acf_ci`. Autocorrelation decaying slowly across lags is the signal
+#'   that an AR1 correction (`use_ar1 = TRUE` in [fit_gamm()]) is worth
+#'   turning on.
+#'
+#' `concurvity` is [mgcv::concurvity()]'s full table (0-1, higher means
+#' more confounding between smooths) when it can be computed.
+#'
+#' The ACF is computed **per token** (the residuals are split by token and
+#' the within-token lag products are pooled, in the spirit of
+#' [itsadug::acf_resid()]) so that token boundaries do not contaminate the
+#' low lags — important because f0 tokens are short. When the fit used an
+#' AR1 correction the residuals are first whitened within each token
+#' (`e_i - rho * e_{i-1}`, reset at each token start), so the ACF then
+#' shows whether the AR1 term actually removed the autocorrelation rather
+#' than the pre-correction picture. `acf_grouped` / `acf_whitened` record
+#' which path was taken (a plain concatenated ACF is used only as a
+#' fallback if residuals cannot be aligned to tokens).
+#'
+#' @param gamm_obj An object of class `"shinytone_gamm"` from
+#'   [fit_gamm()].
+#'
+#' @return An S3 object of class `"shinytone_gamm_diag"`, a list with:
+#' * `resid_df`: data frame with `residual` (deviance), `fitted`, and
+#'   `observed`.
+#' * `k_check`: data frame version of [mgcv::k.check()] with a `Smooth`
+#'   column and a `k_flag` column (`"ok"`, `"low"`, or `"na"`), or `NULL`
+#'   if it could not be computed.
+#' * `concurvity`: data frame version of [mgcv::concurvity()], or `NULL`.
+#' * `acf`: data frame with `lag` and `acf` (per token; AR1-whitened when
+#'   the fit used an AR1 correction).
+#' * `acf_ci`: half-width of the white-noise confidence band.
+#' * `acf_grouped`, `acf_whitened`: logicals recording whether the ACF was
+#'   computed per token and whether it was AR1-whitened.
+#' * `n`: number of residuals.
+#' * `rho`, `use_ar1`: AR1 information carried over from the fit.
+#' * `family`: the model's error family.
+#'
+#' @seealso [fit_gamm()] for the model fit, [mgcv::gam.check()] and
+#'   [mgcv::k.check()] for the underlying diagnostics.
+#'
+#' @references
+#' Wood, S. N. (2017). \emph{Generalized Additive Models: An Introduction
+#' with R} (2nd ed.). Chapman and Hall/CRC.
+#'
+#' @examples
+#' \dontrun{
+#' data(sample_f0)
+#' normed <- normalise_f0(sample_f0, f0 = "f0_Hz",
+#'                        speaker = "speaker", tone = "tone")
+#' gamm <- fit_gamm(normed, f0 = "f0_st", time = "time", token = "token",
+#'                  tone = "tone", speaker = "speaker", item = "char")
+#' diag <- diagnose_gamm(gamm)
+#' head(diag$k_check)
+#' }
+#' @export
+#' @importFrom stats residuals fitted acf
+diagnose_gamm <- function(gamm_obj) {
+  if (!inherits(gamm_obj, "shinytone_gamm")) {
+    stop("`gamm_obj` must be a shinytone_gamm object from fit_gamm().",
+         call. = FALSE)
+  }
+  if (!requireNamespace("mgcv", quietly = TRUE)) {
+    stop("mgcv is required for GAMM diagnostics. Install with install.packages('mgcv').",
+         call. = FALSE)
+  }
+
+  model     <- gamm_obj$model
+  col_names <- gamm_obj$col_names
+
+  # --- Residuals / fitted (the four gam.check panels) ----------------------
+  res_dev  <- as.numeric(stats::residuals(model, type = "deviance"))
+  res_resp <- as.numeric(stats::residuals(model, type = "response"))
+  fit_vals <- as.numeric(stats::fitted(model))
+  observed <- fit_vals + res_resp
+  resid_df <- data.frame(
+    residual = res_dev,
+    fitted   = fit_vals,
+    observed = observed,
+    stringsAsFactors = FALSE
+  )
+
+  # --- Basis-dimension (k) check -------------------------------------------
+  # k.check re-simulates, so guard it; some model structures can trip it up.
+  k_check <- tryCatch({
+    kc <- mgcv::k.check(model)
+    if (is.null(kc) || nrow(kc) == 0) {
+      NULL
+    } else {
+      orig  <- rownames(kc)
+      kidx  <- suppressWarnings(as.numeric(kc[, "k-index"]))
+      pval  <- suppressWarnings(as.numeric(kc[, "p-value"]))
+      # A term is a spline smooth (where the k-index diagnostic is meaningful)
+      # when it is a smooth of the time axis or duration and NOT a grouped
+      # factor smooth "s(x,group)" random effect (those carry a comma).
+      is_spline <- !grepl(",", orig, fixed = TRUE) &
+                   grepl("\\.time_norm|\\.duration", orig)
+      k_flag <- ifelse(
+        !is_spline, "na",
+        ifelse(!is.na(kidx) & kidx < 1 & !is.na(pval) & pval < 0.05,
+               "low", "ok"))
+      df <- data.frame(Smooth = backmap_gamm_terms(orig, col_names),
+                       stringsAsFactors = FALSE)
+      df <- cbind(df, as.data.frame(kc, check.names = FALSE))
+      df$k_flag <- k_flag
+      rownames(df) <- NULL
+      df
+    }
+  }, error = function(e) NULL)
+
+  # --- Concurvity (confounding between smooths) ----------------------------
+  concurvity <- tryCatch({
+    cc <- mgcv::concurvity(model, full = TRUE)
+    df <- data.frame(Measure = rownames(cc),
+                     as.data.frame(cc, check.names = FALSE),
+                     check.names = FALSE, stringsAsFactors = FALSE)
+    names(df)[-1] <- backmap_gamm_terms(names(df)[-1], col_names)
+    rownames(df) <- NULL
+    df
+  }, error = function(e) NULL)
+
+  # --- Residual autocorrelation --------------------------------------------
+  # Prefer a per-token ACF (see grouped_acf) so token boundaries do not
+  # contaminate the lags, and whiten by the AR1 rho when one was used so the
+  # panel can actually show whether the correction worked. Fall back to a plain
+  # ACF only if the residuals cannot be aligned to their tokens.
+  n_resid <- length(res_dev)
+  dat     <- gamm_obj$data_for_predict
+  tok     <- if (!is.null(dat) && ".token" %in% names(dat))
+               as.character(dat$.token) else NULL
+  if (!is.null(tok) && !is.null(model$na.action)) {
+    tok <- tok[-as.integer(model$na.action)]
+  }
+  whiten_rho <- if (!is.null(gamm_obj$rho) && is.finite(gamm_obj$rho))
+                  gamm_obj$rho else NULL
+
+  if (!is.null(tok) && length(tok) == n_resid && !anyNA(res_dev)) {
+    acf_df       <- grouped_acf(res_dev, tok, rho = whiten_rho)
+    acf_grouped  <- TRUE
+    acf_whitened <- !is.null(whiten_rho)
+  } else {
+    acf_obj      <- stats::acf(res_dev, plot = FALSE, na.action = stats::na.pass)
+    acf_df       <- data.frame(lag = as.numeric(acf_obj$lag),
+                               acf = as.numeric(acf_obj$acf))
+    acf_grouped  <- FALSE
+    acf_whitened <- FALSE
+  }
+  acf_ci <- if (n_resid > 0) 1.96 / sqrt(n_resid) else NA_real_
+
+  structure(
+    list(
+      resid_df     = resid_df,
+      k_check      = k_check,
+      concurvity   = concurvity,
+      acf          = acf_df,
+      acf_ci       = acf_ci,
+      acf_grouped  = acf_grouped,
+      acf_whitened = acf_whitened,
+      n            = n_resid,
+      rho          = gamm_obj$rho,
+      use_ar1      = !is.null(gamm_obj$rho),
+      family       = tryCatch(model$family$family, error = function(e) NA_character_),
+      col_names    = col_names
+    ),
+    class = "shinytone_gamm_diag"
+  )
 }
