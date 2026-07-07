@@ -1,5 +1,20 @@
 # shinytone (development version)
 
+* **GAMM diagnostics** (new). `diagnose_gamm()` and a "Model diagnostics"
+  section on the GAMM tab: after fitting, one click reports the
+  basis-dimension check (k', edf, k-index, p-value, flagging under-resourced
+  time smooths), the four `gam.check()` residual panels (Q–Q, residuals vs
+  fitted, histogram, observed vs fitted), the residual ACF, and the
+  concurvity table, with a text download of all diagnostics. The ACF is
+  computed per token (in the spirit of `itsadug::acf_resid()`) and
+  AR1-whitened when the fit used an AR1 correction, so it shows whether the
+  correction actually worked.
+* The GAMM tab's **AR1 correction is now on by default**: densely-sampled f0
+  frames are strongly autocorrelated, so smooth p-values are anticonservative
+  without it. `fit_gamm()` (whose `use_ar1` argument still defaults to
+  `FALSE`) now estimates `rho` from the lag-1 autocorrelation *within* tokens
+  rather than across the flat concatenation, so token boundaries no longer
+  bias the estimate.
 * `run_app()` now checks GitHub once per launch for a newer shinytone release
   (2-second timeout, silent when offline) and, when one exists, prints the
   update command in the console and shows a one-time notification in the app.

@@ -181,6 +181,43 @@ ggplot(preds, aes(time, f0_predicted, colour = tone)) +
   geom_line(linewidth = 1)
 ```
 
+## Fit a GAMM and check its diagnostics
+
+`fit_gamm()` wraps `mgcv::bam()` with the smooth structure recommended
+for tone contours (Sóskuthy 2017): a reference smooth plus per-tone
+difference smooths, by-speaker random smooths, and an optional AR1
+correction for the strong within-token autocorrelation of
+densely-sampled f0 (`use_ar1 = TRUE`; the app's GAMM tab enables it by
+default). The AR1 parameter rho is estimated from the lag-1
+autocorrelation of the residuals *within* tokens, so token boundaries
+do not bias it. `diagnose_gamm()` then answers the model-checking
+questions in one call: is the basis dimension `k` large enough, are the
+residuals well-behaved, and did the AR1 correction actually remove the
+autocorrelation.
+
+```{r, eval = FALSE}
+# (Skipped on package build for speed; uncomment to run locally.)
+gamm <- fit_gamm(normed,
+                 f0      = "f0_st",
+                 time    = "time",
+                 token   = "token",
+                 tone    = "tone",
+                 speaker = "speaker",
+                 item    = "char",
+                 use_ar1 = TRUE)
+
+# Population-level per-tone curves, same schema as predict_gca()
+preds <- predict_gamm(gamm, n = 100)
+ggplot(preds, aes(time, f0_predicted, colour = tone)) +
+  geom_line(linewidth = 1)
+
+# Model checking: basis-dimension (k) check, residual panels, per-token
+# residual ACF (AR1-whitened when use_ar1 = TRUE), and concurvity
+diag <- diagnose_gamm(gamm)
+diag$k_check
+head(diag$acf)
+```
+
 ## Convert to Chao tone numerals
 
 `contour_to_chao()` reduces per-tone mean (or model-predicted) contours
@@ -220,6 +257,8 @@ The `shape` column summarises the contour ("rising", "falling",
 
 ## References
 
+* Sóskuthy, M. (2017). Generalised additive mixed models for dynamic
+  analysis in linguistics: A practical introduction. arXiv:1703.05339.
 * Steffman, J., & Cole, J. (2022). Pitch tracking artefacts and the
   detection of voicing errors in spontaneous speech.
 * Sundberg, J. (1973). The acoustics of the singing voice.

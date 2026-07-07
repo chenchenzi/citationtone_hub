@@ -90,13 +90,15 @@ reference:
   - title: Contour modelling
     desc: >
       Token-level polynomial fits, mixed-effects growth-curve analysis,
-      and GAMMs over tone contours.
+      and GAMMs over tone contours, with AR1 correction and
+      model-checking diagnostics.
     contents:
       - fit_polynomial
       - fit_gca
       - predict_gca
       - fit_gamm
       - predict_gamm
+      - diagnose_gamm
 
   - title: Chao tone numerals
     desc: >

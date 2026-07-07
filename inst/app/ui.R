@@ -937,7 +937,7 @@ ui <- fluidPage(
                                     showcase_card("analysis", "\U0001F3F7", "Curate", "curate.png",
                                       "Re-label tone-category variants for linguistic variation (tone splits or mergers, colloquial vs. literary readings, sandhi or sociolinguistic forms) or exclude mis-elicited tokens."),
                                     showcase_card("analysis", "\U0001F4CA", "Model", "model.png",
-                                      "Three modelling approaches: per-token Legendre polynomials, Growth Curve Analysis (GCA) with mixed effects, and Generalised Additive Mixed Models (GAMM)."),
+                                      "Three modelling approaches: per-token Legendre polynomials, Growth Curve Analysis (GCA) with mixed effects, and Generalised Additive Mixed Models (GAMM) with AR1 correction and built-in model diagnostics."),
                                     showcase_card("analysis", "\U0001F4CB", "Summarise", "summarise.png",
                                       "Convert tone contours into Chao tone numerals (1–5 scale) for cross-language comparison. Compare reference-line and interval-based methods.")
                                   )
@@ -1540,7 +1540,8 @@ ui <- fluidPage(
                           tags$p(class = "rpkg-fn-desc",
                             "Growth-curve and generalised additive mixed ",
                             "models for tonal contours, with sensible ",
-                            "defaults for citation-tone designs.")
+                            "defaults for citation-tone designs and ",
+                            "one-click model checking via diagnose_gamm().")
                         ),
                         tags$div(class = "rpkg-fn-tile",
                           tags$p(class = "rpkg-fn-name", "contour_to_chao()"),
