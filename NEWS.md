@@ -15,6 +15,12 @@
   set of flagged tokens is essentially unchanged on clean data (the rarer
   truncated-max / floored-min cases are left to `flag_level_outliers()` and
   `flag_pitch_jumps()`).
+* `inspect_f0()` now accepts `tone = NULL`, which skips the tone-relative
+  token-level check (`flag_level_outliers()`) and omits the `tone` column from
+  the output, so it can run before tone categories are known (e.g. the
+  clustering / tone-discovery workflow). The speaker-level extreme-value and
+  sample-level jump checks still run, and the default remains `tone = "tone"`,
+  so existing calls are unchanged.
 * **GAMM diagnostics** (new). `diagnose_gamm()` and a "Model diagnostics"
   section on the GAMM tab: after fitting, one click reports the
   basis-dimension check (k', edf, k-index, p-value, flagging under-resourced

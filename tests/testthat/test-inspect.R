@@ -177,6 +177,40 @@ test_that("inspect_f0 errors on missing columns", {
                "Column.*not found")
 })
 
+test_that("inspect_f0(tone = NULL) skips the level check and omits the tone column", {
+  # No tone column at all (the pre-tone-discovery case). One clear pooled
+  # outlier (t4 ~ 400 Hz vs ~150 Hz peers); all tokens smooth (no jumps).
+  mk <- function(tok, base) data.frame(
+    token   = tok, time = seq(0, 0.04, by = 0.01),
+    f0      = base + c(0, 1, 0, -1, 0),
+    speaker = "S01")
+  df <- do.call(rbind, list(mk("t1", 150), mk("t2", 152),
+                            mk("t3", 149), mk("t4", 400)))
+
+  out <- inspect_f0(df, tone = NULL, z_threshold = 1)
+
+  # tone column omitted; level check never ran.
+  expect_false("tone" %in% names(out))
+  expect_false(any(grepl("level too", out$flag_notes)))
+  # the two tone-free screens still run, report, and flag.
+  expect_true(all(c("flagged_token", "flagged_jump", "flag_notes",
+                    "f0_token_max", "f0_token_min") %in% names(out)))
+  expect_true(all(out$flagged_token[out$token == "t4"]))
+  expect_true(any(grepl("max too high", out$flag_notes[out$token == "t4"])))
+})
+
+test_that("inspect_f0(tone = NULL) drops a stray tone column from the output", {
+  df <- data.frame(
+    token   = rep(c("t1", "t2"), each = 5),
+    time    = rep(seq(0, 0.04, by = 0.01), 2),
+    f0      = c(150, 160, 155, 158, 159, 152, 159, 154, 157, 158),
+    speaker = rep("S01", 10),
+    tone    = rep("T1",  10))
+  out <- inspect_f0(df, tone = NULL)
+  expect_false("tone" %in% names(out))
+  expect_equal(nrow(out), 10)
+})
+
 
 # ---------- flag_level_outliers ----------------------------------------------
 

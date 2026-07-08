@@ -34,7 +34,12 @@ inspect_f0(
 
 \item{speaker}{Column name of speaker ID. Default \code{"speaker"}.}
 
-\item{tone}{Column name of tone category. Default \code{"tone"}.}
+\item{tone}{Column name of tone category, or \code{NULL}. Default \code{"tone"}.
+When \code{NULL}, the token-level (speaker-by-tone) level check
+(\code{\link[=flag_level_outliers]{flag_level_outliers()}}) is skipped and the \code{tone} column is omitted
+from the output, so the wrapper can run before tone categories are known
+(e.g. the \code{\link[=cluster_f0]{cluster_f0()}} tone-discovery workflow); the speaker-level and
+sample-level checks still run.}
 
 \item{z_threshold}{Signed z-score cutoff: a token is flagged when its
 per-token max exceeds \code{+z_threshold} (too high) or its min falls below
@@ -86,37 +91,46 @@ was flagged (e.g. \code{"max too high"}, \code{"jump (rise)"},
 \code{"level too high"}, \code{"low intensity"}).
 }
 
+When \code{tone} is \code{NULL} the \code{tone} column is omitted and the level check is
+not run, so \code{flag_notes} never contains \code{"level too high"} /
+\code{"level too low"} and those checks do not contribute to \code{flagged_token}.
+
 When \code{intensity} is supplied, the result additionally carries the
 \code{intensity} column and a sample-level \code{flag_low_intensity} logical. The
 low-intensity flag is advisory: it appears in \code{flag_notes} but does not by
 itself set \code{flagged_token}.
 }
 \description{
-One-call convenience wrapper that runs both \code{\link[=flag_outliers]{flag_outliers()}} and
-\code{\link[=flag_pitch_jumps]{flag_pitch_jumps()}} on the same dataset, joins their results back
-into one long-format data frame, and produces a single
-\code{flag_notes} column with human-readable reasons for each flag. This
-is the function that backs the Inspect tab of the Shiny app.
+One-call convenience wrapper that runs \code{\link[=flag_outliers]{flag_outliers()}},
+\code{\link[=flag_pitch_jumps]{flag_pitch_jumps()}}, and (when \code{tone} is supplied) \code{\link[=flag_level_outliers]{flag_level_outliers()}}
+on the same dataset, joins their results back into one long-format data
+frame, and produces a single \code{flag_notes} column with human-readable
+reasons for each flag. This is the function that backs the Inspect tab of
+the Shiny app.
 }
 \details{
 \subsection{What the function does internally}{
 \enumerate{
-\item Call \code{\link[=flag_outliers]{flag_outliers()}} to get token-level outlier flags
-(\code{flag_too_high}, \code{flag_too_low}) plus per-token summary
-statistics.
-\item Call \code{\link[=flag_pitch_jumps]{flag_pitch_jumps()}} to get sample-level pitch-tracking
-artefact flags (\code{flagged_jump}, \code{jump_note}).
-\item Left-join the token-level flags onto the long-format jump output,
-so every sample carries both kinds of information.
-\item Set \code{flagged_token} to \code{TRUE} for any token that has a max/min
-z-outlier or contains at least one sample-level jump.
-\item Concatenate the human-readable reasons into a single
-\code{flag_notes} column for display.
+\item Call \code{\link[=flag_outliers]{flag_outliers()}} for the speaker-level extreme-value check
+(\code{flag_too_high}, \code{flag_too_low}) plus per-token summary statistics.
+\item When \code{tone} is supplied, call \code{\link[=flag_level_outliers]{flag_level_outliers()}} for the
+token-level (speaker-by-tone) level check (\code{flag_level_high},
+\code{flag_level_low}). With \code{tone = NULL} this screen is skipped and both
+flags are set to \code{FALSE}.
+\item Call \code{\link[=flag_pitch_jumps]{flag_pitch_jumps()}} for the sample-level pitch-tracking artefact
+flags (\code{flagged_jump}, \code{jump_note}).
+\item Left-join the token-level flags onto the long-format jump output, so
+every sample carries all three kinds of information.
+\item Set \code{flagged_token} to \code{TRUE} for any token that is a speaker-level
+extreme, an unusual level for its tone, or contains at least one
+sample-level jump.
+\item Concatenate the human-readable reasons into a single \code{flag_notes}
+column for display.
 }
 
-Use the individual functions (\code{\link[=flag_outliers]{flag_outliers()}}, \code{\link[=flag_pitch_jumps]{flag_pitch_jumps()}})
-if you want only one kind of check or want to combine the outputs
-yourself in a non-standard way.
+Use the individual functions (\code{\link[=flag_outliers]{flag_outliers()}}, \code{\link[=flag_level_outliers]{flag_level_outliers()}},
+\code{\link[=flag_pitch_jumps]{flag_pitch_jumps()}}) if you want only one kind of check or want to combine
+the outputs yourself in a non-standard way.
 }
 }
 \examples{

@@ -659,36 +659,46 @@ flag_pitch_jumps <- function(data,
 #' Inspect f0 data for token-level outliers and sample-level jumps
 #'
 #' @description
-#' One-call convenience wrapper that runs both [flag_outliers()] and
-#' [flag_pitch_jumps()] on the same dataset, joins their results back
-#' into one long-format data frame, and produces a single
-#' `flag_notes` column with human-readable reasons for each flag. This
-#' is the function that backs the Inspect tab of the Shiny app.
+#' One-call convenience wrapper that runs [flag_outliers()],
+#' [flag_pitch_jumps()], and (when `tone` is supplied) [flag_level_outliers()]
+#' on the same dataset, joins their results back into one long-format data
+#' frame, and produces a single `flag_notes` column with human-readable
+#' reasons for each flag. This is the function that backs the Inspect tab of
+#' the Shiny app.
 #'
 #' @details
 #' ## What the function does internally
 #'
-#' 1. Call [flag_outliers()] to get token-level outlier flags
-#'    (`flag_too_high`, `flag_too_low`) plus per-token summary
-#'    statistics.
-#' 2. Call [flag_pitch_jumps()] to get sample-level pitch-tracking
-#'    artefact flags (`flagged_jump`, `jump_note`).
-#' 3. Left-join the token-level flags onto the long-format jump output,
-#'    so every sample carries both kinds of information.
-#' 4. Set `flagged_token` to `TRUE` for any token that has a max/min
-#'    z-outlier or contains at least one sample-level jump.
-#' 5. Concatenate the human-readable reasons into a single
-#'    `flag_notes` column for display.
+#' 1. Call [flag_outliers()] for the speaker-level extreme-value check
+#'    (`flag_too_high`, `flag_too_low`) plus per-token summary statistics.
+#' 2. When `tone` is supplied, call [flag_level_outliers()] for the
+#'    token-level (speaker-by-tone) level check (`flag_level_high`,
+#'    `flag_level_low`). With `tone = NULL` this screen is skipped and both
+#'    flags are set to `FALSE`.
+#' 3. Call [flag_pitch_jumps()] for the sample-level pitch-tracking artefact
+#'    flags (`flagged_jump`, `jump_note`).
+#' 4. Left-join the token-level flags onto the long-format jump output, so
+#'    every sample carries all three kinds of information.
+#' 5. Set `flagged_token` to `TRUE` for any token that is a speaker-level
+#'    extreme, an unusual level for its tone, or contains at least one
+#'    sample-level jump.
+#' 6. Concatenate the human-readable reasons into a single `flag_notes`
+#'    column for display.
 #'
-#' Use the individual functions ([flag_outliers()], [flag_pitch_jumps()])
-#' if you want only one kind of check or want to combine the outputs
-#' yourself in a non-standard way.
+#' Use the individual functions ([flag_outliers()], [flag_level_outliers()],
+#' [flag_pitch_jumps()]) if you want only one kind of check or want to combine
+#' the outputs yourself in a non-standard way.
 #'
 #' @inheritParams flag_outliers
 #' @inheritParams flag_pitch_jumps
 #' @inheritParams flag_level_outliers
 #' @param time Column name of time. Default `"time"`.
-#' @param tone Column name of tone category. Default `"tone"`.
+#' @param tone Column name of tone category, or `NULL`. Default `"tone"`.
+#'   When `NULL`, the token-level (speaker-by-tone) level check
+#'   ([flag_level_outliers()]) is skipped and the `tone` column is omitted
+#'   from the output, so the wrapper can run before tone categories are known
+#'   (e.g. the [cluster_f0()] tone-discovery workflow); the speaker-level and
+#'   sample-level checks still run.
 #' @param intensity Optional column name of intensity in dB. When supplied,
 #'   the sample-level low-intensity check ([flag_low_intensity()]) is run and
 #'   its results are added (see Value). `NULL` (default) skips the check.
@@ -706,6 +716,10 @@ flag_pitch_jumps <- function(data,
 #' * `flag_notes`: human-readable concatenation of the reasons a sample
 #'   was flagged (e.g. `"max too high"`, `"jump (rise)"`,
 #'   `"level too high"`, `"low intensity"`).
+#'
+#' When `tone` is `NULL` the `tone` column is omitted and the level check is
+#' not run, so `flag_notes` never contains `"level too high"` /
+#' `"level too low"` and those checks do not contribute to `flagged_token`.
 #'
 #' When `intensity` is supplied, the result additionally carries the
 #' `intensity` column and a sample-level `flag_low_intensity` logical. The
@@ -769,10 +783,16 @@ inspect_f0 <- function(data,
   outliers <- flag_outliers(data, f0 = f0, token = token, speaker = speaker,
                             z_threshold = z_threshold)
 
-  levels <- flag_level_outliers(data, f0 = f0, token = token,
-                                speaker = speaker, tone = tone,
-                                level_threshold = level_threshold,
-                                min_tokens = min_tokens)
+  # The token-level (speaker-by-tone) check needs tone labels; skip it when
+  # tone is NULL (e.g. before tone categories are known).
+  levels <- if (!is.null(tone)) {
+    flag_level_outliers(data, f0 = f0, token = token,
+                        speaker = speaker, tone = tone,
+                        level_threshold = level_threshold,
+                        min_tokens = min_tokens)
+  } else {
+    NULL
+  }
 
   result <- flag_pitch_jumps(data, f0 = f0, token = token, time = time,
                              time_unit      = time_unit,
@@ -790,18 +810,28 @@ inspect_f0 <- function(data,
                                 "z_max", "z_min",
                                 "flag_too_high", "flag_too_low"),
       by = token
-    ) |>
-    dplyr::left_join(
-      levels |> dplyr::select(dplyr::all_of(token),
-                              "flag_level_high", "flag_level_low"),
-      by = token
-    ) |>
-    # Tokens with no voiced samples are absent from the level table; treat
-    # their (joined-NA) level flags as FALSE.
-    dplyr::mutate(
-      flag_level_high = !is.na(.data$flag_level_high) & .data$flag_level_high,
-      flag_level_low  = !is.na(.data$flag_level_low)  & .data$flag_level_low
     )
+
+  if (!is.null(tone)) {
+    result <- result |>
+      dplyr::left_join(
+        levels |> dplyr::select(dplyr::all_of(token),
+                                "flag_level_high", "flag_level_low"),
+        by = token
+      ) |>
+      # Tokens with no voiced samples are absent from the level table; treat
+      # their (joined-NA) level flags as FALSE.
+      dplyr::mutate(
+        flag_level_high = !is.na(.data$flag_level_high) & .data$flag_level_high,
+        flag_level_low  = !is.na(.data$flag_level_low)  & .data$flag_level_low
+      )
+  } else {
+    # tone = NULL: the speaker-by-tone level check was skipped, so its flags
+    # never fire (set to a length-n FALSE via mutate so downstream code is
+    # unchanged).
+    result <- result |>
+      dplyr::mutate(flag_level_high = FALSE, flag_level_low = FALSE)
+  }
 
   result <- result |>
     dplyr::group_by(.data[[token]]) |>
