@@ -31,6 +31,14 @@
   The speaker-level extreme-value and sample-level jump checks still
   run, and the default remains `tone = "tone"`, so existing calls are
   unchanged.
+- **Inspect tab: optional tone.** The tone selector now offers
+  `— none —`, which runs the two tone-free screens (speaker-level
+  extreme-value and sample-level jumps) without a tone column, for the
+  pre-tone-discovery workflow. Backed by `inspect_f0(tone = NULL)`.
+- **GAMM tab: on-demand diagnostics.** The “Run model diagnostics”
+  button is shown in the sidebar from the start (disabled until a model
+  is fitted), and diagnostics run when it is clicked rather than
+  automatically after every fit, so fitting stays fast.
 - **GAMM diagnostics** (new).
   [`diagnose_gamm()`](https://chenchenzi.github.io/citationtone_hub/reference/diagnose_gamm.md)
   and a “Model diagnostics” section on the GAMM tab: after fitting, one
