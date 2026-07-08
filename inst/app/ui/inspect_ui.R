@@ -12,7 +12,7 @@ inspect_ui <- function(input, output, session, dataset, inspect_result = reactiv
           tags$li(tags$strong("Token ID:"), " A unique identifier for each token/syllable (groups rows belonging to the same contour)."),
           tags$li(tags$strong("Time:"), " The time variable that orders f0 samples within each token."),
           tags$li(tags$strong("Speaker:"), " A speaker ID for by-speaker z-score computation."),
-          tags$li(tags$strong("Tone category:"), " The column labelling tone types."),
+          tags$li(tags$strong("Tone category (optional):"), " The column labelling tone types. Enables the token-level (by-tone) check; leave as ", tags$em("— none —"), " to skip it, e.g. before tone categories are known (tone discovery)."),
           tags$li(tags$strong("Intensity (dB, optional):"), " A per-frame intensity column (e.g. from the Praat script or in-app wrassp extraction). Enables the low-intensity check; leave as ", tags$em("— none —"), " if your data has no intensity.")
         ),
         tags$strong("Three complementary checks:"),
@@ -89,8 +89,8 @@ inspect_ui <- function(input, output, session, dataset, inspect_result = reactiv
         selectInput("inspect_speaker_var", "Select Speaker variable:",
                     choices = setNames(vars, var_types),
                     selected = guess_var(vars, var_patterns$speaker, 4)),
-        selectInput("inspect_tone_var", "Select Tone category variable:",
-                    choices = setNames(vars, var_types),
+        selectInput("inspect_tone_var", "Select Tone category variable (optional):",
+                    choices = c("— none —" = "", setNames(vars, var_types)),
                     selected = guess_var(vars, var_patterns$tone, 5)),
         selectInput("inspect_intensity_var",
                     "Select Intensity (dB) variable (optional):",
@@ -149,7 +149,7 @@ inspect_ui <- function(input, output, session, dataset, inspect_result = reactiv
   observeEvent(input$inspect_button, {
     req(dataset())
     req(input$inspect_f0_var, input$inspect_token_var, input$inspect_time_var,
-        input$inspect_speaker_var, input$inspect_tone_var)
+        input$inspect_speaker_var)   # tone is optional (coalesced below)
 
     carry_mult <- as.numeric(input$inspect_carryover_mult)
     if (is.na(carry_mult) || carry_mult < 0) carry_mult <- 1.5
@@ -173,13 +173,18 @@ inspect_ui <- function(input, output, session, dataset, inspect_result = reactiv
       intensity_var <- NULL
     }
 
+    # Tone is optional: an empty selection (— none —) skips the token-level
+    # (speaker x tone) check via inspect_f0(tone = NULL).
+    tone_var <- input$inspect_tone_var
+    if (is.null(tone_var) || !nzchar(tone_var)) tone_var <- NULL
+
     result <- inspect_f0(
       dataset(),
       f0              = input$inspect_f0_var,
       token           = input$inspect_token_var,
       time            = input$inspect_time_var,
       speaker         = input$inspect_speaker_var,
-      tone            = input$inspect_tone_var,
+      tone            = tone_var,
       z_threshold     = input$inspect_z_thresh,
       rise_threshold  = input$inspect_rise_thresh,
       fall_threshold  = input$inspect_fall_thresh,
@@ -199,6 +204,8 @@ inspect_ui <- function(input, output, session, dataset, inspect_result = reactiv
     result <- inspect_result()
     token_var <- input$inspect_token_var
     tone_var <- input$inspect_tone_var
+    if (is.null(tone_var) || !nzchar(tone_var)) tone_var <- NULL
+    has_tone <- !is.null(tone_var)
     speaker_var <- input$inspect_speaker_var
 
     # Overall counts
@@ -230,29 +237,40 @@ inspect_ui <- function(input, output, session, dataset, inspect_result = reactiv
 
     # Speaker x tone groups too small to run the level check (fixed
     # minimum of 5 tokens; matches inspect_f0()'s default min_tokens).
+    # Only meaningful when a tone column was supplied.
     LEVEL_MIN_TOKENS <- 5
-    small_grps <- token_level %>%
-      group_by(.data[[speaker_var]], .data[[tone_var]]) %>%
-      summarise(n = n(), .groups = "drop") %>%
-      filter(n < LEVEL_MIN_TOKENS)
-    n_level_skipped <- sum(small_grps$n)
-    n_small_groups  <- nrow(small_grps)
+    if (has_tone) {
+      small_grps <- token_level %>%
+        group_by(.data[[speaker_var]], .data[[tone_var]]) %>%
+        summarise(n = n(), .groups = "drop") %>%
+        filter(n < LEVEL_MIN_TOKENS)
+      n_level_skipped <- sum(small_grps$n)
+      n_small_groups  <- nrow(small_grps)
+    } else {
+      n_level_skipped <- 0
+      n_small_groups  <- 0
+    }
 
-    # Per-tone breakdown
-    tone_summary <- token_level %>%
-      group_by(.data[[tone_var]]) %>%
-      summarise(
-        total = n(),
-        flagged = sum(flagged_token, na.rm = TRUE),
-        .groups = "drop"
-      ) %>%
-      filter(flagged > 0)
+    # Per-tone breakdown (only when a tone column was supplied)
+    if (has_tone) {
+      tone_summary <- token_level %>%
+        group_by(.data[[tone_var]]) %>%
+        summarise(
+          total = n(),
+          flagged = sum(flagged_token, na.rm = TRUE),
+          .groups = "drop"
+        ) %>%
+        filter(flagged > 0)
 
-    tone_items <- lapply(seq_len(nrow(tone_summary)), function(i) {
-      row <- tone_summary[i, ]
-      tags$li(paste0(row[[tone_var]], ": ", row$flagged, " / ", row$total,
-                     " (", round(100 * row$flagged / max(row$total, 1), 1), "%)"))
-    })
+      tone_items <- lapply(seq_len(nrow(tone_summary)), function(i) {
+        row <- tone_summary[i, ]
+        tags$li(paste0(row[[tone_var]], ": ", row$flagged, " / ", row$total,
+                       " (", round(100 * row$flagged / max(row$total, 1), 1), "%)"))
+      })
+    } else {
+      tone_summary <- data.frame()
+      tone_items   <- list()
+    }
 
     tagList(
       tags$div(style = "background-color: #fff8e1; border-left: 4px solid #ffc107; padding: 10px 14px; margin-bottom: 12px; border-radius: 4px; font-size: 0.88rem;",
@@ -262,7 +280,10 @@ inspect_ui <- function(input, output, session, dataset, inspect_result = reactiv
                          " (", round(100 * n_flagged_tokens / max(n_tokens, 1), 1), "%)"),
             tags$ul(style = "margin: 2px 0; padding-left: 18px;",
               tags$li(paste0("Extreme-value (max / min by speaker): ", n_extreme_tokens)),
-              tags$li(paste0("Token-level (median by speaker × tone): ", n_level_tokens)),
+              if (has_tone)
+                tags$li(paste0("Token-level (median by speaker × tone): ", n_level_tokens))
+              else
+                tags$li(tags$em("Token-level (by tone): not run (no tone selected)")),
               tags$li(paste0("Sample-level (jumps): ", n_jump_tokens)),
               tags$li(style = "list-style: none; margin-left: -18px; color: #8a6d00;",
                 tags$em("A token can fire more than one check, so these may sum to more than the flagged total."))
