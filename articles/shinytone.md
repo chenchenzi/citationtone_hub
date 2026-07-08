@@ -126,6 +126,16 @@ tokens whose median is unusual for their speaker and tone (token-level),
 and individual samples where the rate of f0 change exceeds physiological
 plausibility (sample-level; Sundberg 1973, Steffman & Cole 2022).
 
+The token-level check is tone-relative, so it runs only when a `tone`
+column is available. If your tone categories are not yet known (for
+example before the clustering / tone-discovery step,
+[`cluster_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/cluster_f0.md)),
+call
+[`inspect_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/inspect_f0.md)
+with `tone = NULL`: the speaker-level extreme-value and sample-level
+jump checks still run, and only the token-level check is skipped, with
+the `tone` column omitted from the output.
+
 ``` r
 
 inspected <- inspect_f0(sample_f0,

@@ -1,9 +1,10 @@
 # Inspect f0 data for token-level outliers and sample-level jumps
 
-One-call convenience wrapper that runs both
-[`flag_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_outliers.md)
-and
-[`flag_pitch_jumps()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_pitch_jumps.md)
+One-call convenience wrapper that runs
+[`flag_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_outliers.md),
+[`flag_pitch_jumps()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_pitch_jumps.md),
+and (when `tone` is supplied)
+[`flag_level_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_level_outliers.md)
 on the same dataset, joins their results back into one long-format data
 frame, and produces a single `flag_notes` column with human-readable
 reasons for each flag. This is the function that backs the Inspect tab
@@ -56,7 +57,14 @@ inspect_f0(
 
 - tone:
 
-  Column name of tone category. Default `"tone"`.
+  Column name of tone category, or `NULL`. Default `"tone"`. When
+  `NULL`, the token-level (speaker-by-tone) level check
+  ([`flag_level_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_level_outliers.md))
+  is skipped and the `tone` column is omitted from the output, so the
+  wrapper can run before tone categories are known (e.g. the
+  [`cluster_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/cluster_f0.md)
+  tone-discovery workflow); the speaker-level and sample-level checks
+  still run.
 
 - z_threshold:
 
@@ -133,6 +141,10 @@ A long-format data frame containing the original `token`, `time`, `f0`,
   flagged (e.g. `"max too high"`, `"jump (rise)"`, `"level too high"`,
   `"low intensity"`).
 
+When `tone` is `NULL` the `tone` column is omitted and the level check
+is not run, so `flag_notes` never contains `"level too high"` /
+`"level too low"` and those checks do not contribute to `flagged_token`.
+
 When `intensity` is supplied, the result additionally carries the
 `intensity` column and a sample-level `flag_low_intensity` logical. The
 low-intensity flag is advisory: it appears in `flag_notes` but does not
@@ -144,25 +156,33 @@ by itself set `flagged_token`.
 
 1.  Call
     [`flag_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_outliers.md)
-    to get token-level outlier flags (`flag_too_high`, `flag_too_low`)
-    plus per-token summary statistics.
+    for the speaker-level extreme-value check (`flag_too_high`,
+    `flag_too_low`) plus per-token summary statistics.
 
-2.  Call
+2.  When `tone` is supplied, call
+    [`flag_level_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_level_outliers.md)
+    for the token-level (speaker-by-tone) level check
+    (`flag_level_high`, `flag_level_low`). With `tone = NULL` this
+    screen is skipped and both flags are set to `FALSE`.
+
+3.  Call
     [`flag_pitch_jumps()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_pitch_jumps.md)
-    to get sample-level pitch-tracking artefact flags (`flagged_jump`,
+    for the sample-level pitch-tracking artefact flags (`flagged_jump`,
     `jump_note`).
 
-3.  Left-join the token-level flags onto the long-format jump output, so
-    every sample carries both kinds of information.
+4.  Left-join the token-level flags onto the long-format jump output, so
+    every sample carries all three kinds of information.
 
-4.  Set `flagged_token` to `TRUE` for any token that has a max/min
-    z-outlier or contains at least one sample-level jump.
+5.  Set `flagged_token` to `TRUE` for any token that is a speaker-level
+    extreme, an unusual level for its tone, or contains at least one
+    sample-level jump.
 
-5.  Concatenate the human-readable reasons into a single `flag_notes`
+6.  Concatenate the human-readable reasons into a single `flag_notes`
     column for display.
 
 Use the individual functions
 ([`flag_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_outliers.md),
+[`flag_level_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_level_outliers.md),
 [`flag_pitch_jumps()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_pitch_jumps.md))
 if you want only one kind of check or want to combine the outputs
 yourself in a non-standard way.

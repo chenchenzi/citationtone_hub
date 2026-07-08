@@ -22,6 +22,15 @@
   [`flag_level_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_level_outliers.md)
   and
   [`flag_pitch_jumps()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_pitch_jumps.md)).
+- [`inspect_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/inspect_f0.md)
+  now accepts `tone = NULL`, which skips the tone-relative token-level
+  check
+  ([`flag_level_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_level_outliers.md))
+  and omits the `tone` column from the output, so it can run before tone
+  categories are known (e.g. the clustering / tone-discovery workflow).
+  The speaker-level extreme-value and sample-level jump checks still
+  run, and the default remains `tone = "tone"`, so existing calls are
+  unchanged.
 - **GAMM diagnostics** (new).
   [`diagnose_gamm()`](https://chenchenzi.github.io/citationtone_hub/reference/diagnose_gamm.md)
   and a “Model diagnostics” section on the GAMM tab: after fitting, one
