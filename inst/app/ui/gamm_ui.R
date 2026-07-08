@@ -75,7 +75,7 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
             tags$span(style = "color: #7a5d00;",
               "AR1 assumes ", tags$strong("evenly-spaced frames within each token."),
               " It is robust to the occasional dropped frame, but treat rho with more caution for contours with long voiceless gaps (e.g. a medial voiceless consonant). Use the ",
-              tags$strong("Diagnose model"), " ACF panel to check the correction worked."))
+              tags$strong("Run model diagnostics"), " ACF panel to check the correction worked."))
         )
       ),
       # --- Collapsible illustrated guide for multisyllabic words ---
@@ -326,7 +326,7 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
   gamm_formula_str <- reactiveVal(NULL)
   gamm_rho_val <- reactiveVal(NULL)
   gamm_fitting <- reactiveVal(FALSE)
-  gamm_diag_data <- reactiveVal(NULL)  # NULL until the user clicks "Diagnose model"
+  gamm_diag_data <- reactiveVal(NULL)  # NULL until the user clicks "Run model diagnostics"
 
   # --- Core computation ---
   observeEvent(input$gamm_button, {
@@ -337,7 +337,7 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
 
     progress_id <- showNotification(
       tagList(icon("spinner", class = "fa-spin"),
-              " Fitting GAMM model... This may take a while."),
+              " Fitting GAMM model and running diagnostics... This may take a while."),
       duration = NULL, closeButton = FALSE, type = "message"
     )
     on.exit(removeNotification(progress_id), add = TRUE)
@@ -428,12 +428,19 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
     plot_df <- predict_gamm(fit, n = 200)
     gamm_plot_data(plot_df)
     if (!is.null(gamm_pred_data)) gamm_pred_data(plot_df)
+
+    # Diagnostics are NOT run automatically: diagnose_gamm() (k-check,
+    # per-token ACF, concurvity) is not free, so running it on every fit would
+    # slow the fit down. gamm_diag_data() was reset to NULL at the start of
+    # this fit; the user runs diagnostics on demand via the sidebar button.
   })
 
   # ==========================================================================
   # Model diagnostics
   # --------------------------------------------------------------------------
-  # After a model is fit, offer a "Diagnose model" button. Diagnostics mirror
+  # Diagnostics are computed on demand when the user clicks the sidebar
+  # "Run model diagnostics" button (not automatically, to keep fits fast).
+  # Diagnostics mirror
   # mgcv::gam.check(): residual behaviour (Q-Q, residuals vs fitted, histogram,
   # observed vs fitted), the basis-dimension (k) check, and residual
   # autocorrelation (which motivates the AR1 option). The heavy lifting lives
@@ -441,17 +448,30 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
   # its numeric output into tables and ggplots.
   # ==========================================================================
 
-  # --- Sidebar button (only appears once a model exists) ---
+  # --- Sidebar diagnostics section (always shown; the button is disabled
+  #     until a model exists, so users can see the control before fitting). ---
   output$gamm_diagnose_ui <- renderUI({
-    if (is.null(gamm_model())) return(NULL)
+    has_fit <- !is.null(gamm_model())
     tagList(
       tags$hr(),
       tags$strong("Model diagnostics:"),
       tags$p(style = "font-size: 0.8rem; color: #555; margin: 4px 0 8px;",
-        "Check whether the fit is trustworthy: residual normality, whether the ",
-        "basis dimension ", tags$em("k"), " is large enough, and leftover ",
-        "autocorrelation."),
-      actionButton("gamm_diagnose", "Diagnose model", icon = icon("stethoscope")),
+        "Check residual normality, whether the basis dimension ", tags$em("k"),
+        " is large enough, and leftover autocorrelation. Run once a model is ",
+        "fitted (kept separate from fitting so the fit itself stays fast)."),
+      if (has_fit) {
+        actionButton("gamm_diagnose", "Run model diagnostics", icon = icon("stethoscope"))
+      } else {
+        tagList(
+          tagAppendAttributes(
+            actionButton("gamm_diagnose", "Run model diagnostics",
+                         icon = icon("stethoscope")),
+            disabled = NA
+          ),
+          tags$p(style = "font-size: 0.8rem; color: #888; margin-top: 4px;",
+            "Fit a model first to enable diagnostics.")
+        )
+      },
       if (!is.null(gamm_diag_data())) {
         div(style = "margin-top: 6px;",
           downloadButton("gamm_diag_download", "Download diagnostics"))
@@ -552,7 +572,13 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
   # --- Diagnostics main-panel container (tables + plot slots + guide) ---
   output$gamm_diagnostics <- renderUI({
     diag <- gamm_diag_data()
-    if (is.null(diag)) return(NULL)
+    if (is.null(diag)) {
+      msg <- if (is.null(gamm_fit_obj()))
+        "Fit a GAMM, then click “Run model diagnostics” in the sidebar to check residuals, the basis dimension k, and leftover autocorrelation."
+      else
+        "Click “Run model diagnostics” in the sidebar to compute the residual, k, and autocorrelation checks for the current fit."
+      return(tags$p(style = "color: #777; font-size: 0.9rem; margin-top: 8px;", msg))
+    }
 
     th_style   <- "padding: 4px 10px; border-bottom: 2px solid #ddd; text-align: center;"
     td_style   <- "padding: 4px 10px; text-align: center;"
@@ -1100,7 +1126,7 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
       '# View results\n',
       'summary(model)\n\n')
 
-    # Diagnostics block — mirrors the app's "Diagnose model" panel so the
+    # Diagnostics block — mirrors the app's "Run model diagnostics" panel so the
     # exported script reproduces it. Points at the standard packages.
     acf_line <- if (use_ar1) {
       paste0('acf_resid(model)   # AR1 fit: uses the stored AR.start/rho to\n',
