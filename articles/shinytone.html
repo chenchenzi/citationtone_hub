@@ -187,11 +187,12 @@ and [predict_gamm()]:</p>
 <h2 id="inspect-for-outliers-and-pitch-tracking-artefacts">Inspect for outliers and pitch-tracking artefacts<a class="anchor" aria-label="anchor" href="#inspect-for-outliers-and-pitch-tracking-artefacts"></a>
 </h2>
 <p><code><a href="../reference/inspect_f0.html">inspect_f0()</a></code> runs three complementary checks: tokens
-whose per-token max or min sits more than <code>z_threshold</code> SDs
-from the speaker’s mean (extreme-value), tokens whose median is unusual
-for their speaker and tone (token-level), and individual samples where
-the rate of f0 change exceeds physiological plausibility (sample-level;
-Sundberg 1973, Steffman &amp; Cole 2022).</p>
+whose per-token maximum sits more than <code>z_threshold</code> SDs
+above, or whose minimum more than <code>z_threshold</code> SDs below,
+the speaker’s other tokens (extreme-value), tokens whose median is
+unusual for their speaker and tone (token-level), and individual samples
+where the rate of f0 change exceeds physiological plausibility
+(sample-level; Sundberg 1973, Steffman &amp; Cole 2022).</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">inspected</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/inspect_f0.html">inspect_f0</a></span><span class="op">(</span><span class="va">sample_f0</span>,</span>
 <span>                        f0      <span class="op">=</span> <span class="st">"f0_Hz"</span>,</span>

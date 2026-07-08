@@ -107,8 +107,9 @@ is the function that backs the Inspect tab of the Shiny app.</p>
 
 
 <dt id="arg-z-threshold">z_threshold<a class="anchor" aria-label="anchor" href="#arg-z-threshold"></a></dt>
-<dd><p>Absolute z-score above which a token is flagged.
-Default <code>3</code>, covering about 99.7% of a normal distribution.</p></dd>
+<dd><p>Signed z-score cutoff: a token is flagged when its
+per-token max exceeds <code>+z_threshold</code> (too high) or its min falls below
+<code>-z_threshold</code> (too low). Default <code>3</code>.</p></dd>
 
 
 <dt id="arg-rise-threshold">rise_threshold<a class="anchor" aria-label="anchor" href="#arg-rise-threshold"></a></dt>

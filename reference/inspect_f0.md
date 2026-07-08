@@ -60,8 +60,9 @@ inspect_f0(
 
 - z_threshold:
 
-  Absolute z-score above which a token is flagged. Default `3`, covering
-  about 99.7% of a normal distribution.
+  Signed z-score cutoff: a token is flagged when its per-token max
+  exceeds `+z_threshold` (too high) or its min falls below
+  `-z_threshold` (too low). Default `3`.
 
 - rise_threshold:
 

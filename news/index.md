@@ -2,6 +2,26 @@
 
 ## shinytone (development version)
 
+- [`flag_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_outliers.md)
+  (the speaker-level extreme-value screen) is now **one-sided**: a token
+  is flagged `too_high` only when its per-token maximum is unusually
+  high (`z_max > z_threshold`), and `too_low` only when its minimum is
+  unusually low (`z_min < -z_threshold`), replacing the previous
+  two-sided `abs(z) > z_threshold`. Gross tracking errors are
+  directional (octave-doubling or a spurious spike inflates the maximum;
+  octave-halving, a subharmonic, or creak deflates the minimum), and
+  because the screen pools all of a speaker’s tones the opposite tails
+  hold legitimate low/high tones rather than errors. This makes the
+  `flag_too_high` / `flag_too_low` columns — and the “max too high” /
+  “min too low” notes from
+  [`inspect_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/inspect_f0.md)
+  — directionally correct; before, a token with an unusually *high*
+  floor could be mislabelled “too low”. The set of flagged tokens is
+  essentially unchanged on clean data (the rarer truncated-max /
+  floored-min cases are left to
+  [`flag_level_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_level_outliers.md)
+  and
+  [`flag_pitch_jumps()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_pitch_jumps.md)).
 - **GAMM diagnostics** (new).
   [`diagnose_gamm()`](https://chenchenzi.github.io/citationtone_hub/reference/diagnose_gamm.md)
   and a “Model diagnostics” section on the GAMM tab: after fitting, one

@@ -119,8 +119,9 @@ ggplot(mean_contour, aes(time, f0_predicted, colour = factor(tone))) +
 ## Inspect for outliers and pitch-tracking artefacts
 
 [`inspect_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/inspect_f0.md)
-runs three complementary checks: tokens whose per-token max or min sits
-more than `z_threshold` SDs from the speaker’s mean (extreme-value),
+runs three complementary checks: tokens whose per-token maximum sits
+more than `z_threshold` SDs above, or whose minimum more than
+`z_threshold` SDs below, the speaker’s other tokens (extreme-value),
 tokens whose median is unusual for their speaker and tone (token-level),
 and individual samples where the rate of f0 change exceeds physiological
 plausibility (sample-level; Sundberg 1973, Steffman & Cole 2022).
