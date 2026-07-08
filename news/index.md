@@ -12,6 +12,15 @@
   download of all diagnostics. The ACF is computed per token (in the
   spirit of `itsadug::acf_resid()`) and AR1-whitened when the fit used
   an AR1 correction, so it shows whether the correction actually worked.
+- **GCA fit-over-data overlay** (new). The GCA tab now optionally
+  overlays the observed per-tone mean contour (semi-transparent points,
+  computed with
+  [`compute_mean_contour()`](https://chenchenzi.github.io/citationtone_hub/reference/compute_mean_contour.md))
+  on the fitted polynomial curves, so you can judge how well the chosen
+  degree tracks the data — the standard GCA model-adequacy check (Mirman
+  2014). Toggle it with the “Overlay observed per-tone means” checkbox;
+  turn it off for a cleaner plot on busy data. The overlay is included
+  in the downloaded plot.
 - The GAMM tab’s **AR1 correction is now on by default**:
   densely-sampled f0 frames are strongly autocorrelated, so smooth
   p-values are anticonservative without it.
