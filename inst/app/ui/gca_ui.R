@@ -151,6 +151,13 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
           actionButton("gca_show_code", "Show R code", icon = icon("code"))
         ),
         tags$hr(),
+        tags$strong("Plot options:"),
+        checkboxInput("gca_overlay",
+                      "Overlay observed per-tone means",
+                      value = TRUE),
+        tags$p(style = "font-size: 0.78rem; color: #777; margin: -4px 0 0 0;",
+               "Semi-transparent points show the observed mean contour per tone, so you can see how well the fitted curves track the data. Turn off if the overlay makes a busy plot hard to read."),
+        tags$hr(),
         h5("Download"),
         textInput("gca_filename", "Enter filename (without extension):",
                   value = if (!is.null(input$dataset_name) && nzchar(input$dataset_name))
@@ -166,6 +173,7 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
   gca_fixef_table <- reactiveVal(NULL)
   gca_convergence_warning <- reactiveVal(NULL)
   gca_plot_data <- reactiveVal(NULL)
+  gca_obs_data <- reactiveVal(NULL)   # observed per-tone mean contour, for the overlay
   gca_formula_str <- reactiveVal(NULL)
   gca_tone_estimates <- reactiveVal(NULL)
   gca_pairwise <- reactiveVal(NULL)
@@ -275,6 +283,18 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
     plot_df <- predict_gca(fit, n = 100)
     gca_plot_data(plot_df)
     if (!is.null(gca_pred_data)) gca_pred_data(plot_df)
+
+    # Observed per-tone mean contour on the same normalised-time / f0 scale,
+    # for the optional overlay. Same columns and dataset as the fit, so its
+    # tone / time / f0_predicted schema lines up with predict_gca()'s output.
+    obs_df <- tryCatch(
+      compute_mean_contour(active_data(),
+                           token = input$gca_token_var,
+                           f0    = input$gca_f0_var,
+                           time  = input$gca_time_var,
+                           tone  = input$gca_tone_var),
+      error = function(e) NULL)
+    gca_obs_data(obs_df)
 
     # Pairwise tone comparisons (intercept-level + per polynomial slope).
     pw_tables <- list()
@@ -451,22 +471,46 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
     )
   })
 
-  # --- Model plot ---
-  output$gca_plot <- renderPlot({
-    req(gca_plot_data())
-    pdat <- gca_plot_data()
-    tone_var <- input$gca_tone_var
-    f0_var <- input$gca_f0_var
-
-    ggplot(pdat, aes(x = time, y = f0_predicted, colour = tone)) +
+  # --- Shared plot builder (used by both the on-screen plot and the download) ---
+  # Fitted per-tone curves, with an optional semi-transparent overlay of the
+  # observed per-tone mean contour so you can judge how well the polynomial
+  # captures the data — the standard GCA "fit over data" check (Mirman 2014).
+  # The overlay points inherit the ggplot() aes (time / f0_predicted / tone),
+  # which is why predict_gca() and compute_mean_contour() share that schema.
+  gca_build_plot <- function(pdat, obs, tone_var, f0_var, overlay) {
+    show_overlay <- isTRUE(overlay) && !is.null(obs) && nrow(obs) > 0
+    # Format the f0 axis title the same way the Visualise tab does
+    # (f0_axis_label(): "f₀ (Hz)" / "f₀ (semitone)" / "normalised f₀"). With the
+    # overlay the axis carries both observed points and the fitted line, so it
+    # reads the plain quantity; without it, only the fitted curve is shown, so
+    # "Predicted …" is accurate.
+    y_lab <- if (show_overlay) f0_axis_label(f0_var)
+             else paste0("Predicted ", f0_axis_label(f0_var))
+    p <- ggplot(pdat, aes(x = time, y = f0_predicted, colour = tone))
+    if (show_overlay) {
+      p <- p + geom_point(data = obs, alpha = 0.4, size = 1.5,
+                          show.legend = FALSE)
+    }
+    p +
       geom_line(linewidth = 1.2) +
       labs(
         x = "Normalised time",
-        y = paste0("Predicted ", f0_var),
-        colour = tone_var
+        y = y_lab,
+        colour = tone_var,
+        caption = if (show_overlay)
+                    "Points: observed per-tone means · Line: GCA model fit"
+                  else NULL
       ) +
       theme_bw(base_size = 14) +
       theme(legend.position = "bottom")
+  }
+
+  # --- Model plot ---
+  output$gca_plot <- renderPlot({
+    req(gca_plot_data())
+    gca_build_plot(gca_plot_data(), gca_obs_data(),
+                   input$gca_tone_var, input$gca_f0_var,
+                   isTRUE(input$gca_overlay))
   }, width = 800, height = 500)
 
   # --- Download handler (plot image) ---
@@ -476,20 +520,9 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
     },
     content = function(file) {
       req(gca_plot_data())
-      pdat <- gca_plot_data()
-      tone_var <- input$gca_tone_var
-      f0_var <- input$gca_f0_var
-
-      p <- ggplot(pdat, aes(x = time, y = f0_predicted, colour = tone)) +
-        geom_line(linewidth = 1.2) +
-        labs(
-          x = "Normalised time",
-          y = paste0("Predicted ", f0_var),
-          colour = tone_var
-        ) +
-        theme_bw(base_size = 14) +
-        theme(legend.position = "bottom")
-
+      p <- gca_build_plot(gca_plot_data(), gca_obs_data(),
+                          input$gca_tone_var, input$gca_f0_var,
+                          isTRUE(input$gca_overlay))
       ggsave(file, plot = p, width = 8, height = 5, dpi = 300)
       showNotification(paste("Plot saved as", paste0(input$gca_filename, ".png")),
                        type = "message", duration = 4)
