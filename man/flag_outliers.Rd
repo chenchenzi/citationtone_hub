@@ -21,8 +21,9 @@ flag_outliers(
 
 \item{speaker}{Column name of speaker ID. Default \code{"speaker"}.}
 
-\item{z_threshold}{Absolute z-score above which a token is flagged.
-Default \code{3}, covering about 99.7\% of a normal distribution.}
+\item{z_threshold}{Signed z-score cutoff: a token is flagged when its
+per-token max exceeds \code{+z_threshold} (too high) or its min falls below
+\code{-z_threshold} (too low). Default \code{3}.}
 }
 \value{
 A token-level data frame (one row per token) with columns:
@@ -31,12 +32,12 @@ A token-level data frame (one row per token) with columns:
 \code{token} and \code{speaker} columns.
 }
 \description{
-Identifies tokens whose maximum or minimum f0 lies far from the centre
-of a speaker's per-token f0 distribution. Suitable as a first pass at
-detecting tracking errors, mis-segmentations, or genuinely unusual
-productions before fitting contour models. Token-level outlier removal
-is a recommended cleaning step prior to citation-tone analysis
-(Xu & Zhang 2024).
+Identifies tokens whose maximum f0 is unusually high, or whose minimum
+f0 unusually low, for a speaker's per-token f0 distribution. Suitable as
+a first pass at detecting tracking errors, mis-segmentations, or
+genuinely unusual productions before fitting contour models. Token-level
+outlier removal is a recommended cleaning step prior to citation-tone
+analysis (Xu & Zhang 2024).
 }
 \details{
 \subsection{What the function does internally}{
@@ -47,16 +48,30 @@ output 0 for unvoiced frames).
 \item Within each speaker, z-score the per-token maxima against each
 other and the per-token minima against each other (so a speaker
 with consistently high f0 isn't flagged as an outlier of the corpus).
-\item Flag a token if \verb{|z_max| > z_threshold} (the per-token max is too
-high or too low for this speaker) or \verb{|z_min| > z_threshold}.
+\item Flag a token when its maximum is unusually high (\code{z_max > z_threshold}, \code{flag_too_high}) or its minimum unusually low
+(\code{z_min < -z_threshold}, \code{flag_too_low}). Each test is one-sided:
+the gross tracking errors this coarse screen targets are directional
+(octave-doubling or a spurious spike inflates the maximum;
+octave-halving, a subharmonic, or creak deflates the minimum), so
+only the outer tails are treated as errors.
 }
+
+Because the maxima and minima are pooled across all of a speaker's tones,
+the opposite tails are occupied by legitimate tone identity rather than
+error (a low ceiling is what a genuine low tone looks like; a high floor
+is what a genuine high tone looks like), so they are deliberately not
+flagged here. The rarer artefacts that do sit in those tails --- a
+truncated (abnormally low) maximum or a floored (abnormally high) minimum
+--- are deferred to the finer screens \code{\link[=flag_level_outliers]{flag_level_outliers()}} (within
+speaker and tone) and \code{\link[=flag_pitch_jumps]{flag_pitch_jumps()}} (frame level).
 }
 
 \subsection{Choosing \code{z_threshold}}{
 
 The default of \code{3} corresponds to the standard convention that ±3 SDs
-covers 99.7\% of a normal distribution, so under that assumption only
-about 0.3\% of tokens are flagged. Lower thresholds (e.g., \code{2} or \code{2.5})
+cover 99.7\% of a normal distribution. Because each criterion is one-sided
+(\code{z_max > 3}, or \code{z_min < -3}), under that assumption only about 0.1\% of
+tokens lie beyond either cutoff. Lower thresholds (e.g., \code{2} or \code{2.5})
 are more aggressive, useful when manual review of every flagged token
 is feasible. Higher thresholds (\code{4}+) are more conservative.
 

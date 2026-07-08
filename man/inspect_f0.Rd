@@ -36,8 +36,9 @@ inspect_f0(
 
 \item{tone}{Column name of tone category. Default \code{"tone"}.}
 
-\item{z_threshold}{Absolute z-score above which a token is flagged.
-Default \code{3}, covering about 99.7\% of a normal distribution.}
+\item{z_threshold}{Signed z-score cutoff: a token is flagged when its
+per-token max exceeds \code{+z_threshold} (too high) or its min falls below
+\code{-z_threshold} (too low). Default \code{3}.}
 
 \item{rise_threshold}{Maximum plausible rise in ST per 10 ms.
 Default \code{1.263} (Sundberg 1973).}

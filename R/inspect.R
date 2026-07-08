@@ -12,12 +12,12 @@
 #' Flag per-token f0 outliers using by-speaker z-scores
 #'
 #' @description
-#' Identifies tokens whose maximum or minimum f0 lies far from the centre
-#' of a speaker's per-token f0 distribution. Suitable as a first pass at
-#' detecting tracking errors, mis-segmentations, or genuinely unusual
-#' productions before fitting contour models. Token-level outlier removal
-#' is a recommended cleaning step prior to citation-tone analysis
-#' (Xu & Zhang 2024).
+#' Identifies tokens whose maximum f0 is unusually high, or whose minimum
+#' f0 unusually low, for a speaker's per-token f0 distribution. Suitable as
+#' a first pass at detecting tracking errors, mis-segmentations, or
+#' genuinely unusual productions before fitting contour models. Token-level
+#' outlier removal is a recommended cleaning step prior to citation-tone
+#' analysis (Xu & Zhang 2024).
 #'
 #' @details
 #' ## What the function does internally
@@ -28,14 +28,29 @@
 #' 3. Within each speaker, z-score the per-token maxima against each
 #'    other and the per-token minima against each other (so a speaker
 #'    with consistently high f0 isn't flagged as an outlier of the corpus).
-#' 4. Flag a token if `|z_max| > z_threshold` (the per-token max is too
-#'    high or too low for this speaker) or `|z_min| > z_threshold`.
+#' 4. Flag a token when its maximum is unusually high (`z_max >
+#'    z_threshold`, `flag_too_high`) or its minimum unusually low
+#'    (`z_min < -z_threshold`, `flag_too_low`). Each test is one-sided:
+#'    the gross tracking errors this coarse screen targets are directional
+#'    (octave-doubling or a spurious spike inflates the maximum;
+#'    octave-halving, a subharmonic, or creak deflates the minimum), so
+#'    only the outer tails are treated as errors.
+#'
+#' Because the maxima and minima are pooled across all of a speaker's tones,
+#' the opposite tails are occupied by legitimate tone identity rather than
+#' error (a low ceiling is what a genuine low tone looks like; a high floor
+#' is what a genuine high tone looks like), so they are deliberately not
+#' flagged here. The rarer artefacts that do sit in those tails --- a
+#' truncated (abnormally low) maximum or a floored (abnormally high) minimum
+#' --- are deferred to the finer screens [flag_level_outliers()] (within
+#' speaker and tone) and [flag_pitch_jumps()] (frame level).
 #'
 #' ## Choosing `z_threshold`
 #'
 #' The default of `3` corresponds to the standard convention that ±3 SDs
-#' covers 99.7% of a normal distribution, so under that assumption only
-#' about 0.3% of tokens are flagged. Lower thresholds (e.g., `2` or `2.5`)
+#' cover 99.7% of a normal distribution. Because each criterion is one-sided
+#' (`z_max > 3`, or `z_min < -3`), under that assumption only about 0.1% of
+#' tokens lie beyond either cutoff. Lower thresholds (e.g., `2` or `2.5`)
 #' are more aggressive, useful when manual review of every flagged token
 #' is feasible. Higher thresholds (`4`+) are more conservative.
 #'
@@ -47,8 +62,9 @@
 #' @param f0 Column name of f0 in Hz. Default `"f0"`.
 #' @param token Column name of token ID. Default `"token"`.
 #' @param speaker Column name of speaker ID. Default `"speaker"`.
-#' @param z_threshold Absolute z-score above which a token is flagged.
-#'   Default `3`, covering about 99.7% of a normal distribution.
+#' @param z_threshold Signed z-score cutoff: a token is flagged when its
+#'   per-token max exceeds `+z_threshold` (too high) or its min falls below
+#'   `-z_threshold` (too low). Default `3`.
 #'
 #' @return A token-level data frame (one row per token) with columns:
 #'   `f0_token_max`, `f0_token_min`, `f0_token_mean`, `f0_token_sd`,
@@ -124,8 +140,8 @@ flag_outliers <- function(data,
     ) |>
     dplyr::ungroup() |>
     dplyr::mutate(
-      flag_too_high = !is.na(.data$z_max) & abs(.data$z_max) > z_threshold,
-      flag_too_low  = !is.na(.data$z_min) & abs(.data$z_min) > z_threshold
+      flag_too_high = !is.na(.data$z_max) & .data$z_max >  z_threshold,
+      flag_too_low  = !is.na(.data$z_min) & .data$z_min < -z_threshold
     )
 }
 
