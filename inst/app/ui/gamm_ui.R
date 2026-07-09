@@ -454,7 +454,7 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
     has_fit <- !is.null(gamm_model())
     tagList(
       tags$hr(),
-      tags$strong("Model diagnostics:"),
+      h5("Model diagnostics"),
       tags$p(style = "font-size: 0.8rem; color: #555; margin: 4px 0 8px;",
         "Check residual normality, whether the basis dimension ", tags$em("k"),
         " is large enough, and leftover autocorrelation. Run once a model is ",
