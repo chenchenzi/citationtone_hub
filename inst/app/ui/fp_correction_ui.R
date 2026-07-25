@@ -328,6 +328,45 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     )
   })
 
+  # ---- Display toggle for the plot's candidate overlay ----
+  # Greyed out (and unticked) when the data carries no Praat candidates, so
+  # the control reads as "not applicable here" rather than as an option that
+  # is on but does nothing. Same idiom as the GAMM tab's diagnostics button.
+  # Re-renders only when candidate availability changes (i.e. on extraction),
+  # at which point the box returns to its ticked default.
+  output$fp_corr_candidates_toggle <- renderUI({
+    cands <- if (is.null(fp_pitch_candidates)) NULL else fp_pitch_candidates()
+    has_cands <- !is.null(cands) && length(cands) > 0
+    cb <- checkboxInput("fp_corr_show_candidates",
+                        "Top-3 Praat candidates on f0 plot",
+                        value = has_cands)
+    caption <- function(colour, ...) tags$div(
+      style = sprintf("color:%s; font-size:0.72rem; font-style:italic; margin-top:-6px;",
+                      colour), ...)
+    if (has_cands) {
+      tagList(cb, caption("#888",
+        "Grey dots ranked 1 to 3 by strength. Click one to apply it to that ",
+        "frame. Praat often supplies only two, so a rank 3 dot is not always ",
+        "shown."))
+    } else {
+      tagList(
+        # tagQuery reaches the <input> itself; tagAppendAttributes would put
+        # the attribute on the wrapping form-group div, where it does nothing.
+        # The browser only dims the box, not the label, so grey that too or
+        # the row still reads as active.
+        htmltools::tagQuery(cb)$
+          find("input")$addAttrs(disabled = NA)$
+          resetSelected()$
+          find("label")$addAttrs(style = "color:#a0a0a0; cursor:not-allowed;")$
+          allTags(),
+        caption("#aaa",
+          "Not available: this data carries no Praat candidates. Upload ",
+          tags$code(".Pitch"), " files to enable it.")
+      )
+    }
+  })
+  outputOptions(output, "fp_corr_candidates_toggle", suspendWhenHidden = FALSE)
+
   # ---- Plot mark legend ----
   # Names every non-obvious mark on the f0 panel. Colours and sizes here
   # mirror the traces in output$fp_corr_plot; keep them in step if those
@@ -711,12 +750,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         checkboxInput("fp_corr_show_pulses",
                       "Glottal pulses on waveform",
                       value = FALSE),
-        checkboxInput("fp_corr_show_candidates",
-                      "Top-3 Praat candidates on f0 plot",
-                      value = TRUE),
-        tags$div(style = "color:#888; font-size:0.72rem; font-style:italic; margin-top:-6px;",
-          "Grey dots ranked 1 to 3 by strength. Click one to apply it to ",
-          "that frame.")
+        uiOutput("fp_corr_candidates_toggle")
       ),
 
       tags$hr(),
