@@ -2131,6 +2131,15 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
               if (nextBtn) { e.preventDefault(); nextBtn.click(); }
               return;
             }
+            // x → discard the current token, or restore it if already
+            // discarded (the sidebar renders exactly one of the two buttons,
+            // matching the token's state; ✗ is the picker marker, hence x).
+            if ((e.key === 'x' || e.key === 'X') && !e.metaKey && !e.ctrlKey && !e.altKey) {
+              var xBtn = document.getElementById('fp_corr_discard') ||
+                         document.getElementById('fp_corr_restore');
+              if (xBtn) { e.preventDefault(); xBtn.click(); }
+              return;
+            }
             // q → quit / clear the current point / box / lasso selection, so you
             // can start a fresh selection (or just drop the highlighted frames)
             // without dragging an empty box. (Esc is avoided as browsers bind it
@@ -2241,6 +2250,10 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                 tags$span(class = "sep", "/"),
                 tags$kbd("Ctrl"), "+", tags$kbd("Z")),
               tags$div(class = "kbd-desc", "Undo the last edit.")),
+            tags$div(class = "kbd-row",
+              tags$div(class = "kbd-keys", tags$kbd("X")),
+              tags$div(class = "kbd-desc",
+                       "Discard the whole token (✗), or restore it if already discarded.")),
 
             tags$div(class = "kbd-set-title", "Selection"),
             tags$div(class = "kbd-row",
@@ -2775,6 +2788,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         tags$kbd("Cmd"), "+", tags$kbd("Z"),
         " / ", tags$kbd("Ctrl"), "+", tags$kbd("Z"),
         " undo the last edit, ",
+        tags$kbd("X"), " discard / restore the token, ",
         tags$kbd(","), " / ", tags$kbd("."), " previous / next token.",
         tags$br(),
         tags$span(style = "display:inline-flex; align-items:center; gap:6px; vertical-align:middle;",

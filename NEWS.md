@@ -9,7 +9,9 @@
   above the plot, appear in the edit log (Undo restores, as does the Restore
   button), survive the save/re-upload resume cycle via the new column, and a
   "Kept + discarded / Only kept / Only discarded" filter joins the
-  edit-status drawer. The sidebar progress line and every discard
+  edit-status drawer. Keyboard: `X` discards the current token, or restores
+  it if already discarded, so a review pass can run entirely on `,` `.` and
+  `X`. The sidebar progress line and every discard
   notification report the running share of the corpus discarded, e.g.
   "Discarded: 812 of 8000 (10.2%)".
 * **F0 Correction tab: bulk discard of flagged tokens.** Once an Inspect-tab
