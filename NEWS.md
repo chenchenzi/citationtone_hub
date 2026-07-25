@@ -47,10 +47,12 @@
   the plot can be clicked directly. The Display checkbox "Top-3 Praat
   candidates on f0 plot" is greyed out and unticked when the data carries no
   candidates, rather than sitting ticked over an overlay that cannot appear,
-  and its caption notes that not every frame has three candidates.
+  and its caption explains that dot 1 is the value Praat chose (2 and 3 are
+  its next alternatives), that not every frame has three candidates, and that
+  the unvoiced candidate is not numbered.
 * **F0 Correction: plot mark legend.** A "Marks:" strip above the plot names
-  every non-obvious mark: f0 value, selected frame, Praat candidates ranked
-  1 to 3 by strength (click one to apply), Inspect-flagged frames, edited
+  every non-obvious mark: f0 value, selected frame, Praat candidates (dot 1
+  being Praat's own pick, click to apply), Inspect-flagged frames, edited
   frames, and the outlined circle showing a frame's value before the edit.
   Entries appear only when the corresponding data exists.
 * **Curate tab: "Flagged" now covers every Inspect check.** The amber

@@ -345,8 +345,9 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                       colour), ...)
     if (has_cands) {
       tagList(cb, caption("#888",
-        "Grey dots ranked 1 to 3 by strength. Click one to apply it to that ",
-        "frame. Not every frame has three candidates."))
+        "Grey dots: 1 is the value Praat chose, 2 and 3 are its next ",
+        "alternatives for that frame. Click one to apply it. Not every frame ",
+        "has three candidates, and the unvoiced candidate is not numbered."))
     } else {
       tagList(
         # tagQuery reaches the <input> itself; tagAppendAttributes would put
@@ -393,7 +394,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         tags$span(style = "display:inline-flex; align-items:center; gap:2px;",
           swatch("width:6px; height:6px; background:#777; opacity:0.75;"),
           tags$span(style = "font-size:0.72rem; color:#888;", "1 2 3")),
-        "Praat candidates, ranked by strength (click one to apply it)")))
+        "Praat candidates: 1 is Praat's own pick (click one to apply it)")))
     }
 
     frames_by_tok <- fp_flagged_frames()
