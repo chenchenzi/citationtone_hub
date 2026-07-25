@@ -55,11 +55,14 @@
   being Praat's own pick, click to apply), Inspect-flagged frames,
   low-intensity frames, edited frames, and the outlined circle showing a
   frame's value before the edit. Entries appear only when the corresponding
-  data exists. When an Inspect CSV is loaded, a second line summarises the
-  current token: how many flagged and low-intensity frames it has, or, for a
-  token flagged at token level with no flagged frames (extreme value /
-  level), a pointer to look at the whole contour, or an explicit "nothing
-  flagged by Inspect".
+  data exists. When an Inspect CSV is loaded, a tinted status box under the
+  key summarises the current token: amber with the flagged / low-intensity
+  frame counts and flag classes, amber with a pointer to look at the whole
+  contour for a token flagged at token level with no flagged frames
+  (extreme value / level), or green with an explicit "nothing flagged by
+  Inspect". Flagged states add the reminder that a flag is a pointer, not a
+  verdict: flagged f0 can still be genuine, so look and listen before
+  editing.
 * **F0 Correction: low-intensity frames marked on the plot.** Frames the
   Inspect tab flagged as low intensity now carry an amber marker ring
   (reading `flag_low_intensity` when present, else the `flag_notes` text).

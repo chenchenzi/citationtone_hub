@@ -426,10 +426,12 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
              "value before the edit")))
     }
 
-    # Second line: what the flags amount to for THIS token. Kept off the key
-    # itself so the legend stays a simple key; this is where "no red dots"
-    # is disambiguated (clean vs flagged-at-token-level, where the whole
-    # contour needs a look rather than particular frames).
+    # Second line: what the flags amount to for THIS token, as a tinted box
+    # in the same idiom as the edit-status / discard banners. Kept off the
+    # key itself so the legend stays a simple key; this is where "no red
+    # dots" is disambiguated (clean vs flagged-at-token-level, where the
+    # whole contour needs a look rather than particular frames). Amber for
+    # any flagged state, green for the all-clear.
     tok_line <- NULL
     if (!is.null(frames_by_tok) && length(frames_by_tok) > 0 &&
         !is.null(tok) && nzchar(tok)) {
@@ -444,29 +446,47 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         m <- fp_flag_types()
         if (!is.null(m) && key %in% names(m)) m[[key]] else character(0)
       }
-      msg <- if (n_fl > 0) {
-        nows(sprintf("This token: %d flagged frame%s", n_fl,
-                     if (n_fl == 1) "" else "s"),
-             if (n_li > 0) sprintf(", %d low-intensity frame%s", n_li,
-                                   if (n_li == 1) "" else "s"),
-             if (length(classes) > 0)
-               paste0(" (", paste(classes, collapse = ", "), ")"),
-             ".")
+      flag_box <- function(bg, border, colr, ic, ...) tags$div(
+        style = sprintf(paste(
+          "background:%s; border-left:3px solid %s; color:%s;",
+          "padding:6px 12px; margin:0 0 8px 0; border-radius:4px;",
+          "font-size:0.82rem; line-height:1.55;"), bg, border, colr),
+        icon(ic), " ", ...)
+      # Flags are screens, not verdicts; say so wherever a flag is reported.
+      not_a_verdict <- tags$span(style = "opacity:0.85;",
+        nows(" ", tags$em("A flag is a pointer, not a verdict"),
+             ": flagged f0 can still be genuine, so look at the waveform ",
+             "and listen before editing."))
+      amber <- function(...) flag_box("#fff8e1", "#e0a800", "#6b5310", "flag", ...)
+      tok_line <- if (n_fl > 0) {
+        amber(
+          nows(tags$strong("This token: "),
+               sprintf("%d flagged frame%s", n_fl, if (n_fl == 1) "" else "s"),
+               if (n_li > 0) sprintf(", %d low-intensity frame%s", n_li,
+                                     if (n_li == 1) "" else "s"),
+               if (length(classes) > 0)
+                 paste0(" (", paste(classes, collapse = ", "), ")"),
+               "."),
+          not_a_verdict)
       } else if (tok_flagged) {
-        nows("This token: no flagged frames, but it is flagged at token ",
-             "level",
-             if (length(classes) > 0)
-               paste0(" (", paste(classes, collapse = ", "), ")"),
-             ", so look at the whole contour rather than particular frames.")
+        amber(
+          nows(tags$strong("This token: "),
+               "no flagged frames, but it is flagged at token level",
+               if (length(classes) > 0)
+                 paste0(" (", paste(classes, collapse = ", "), ")"),
+               ", so look at the whole contour rather than particular ",
+               "frames."),
+          not_a_verdict)
       } else if (n_li > 0) {
-        nows(sprintf("This token: not flagged; %d low-intensity frame%s.",
-                     n_li, if (n_li == 1) "" else "s"))
+        amber(
+          nows(tags$strong("This token: "),
+               sprintf("not flagged; %d low-intensity frame%s where the f0 is less reliable.",
+                       n_li, if (n_li == 1) "" else "s")))
       } else {
-        "This token: nothing flagged by Inspect."
+        flag_box("#e8f5f0", "#78c2ad", "#2c5f4f", "circle-check",
+                 nows(tags$strong("This token: "),
+                      "nothing flagged by Inspect."))
       }
-      tok_line <- tags$p(style = paste("color:#999; font-size:0.78rem;",
-                                       "margin:-2px 0 6px 0; font-style:italic;"),
-                         msg)
     }
 
     tagList(
