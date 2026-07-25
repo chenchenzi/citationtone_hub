@@ -14,14 +14,25 @@
 fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                              fp_pitch_candidates = NULL, fp_metadata = NULL) {
 
+  # Which f0 source the sidebar starts on. Flipped to "praat" by the
+  # pitch-file observer further down; declared here so the sidebar
+  # renderUI below can read it.
+  fp_mode_default <- reactiveVal("wrassp")
+
   # ---- Sidebar controls ----
   output$ui_fp_extraction <- renderUI({
     tagList(
+      # Default read from fp_mode_default(), which the pitch-file observer
+      # below sets to "praat". isolate() so a later change re-renders
+      # nothing (the observer's updateRadioButtons covers the already-
+      # rendered case); without this, uploading pitch files before ever
+      # opening this tab would render the sidebar back on "wrassp", since
+      # the update message arrives while the input does not yet exist.
       radioButtons("fp_extract_mode", "f0 source:",
                    choices = c("Extract from .wav (wrassp)" = "wrassp",
                                "Use uploaded .Pitch / .PitchTier (Praat)" = "praat",
                                "Upload existing f0 CSV" = "csv"),
-                   selected = "wrassp"),
+                   selected = isolate(fp_mode_default())),
       conditionalPanel("input.fp_extract_mode == 'wrassp'",
         tags$hr(),
         numericInput("fp_f0_min",   "Min f0 (Hz)",   value = 75,  min = 30,  max = 300),
@@ -108,6 +119,38 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       )
     )
   })
+
+  # ---- Default the f0 source to Praat when pitch files were uploaded ----
+  # Someone who uploads .Pitch / .PitchTier files alongside their .wav files
+  # almost certainly wants them used: they carry Praat's per-frame candidate
+  # lists, which the F0 Correction tab can offer as alternatives. Before this,
+  # the radio stayed on wrassp and hitting Extract silently produced wrassp
+  # output instead, discarding the candidates the upload was for.
+  #
+  # Fires at most once per session (fp_mode_autoswitched), so a later manual
+  # choice is never overridden, and announces itself so the switch is not
+  # silent.
+  fp_mode_autoswitched <- reactiveVal(FALSE)
+  observeEvent(fp_audio_data(), {
+    if (isTRUE(fp_mode_autoswitched())) return()
+    audio <- fp_audio_data()
+    if (is.null(audio) || nrow(audio) == 0) return()
+    has_pitch <- !is.na(audio$pitch_path) | !is.na(audio$pitchtier_path)
+    n_pitch <- sum(has_pitch)
+    if (n_pitch == 0) return()
+    fp_mode_autoswitched(TRUE)
+    # Covers the not-yet-rendered case (see the radioButtons comment).
+    fp_mode_default("praat")
+    if (identical(isolate(input$fp_extract_mode), "praat")) return()
+    updateRadioButtons(session, "fp_extract_mode", selected = "praat")
+    showNotification(
+      sprintf(paste("Found %d Praat pitch file(s), so the f0 source is set to",
+                    "Praat. It keeps Praat's alternative pitch candidates,",
+                    "which you can pick from in F0 Correction. Switch back to",
+                    "wrassp above if you prefer."),
+              n_pitch),
+      type = "message", duration = 8, id = "fp_mode_autoswitch")
+  }, ignoreNULL = TRUE)
 
   # ---- Read uploaded CSV reactively (only when CSV source is active) ----
   uploaded_csv <- reactive({

@@ -328,6 +328,59 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     )
   })
 
+  # ---- Plot mark legend ----
+  # Names every non-obvious mark on the f0 panel. Colours and sizes here
+  # mirror the traces in output$fp_corr_plot; keep them in step if those
+  # change. Entries that depend on data (candidates, flagged frames, ghost
+  # markers) appear only once that data exists, so the strip stays short on
+  # a plain .wav session.
+  output$fp_corr_plot_legend <- renderUI({
+    swatch <- function(css) tags$span(style = paste0(
+      "display:inline-block; border-radius:50%; vertical-align:middle; ", css))
+    item <- function(mark, text) tags$span(
+      style = "display:inline-flex; align-items:center; gap:5px; margin-right:14px;",
+      mark, tags$span(text))
+
+    entries <- list(
+      item(swatch("width:9px; height:9px; background:#5cb89a; border:1px solid #2c5f4f;"),
+           "f0 value"),
+      item(swatch("width:9px; height:9px; background:#1f6feb; border:1px solid #2c5f4f;"),
+           "selected")
+    )
+
+    tok <- input$fp_corr_token
+    cands <- if (is.null(fp_pitch_candidates)) NULL else fp_pitch_candidates()
+    if (!is.null(cands) && !is.null(tok) && tok %in% names(cands)) {
+      entries <- c(entries, list(item(
+        tags$span(style = "display:inline-flex; align-items:center; gap:2px;",
+          swatch("width:6px; height:6px; background:#777; opacity:0.75;"),
+          tags$span(style = "font-size:0.72rem; color:#888;", "1 2 3")),
+        "Praat candidates, ranked by strength (click one to apply it)")))
+    }
+
+    frames_by_tok <- fp_flagged_frames()
+    if (!is.null(frames_by_tok) && length(frames_by_tok) > 0) {
+      entries <- c(entries, list(item(
+        swatch("width:9px; height:9px; background:#d9534f; border:1px solid #2c5f4f;"),
+        "flagged by Inspect")))
+    }
+
+    if (!is.null(edit_diff())) {
+      entries <- c(entries, list(
+        item(swatch(paste0("width:9px; height:9px; background:#5cb89a; ",
+                           "border:1px solid #2c5f4f; ",
+                           "box-shadow: 0 0 0 3px rgba(230,160,0,0.4);")),
+             "edited frame"),
+        item(swatch("width:9px; height:9px; background:transparent; border:1.6px solid #8a8a8a;"),
+             "value before the edit")))
+    }
+
+    tags$p(style = paste("color:#888; font-size:0.82rem; margin:0 0 6px 0;",
+                         "line-height:1.9; display:flex; flex-wrap:wrap;",
+                         "align-items:center;"),
+      tags$strong(style = "margin-right:8px;", "Marks:"), entries)
+  })
+
   # Banner shown above the plot when the current token has been discarded
   # (whole-token drop). Complements the ✗ picker marker so the state is
   # visible while actually looking at the token.
@@ -623,7 +676,19 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         )
       ),
 
-      # ---- Group 5: Whole token ----
+      # ---- Group 5: Praat candidates ----
+      # Picking a candidate writes to the contour, pushes undo history and
+      # logs an edit row, so it belongs with the edit groups rather than
+      # under Display (where it used to sit). The body is rendered by
+      # fp_corr_candidates_ui: the candidate list when the current token
+      # came from a .Pitch file, otherwise a short hint that the option
+      # exists, so wav-only users can discover it.
+      div(class = "fp-edit-group",
+        div(class = "fp-edit-group-label", "Praat candidates"),
+        uiOutput("fp_corr_candidates_ui")
+      ),
+
+      # ---- Group 6: Whole token ----
       # Discard drops the whole token instead of repairing frames; Restore
       # brings it back. The button toggles with the current token's state
       # (rendered in fp_corr_discard_ui).
@@ -648,13 +713,11 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                       value = FALSE),
         checkboxInput("fp_corr_show_candidates",
                       "Top-3 Praat candidates on f0 plot",
-                      value = TRUE)
+                      value = TRUE),
+        tags$div(style = "color:#888; font-size:0.72rem; font-style:italic; margin-top:-6px;",
+          "Grey dots ranked 1 to 3 by strength. Click one to apply it to ",
+          "that frame.")
       ),
-
-      # Praat candidates (only when current token came from .Pitch).
-      # The output includes its own leading <hr> when it renders content,
-      # so the sidebar avoids a double separator when this block is empty.
-      uiOutput("fp_corr_candidates_ui"),
 
       tags$hr(),
       h5("Download"),
@@ -2537,11 +2600,8 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           tags$span(style = "display:inline-block; width:8px; height:8px; border-radius:50%; background:#5cb89a; border:1px solid #2c5f4f;"),
           tags$span(style = "display:inline-block; width:11px; height:11px; border-radius:50%; background:#5cb89a; border:1px solid #2c5f4f;"),
           tags$span(style = "display:inline-block; width:14px; height:14px; border-radius:50%; background:#5cb89a; border:1px solid #2c5f4f;"),
-          tags$span("quieter → louder, scaled within each token (hover for value); uniform size if the data has no intensity"),
-          tags$span(style = paste0("display:inline-block; width:9px; height:9px; border-radius:50%; ",
-                                   "background:#5cb89a; border:1px solid #2c5f4f; ",
-                                   "box-shadow: 0 0 0 3px rgba(230,160,0,0.4); margin-left:8px; margin-right:2px;")),
-          tags$span("edited frame"))),
+          tags$span("quieter → louder, scaled within each token (hover for value); uniform size if the data has no intensity"))),
+      uiOutput("fp_corr_plot_legend"),
       uiOutput("fp_corr_dropped_status"),
       uiOutput("fp_corr_edit_status"),
       plotly::plotlyOutput("fp_corr_plot", height = "560px"),
@@ -3025,20 +3085,29 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   })
 
   output$fp_corr_candidates_ui <- renderUI({
-    if (is.null(fp_pitch_candidates)) return(NULL)
-    cands <- fp_pitch_candidates()
+    # The enclosing fp-edit-group supplies the heading, so this renderer
+    # returns only the body. Three states: no .Pitch data anywhere (hint),
+    # .Pitch data but no single frame selected (prompt), candidates (list).
+    hint <- tags$div(style = "color:#888; font-style: italic; font-size: 0.78rem;",
+      "Not available for this data. Upload ", tags$code(".Pitch"),
+      " files from Praat alongside your ", tags$code(".wav"),
+      " files to pick from Praat's alternative pitch candidates here.")
+
+    cands <- if (is.null(fp_pitch_candidates)) NULL else fp_pitch_candidates()
+    if (is.null(cands) || length(cands) == 0) return(hint)
+
     tok <- input$fp_corr_token
     if (is.null(tok) || !(tok %in% names(cands))) {
-      return(NULL)  # not a .Pitch source — section hidden
+      # Other tokens have candidates, this one does not.
+      return(tags$div(style = "color:#888; font-style: italic; font-size: 0.78rem;",
+        "No Praat candidates for this token (it did not come from a ",
+        tags$code(".Pitch"), " file)."))
     }
     cdf <- current_candidates()
     if (is.null(cdf) || nrow(cdf) == 0) {
-      return(tagList(
-        tags$hr(),
-        tags$strong("Praat candidates:"),
-        tags$div(style = "color:#888; font-style: italic; font-size: 0.85rem;",
-          "Select exactly one frame on the plot to see its alternative candidates.")
-      ))
+      return(tags$div(style = "color:#888; font-style: italic; font-size: 0.78rem;",
+        "Select exactly one frame on the plot to see its alternative ",
+        "candidates, or click a grey numbered dot to apply it directly."))
     }
     # Sort by strength descending
     cdf <- cdf[order(-cdf$strength), , drop = FALSE]
@@ -3062,13 +3131,17 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       )
     })
     tagList(
-      tags$hr(),
-      tags$strong("Praat candidates:"),
       tags$div(style = "color:#666; font-size: 0.78rem; margin-bottom: 4px;",
-               "Click an alternative to set this frame's f0."),
+        nows("Click an alternative to set this frame's f0. ",
+             tags$em("s"), " = strength, Praat's confidence in that ",
+             "candidate; higher is better. A tick marks the frame's ",
+             "current value.")),
       tagList(rows)
     )
   })
+  # Rendered inside a conditionalPanel-hosted sidebar, so keep it eager for
+  # the same reason as the other sidebar outputs.
+  outputOptions(output, "fp_corr_candidates_ui", suspendWhenHidden = FALSE)
 
   observeEvent(input$fp_corr_pick_candidate, {
     v <- suppressWarnings(as.numeric(input$fp_corr_pick_candidate))

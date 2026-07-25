@@ -30,6 +30,26 @@
   (e.g. discard the octave jumps, review the level outliers by hand). It
   combines with the discard-status filter, so the discarded set can be
   reviewed one flag type at a time.
+* **F0 Extraction: Praat is the default f0 source when pitch files are
+  uploaded.** Uploading `.Pitch` / `.PitchTier` files alongside the audio now
+  selects "Use uploaded .Pitch / .PitchTier (Praat)" automatically and says
+  so, instead of leaving the radio on wrassp and silently extracting without
+  Praat's per-frame candidate lists. It fires once per session, so a later
+  manual choice is never overridden.
+* **F0 Correction: Praat candidates promoted to an edit group.** Picking a
+  candidate writes to the contour, pushes undo history and logs an edit row,
+  so the block now sits with the other edit groups (after Manual entry)
+  rather than below the Display checkboxes. When no `.Pitch` data is loaded
+  it shows a short hint explaining how to enable the option, so the feature
+  is discoverable from a `.wav`-only session. The candidate list now spells
+  out that `s` is Praat's strength and that the tick marks the frame's
+  current value, and the empty state mentions that the grey numbered dots on
+  the plot can be clicked directly.
+* **F0 Correction: plot mark legend.** A "Marks:" strip above the plot names
+  every non-obvious mark: f0 value, selected frame, Praat candidates ranked
+  1 to 3 by strength (click one to apply), Inspect-flagged frames, edited
+  frames, and the outlined circle showing a frame's value before the edit.
+  Entries appear only when the corresponding data exists.
 * **Curate tab: "Flagged" now covers every Inspect check.** The amber
   highlight, the "Flagged" quick-select, and the flagged-count chip now use
   `flagged_token` (any check: extreme max/min, unusual level, frame-level
