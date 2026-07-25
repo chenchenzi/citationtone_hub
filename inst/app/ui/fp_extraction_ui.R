@@ -120,35 +120,87 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     )
   })
 
-  # ---- Default the f0 source to Praat when pitch files were uploaded ----
-  # Someone who uploads .Pitch / .PitchTier files alongside their .wav files
+  # How many uploaded recordings Praat pitch files actually cover. Praat mode
+  # can only produce f0 for recordings that have a .Pitch / .PitchTier, so
+  # partial coverage silently drops the rest; callers use this to refuse to
+  # default into that state and to warn before it happens.
+  praat_coverage <- function(audio) {
+    if (is.null(audio) || nrow(audio) == 0) {
+      return(list(n_wav = 0L, n_pitch = 0L, n_missing = 0L, missing = character(0)))
+    }
+    is_wav   <- !is.na(audio$wav_path)
+    has_p    <- !is.na(audio$pitch_path) | !is.na(audio$pitchtier_path)
+    uncovered <- is_wav & !has_p
+    list(n_wav = sum(is_wav), n_pitch = sum(has_p),
+         n_missing = sum(uncovered), missing = audio$basename[uncovered])
+  }
+
+  # ---- Default the f0 source to Praat, but only on FULL coverage ----
+  # Someone who uploads .Pitch / .PitchTier files for all their recordings
   # almost certainly wants them used: they carry Praat's per-frame candidate
   # lists, which the F0 Correction tab can offer as alternatives. Before this,
   # the radio stayed on wrassp and hitting Extract silently produced wrassp
   # output instead, discarding the candidates the upload was for.
   #
+  # Coverage matters because Praat mode yields NOTHING for a .wav without a
+  # pitch file: those recordings drop out of the extraction entirely. So a
+  # partly-covered upload stays on wrassp (which handles every .wav) and gets
+  # a warning naming the uncovered files, rather than defaulting into silent
+  # data loss.
+  #
   # Fires at most once per session (fp_mode_autoswitched), so a later manual
-  # choice is never overridden, and announces itself so the switch is not
-  # silent.
+  # choice is never overridden, and announces itself either way.
   fp_mode_autoswitched <- reactiveVal(FALSE)
   observeEvent(fp_audio_data(), {
     if (isTRUE(fp_mode_autoswitched())) return()
     audio <- fp_audio_data()
     if (is.null(audio) || nrow(audio) == 0) return()
-    has_pitch <- !is.na(audio$pitch_path) | !is.na(audio$pitchtier_path)
-    n_pitch <- sum(has_pitch)
-    if (n_pitch == 0) return()
+    cov <- praat_coverage(audio)
+    if (cov$n_pitch == 0) return()
     fp_mode_autoswitched(TRUE)
-    # Covers the not-yet-rendered case (see the radioButtons comment).
+
+    # Partial coverage: do NOT default into Praat. Praat mode would extract
+    # only the covered recordings and silently drop the rest, so stay on
+    # wrassp (which handles every .wav) and say why.
+    if (cov$n_missing > 0) {
+      showNotification(
+        tags$div(
+          tags$strong(sprintf("Praat pitch files cover only %d of %d recordings.",
+                              cov$n_pitch, cov$n_wav)),
+          tags$div(style = "margin-top:4px;",
+            nows(sprintf("%d .wav file(s) have no matching .Pitch / .PitchTier: ",
+                         cov$n_missing),
+                 tags$code(paste(utils::head(cov$missing, 3), collapse = ", ")),
+                 if (cov$n_missing > 3) sprintf(" and %d more", cov$n_missing - 3),
+                 ".")),
+          tags$div(style = "margin-top:4px;",
+            "Left on ", tags$strong("Extract from .wav (wrassp)"),
+            ", which covers every recording. Choosing ",
+            tags$strong("Praat"),
+            " would extract only the covered ones and skip the rest."),
+          tags$div(style = "margin-top:6px;",
+            "To use Praat for the whole set, re-run the script over every ",
+            ".wav and upload the new ", tags$code(".Pitch"), " files: ",
+            nows(tags$a(href = "#", style = "font-weight:600; text-decoration:underline;",
+                        onclick = paste0("Shiny.setInputValue('about_nav_target', ",
+                                         "'F0 Processing|Measure f0 with Praat', ",
+                                         "{priority:'event'}); return false;"),
+                        "open Measure f0 with Praat"), "."))),
+        type = "warning", duration = 20, id = "fp_mode_autoswitch")
+      return()
+    }
+
+    # Full coverage: Praat is the better default (it keeps the per-frame
+    # candidate lists). Covers the not-yet-rendered case (see radioButtons).
     fp_mode_default("praat")
     if (identical(isolate(input$fp_extract_mode), "praat")) return()
     updateRadioButtons(session, "fp_extract_mode", selected = "praat")
     showNotification(
-      sprintf(paste("Found %d Praat pitch file(s), so the f0 source is set to",
-                    "Praat. It keeps Praat's alternative pitch candidates,",
-                    "which you can pick from in F0 Correction. Switch back to",
-                    "wrassp above if you prefer."),
-              n_pitch),
+      sprintf(paste("Praat pitch files found for all %d recording(s), so the",
+                    "f0 source is set to Praat. It keeps Praat's alternative",
+                    "pitch candidates, which you can pick from in F0",
+                    "Correction. Switch back to wrassp above if you prefer."),
+              cov$n_wav),
       type = "message", duration = 8, id = "fp_mode_autoswitch")
   }, ignoreNULL = TRUE)
 
@@ -749,6 +801,32 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         showNotification("No .Pitch / .PitchTier files in the upload.",
                          type = "warning", duration = 4)
         return()
+      }
+
+      # Partial coverage: Praat mode can only yield f0 for recordings that
+      # have a pitch file, so the rest are dropped from the extraction
+      # entirely. Say so before it happens, with both ways out.
+      cov <- praat_coverage(audio)
+      if (cov$n_missing > 0) {
+        showNotification(
+          tags$div(
+            tags$strong(sprintf("Skipping %d of %d recording(s): no matching .Pitch / .PitchTier.",
+                                cov$n_missing, cov$n_wav)),
+            tags$div(style = "margin-top:4px;",
+              nows(tags$code(paste(utils::head(cov$missing, 3), collapse = ", ")),
+                   if (cov$n_missing > 3) sprintf(" and %d more", cov$n_missing - 3),
+                   " will have no f0 at all.")),
+            tags$div(style = "margin-top:6px;",
+              "For the whole set, either switch to ",
+              tags$strong("Extract from .wav (wrassp)"),
+              " above, or re-run the Praat script over every .wav and upload ",
+              "the new ", tags$code(".Pitch"), " files: ",
+              nows(tags$a(href = "#", style = "font-weight:600; text-decoration:underline;",
+                          onclick = paste0("Shiny.setInputValue('about_nav_target', ",
+                                           "'F0 Processing|Measure f0 with Praat', ",
+                                           "{priority:'event'}); return false;"),
+                          "open Measure f0 with Praat"), "."))),
+          type = "warning", duration = 20, id = "fp_praat_partial")
       }
 
       # Wipe any previous extraction and announce start.
