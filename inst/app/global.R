@@ -28,6 +28,39 @@ guess_var <- function(vars, patterns, fallback_idx = 1) {
   if (fallback_idx <= length(vars)) vars[fallback_idx] else vars[1]
 }
 
+# ---------------------------------------------------------------------------
+# nows(): render inline children with NO whitespace between them.
+# htmltools writes each child of a tag on its own line, and the browser
+# renders that newline as a space. So
+#   tags$li("In ", tags$span(class = "tab-chip", "Start"), ", upload ...")
+# comes out as "In Start , upload ...", with a gap before the comma. Wrapping
+# the run in nows() concatenates the rendered HTML directly, so punctuation
+# sits flush against the preceding chip / code / bold span:
+#   tags$li(nows("In ", tags$span(class = "tab-chip", "Start"), ", upload ..."))
+# Only needed where a tag is followed by punctuation; ordinary prose is fine.
+# ---------------------------------------------------------------------------
+nows <- function(...) {
+  parts <- lapply(list(...), function(x) paste0(as.character(x), collapse = ""))
+  htmltools::HTML(paste0(unlist(parts), collapse = ""))
+}
+
+# ---------------------------------------------------------------------------
+# Bulk-discard offer.
+# When a corpus is large but only a small share of its tokens is flagged,
+# repairing every flagged token one by one is rarely worth the time; the
+# F0 Correction tab's "Discard all flagged tokens" + review loop is the
+# faster route. The Inspect summary and the F0 Correction flagged-CSV
+# loader both call offer_bulk_triage() to decide when to surface that
+# suggestion, so the two tabs stay in sync on the thresholds.
+# ---------------------------------------------------------------------------
+TRIAGE_OFFER_MIN_TOKENS       <- 1000
+TRIAGE_OFFER_MAX_FLAGGED_PROP <- 0.15
+offer_bulk_triage <- function(n_tokens, n_flagged) {
+  isTRUE(n_tokens >= TRIAGE_OFFER_MIN_TOKENS) &&
+    isTRUE(n_flagged > 0) &&
+    isTRUE(n_flagged / n_tokens <= TRIAGE_OFFER_MAX_FLAGGED_PROP)
+}
+
 var_patterns <- list(
   token    = c("^token$", "^token", "^filename", "^basename", "^item$", "^segment", "^id$"),
   f0       = c("^f0_st$", "^f0_zscore$", "^f0_norm", "^f0_hz$", "^f0$", "^f0_", "^pitch"),

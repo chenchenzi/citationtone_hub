@@ -107,6 +107,32 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   fp_flagged_tokens <- reactiveVal(NULL)
   fp_flagged_frames <- reactiveVal(NULL)
 
+  # Per-token flag CLASSES parsed from the CSV's flag_notes column, so the
+  # user can work one artefact type at a time ("show me only the octave
+  # jumps"). fp_flag_types: named list, normalised token key -> character
+  # vector of classes; fp_flag_type_levels: the classes actually present,
+  # in canonical order, used to build the checkbox group.
+  fp_flag_types       <- reactiveVal(NULL)
+  fp_flag_type_levels <- reactiveVal(character(0))
+
+  # flag_notes is free text assembled by inspect_f0(); group the individual
+  # notes into the classes a user would filter by. Order is canonical
+  # (token-level checks first, then frame-level, advisory last).
+  FLAG_CLASSES <- list(
+    "Extreme value (max / min)" = "max too high|min too low",
+    "Level (speaker x tone)"    = "level too",
+    "Octave jump"               = "octave jump",
+    "Jump (rate of change)"     = "jump \\((rise|fall)\\)",
+    "Carryover"                 = "carryover",
+    "Low intensity"             = "low intensity"
+  )
+  classify_flag_notes <- function(notes) {
+    notes <- notes[!is.na(notes) & nzchar(notes)]
+    if (length(notes) == 0) return(character(0))
+    hit <- vapply(FLAG_CLASSES, function(pat) any(grepl(pat, notes)), logical(1))
+    names(FLAG_CLASSES)[hit]
+  }
+
   # Remembers the user's x-axis zoom/pan, keyed by token, so a selection-driven
   # re-render does not discard a keyboard pan. uirevision keeps mouse zoom (a
   # "user edit") but not programmatic Plotly.relayout from the keyboard handler.
@@ -481,6 +507,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           uiOutput("fp_corr_speaker_keep_picker"),
           uiOutput("fp_corr_tone_col_picker"),
           uiOutput("fp_corr_tone_keep_picker"),
+          uiOutput("fp_corr_flag_type_picker"),
           checkboxInput("fp_corr_only_flagged",
                         "Only show flagged tokens", value = FALSE),
           # Bulk triage: discard every Inspect-flagged token in one click,
@@ -640,7 +667,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           "<strong>Current token</strong> &rarr; <code>&lt;token&gt;_f0.csv</code><br>",
           "<strong>All tokens</strong> &rarr; <code>all_correctedf0.csv</code><br>",
           "Discarded tokens stay in both files, marked ",
-          "<code>token_dropped = TRUE</code> — drop those rows in your ",
+          "<code>token_dropped = TRUE</code>. Drop those rows in your ",
           "analysis, e.g. <code>subset(d, !token_dropped)</code>.")))
     )
   })
@@ -751,6 +778,8 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     updateCheckboxInput(session,   "fp_corr_only_flagged", value = FALSE)
     updateRadioButtons(session,    "fp_corr_edit_filter", selected = "all")
     updateRadioButtons(session,    "fp_corr_drop_filter", selected = "all")
+    updateCheckboxGroupInput(session, "fp_corr_flag_types",
+                             selected = fp_flag_type_levels())
     # Confirm the effect explicitly: the selected token stays put after a clear,
     # so report how many tokens are now visible to make it obvious the filters
     # lifted (the alternative reads as "nothing happened").
@@ -849,6 +878,22 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                        choices = levs, selected = levs, inline = TRUE)
   })
 
+  # ---- Flag-type keep-list (only when the CSV carries flag_notes) ----
+  output$fp_corr_flag_type_picker <- renderUI({
+    levs <- fp_flag_type_levels()
+    if (length(levs) == 0) return(NULL)
+    tagList(
+      checkboxGroupInput("fp_corr_flag_types", "Keep flag types:",
+                         choices = levs, selected = levs),
+      tags$div(style = "color: #888; font-size: 0.72rem; font-style: italic; margin-top: -8px; margin-bottom: 6px;",
+        "Untick a type to work one artefact at a time. Tokens carrying none ",
+        "of the ticked types are hidden, and ",
+        tags$strong("Discard all flagged tokens"),
+        " then acts only on the ticked types. Unticking everything is ",
+        "treated as no filter.")
+    )
+  })
+
   # The filter drawer's child uiOutputs sit inside a <details> element that is
   # closed on first render. Without suspendWhenHidden = FALSE, Shiny suspends
   # them and skips re-evaluation when fp_flagged_raw() updates (CSV upload),
@@ -858,6 +903,20 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   outputOptions(output, "fp_corr_speaker_keep_picker", suspendWhenHidden = FALSE)
   outputOptions(output, "fp_corr_tone_col_picker",     suspendWhenHidden = FALSE)
   outputOptions(output, "fp_corr_tone_keep_picker",    suspendWhenHidden = FALSE)
+  outputOptions(output, "fp_corr_flag_type_picker",    suspendWhenHidden = FALSE)
+
+  # Normalised token keys carrying at least one of the ticked flag types, or
+  # NULL when the selection imposes no restriction: no flag_notes in the CSV,
+  # every type ticked, or none ticked (Shiny reports an empty checkbox group
+  # as NULL, and "show nothing" would be a confusing reading of that).
+  flag_type_keys <- reactive({
+    levs <- fp_flag_type_levels()
+    sel  <- input$fp_corr_flag_types
+    if (length(levs) == 0 || is.null(sel) || setequal(sel, levs)) return(NULL)
+    m <- fp_flag_types()
+    if (is.null(m) || length(m) == 0) return(character(0))
+    names(m)[vapply(m, function(cl) any(cl %in% sel), logical(1))]
+  })
 
   # ---- Whole-token discard: toggle button + restore-all ----
   # The main button reflects the current token's state (Discard ↔ Restore);
@@ -897,9 +956,10 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                    icon = icon("ban"), class = "btn-sm",
                    title = "Mark every flagged token as discarded (asks for confirmation)"),
       tags$div(style = "color: #888; font-size: 0.72rem; font-style: italic; margin-top: 4px;",
-        "Fast triage for a big corpus: discard the whole flagged set in one ",
-        "click, then step through (", tags$em("Only discarded"),
-        " in the edit / discard filter) and Restore the ones worth repairing.")
+        nows("Fast route for a big corpus: discard the whole flagged set in ",
+             "one click, then review it (", tags$em("Only discarded"),
+             " in the edit / discard filter) and Restore any worth repairing. ",
+             "Reviewing is optional."))
     )
   })
   outputOptions(output, "fp_corr_bulk_discard_ui", suspendWhenHidden = FALSE)
@@ -940,6 +1000,46 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
               flag_source, length(toks)),
       type = "message", duration = 4
     )
+
+    # --- 1b) Per-token flag classes (for the "Keep flag types" filter) ---
+    # Built from every row with a non-empty flag_notes, so advisory notes
+    # that do not set flagged_token (low intensity) are filterable too.
+    if ("flag_notes" %in% names(df)) {
+      nt  <- as.character(df$flag_notes)
+      has <- !is.na(nt) & nzchar(nt)
+      if (any(has)) {
+        keys <- make_corr_key(df[[col]][has], isTRUE(input$fp_corr_strip_ext))
+        by_tok <- lapply(split(nt[has], keys), classify_flag_notes)
+        by_tok <- by_tok[lengths(by_tok) > 0]
+        present <- names(FLAG_CLASSES)[
+          names(FLAG_CLASSES) %in% unique(unlist(by_tok))]
+        fp_flag_types(by_tok)
+        fp_flag_type_levels(present)
+      } else {
+        fp_flag_types(NULL); fp_flag_type_levels(character(0))
+      }
+    } else {
+      fp_flag_types(NULL); fp_flag_type_levels(character(0))
+    }
+
+    # Bulk-discard offer (thresholds in global.R): large corpus, small
+    # flagged share, so suggest discarding the set and reviewing it rather
+    # than stepping through every flagged token.
+    f0_now <- fp_f0_data()
+    if (!is.null(f0_now)) {
+      n_total   <- length(unique(as.character(f0_now$token)))
+      n_matched <- length(bulk_discard_targets())
+      if (offer_bulk_triage(n_total, n_matched)) {
+        showNotification(
+          sprintf(paste("Tip: only %.1f%% of your %d tokens are flagged.",
+                        "Instead of repairing each one, click “Discard",
+                        "all flagged tokens” in the filter drawer, then",
+                        "review with “Only discarded” and Restore any",
+                        "worth keeping. See the guide above the plot."),
+                  100 * n_matched / max(n_total, 1), n_total),
+          type = "message", duration = 12, id = "fp_corr_triage_tip")
+      }
+    }
 
     # --- 2) Per-frame flag info (for in-plot highlighting) ---
     has_jump <- "flagged_jump" %in% names(df)
@@ -987,8 +1087,10 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   # Filtered list of tokens to populate the dropdown.
   # Filters AND together (intersected with the set of extracted tokens):
   #   - flagged-tokens checkbox (token IDs from the CSV's token column)
+  #   - flag-type keep-list (when the CSV carries flag_notes)
   #   - speaker keep-list (when a speaker column is picked)
   #   - tone keep-list    (when a tone column is picked)
+  #   - edit status, then discard status
   # All comparisons normalise via make_corr_key() so case + extension
   # differences don't cause silent mismatches.
   filtered_tokens <- reactive({
@@ -1011,7 +1113,16 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       }
     }
 
-    # 2) Speaker keep-list — apply only when both the column AND the keep-list
+    # 2) Flag-type keep-list. Restricts to tokens carrying at least one of
+    # the ticked artefact classes, so a whole pass can be spent on (say)
+    # octave jumps alone. NULL = no restriction (see flag_type_keys()).
+    ft_keys <- flag_type_keys()
+    if (!is.null(ft_keys)) {
+      keep <- keep[all_key %in% ft_keys]
+      all_key <- make_corr_key(keep, strip_ext)
+    }
+
+    # 3) Speaker keep-list, applied only when both the column AND the keep-list
     # input have been registered. NULL means "input not loaded yet" (transient
     # state right after CSV upload before the keep-list renderUI completes);
     # we skip the filter so the dropdown doesn't briefly empty out. An empty
@@ -1028,7 +1139,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       all_key <- make_corr_key(keep, strip_ext)
     }
 
-    # 3) Tone keep-list — same logic
+    # 4) Tone keep-list, same logic
     tone_col  <- input$fp_corr_tone_col
     tone_keep <- input$fp_corr_tone_keep
     if (!is.null(raw) && !is.null(tone_col) && nzchar(tone_col) &&
@@ -1039,7 +1150,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       keep <- keep[all_key %in% ok]
     }
 
-    # 4) Edit-status filter ("All" / "Only unedited" / "Only edited").
+    # 5) Edit-status filter ("All" / "Only unedited" / "Only edited").
     # Uses the combined set of edited tokens (in-session + uploaded CSV),
     # so re-uploading a previous session's all_correctedf0.csv lets the
     # user filter to unedited tokens and pick up exactly where they
@@ -1054,7 +1165,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       }
     }
 
-    # 5) Discard-status filter ("Kept + discarded" / "Only kept" /
+    # 6) Discard-status filter ("Kept + discarded" / "Only kept" /
     # "Only discarded"). "Only discarded" is the review pass after a bulk
     # discard; "Only kept" excludes discarded tokens from further editing.
     drop_mode <- input$fp_corr_drop_filter
@@ -1085,6 +1196,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       if (isTRUE(input$fp_corr_only_flagged)) active <- c(active, "flagged list")
       if (!is.null(input$fp_corr_speaker_col) && nzchar(input$fp_corr_speaker_col)) active <- c(active, "speaker")
       if (!is.null(input$fp_corr_tone_col)    && nzchar(input$fp_corr_tone_col))    active <- c(active, "tone")
+      if (!is.null(flag_type_keys()))         active <- c(active, "flag type")
       if (!is.null(input$fp_corr_edit_filter) && input$fp_corr_edit_filter != "all")
         active <- c(active, "edit status")
       if (!is.null(input$fp_corr_drop_filter) && input$fp_corr_drop_filter != "all")
@@ -1100,8 +1212,10 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     idx <- if (is.null(cur) || !nzchar(cur)) 0L
            else { m <- match(cur, toks); if (is.na(m)) 0L else m }
     n_edited  <- length(fp_corrections())
-    n_dropped <- length(fp_dropped())
-    dropped_part <- if (n_dropped > 0) sprintf("  ·  Discarded: %d", n_dropped)
+    ds        <- discard_share()
+    dropped_part <- if (ds$n > 0)
+                      sprintf("  ·  Discarded: %d of %d (%.1f%%)",
+                              ds$n, ds$total, ds$pct)
                     else ""
     flagged_total <- if (isTRUE(input$fp_corr_only_flagged) &&
                          !is.null(fp_flagged_tokens())) {
@@ -1829,42 +1943,42 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       ")),
       guide_box("F0 Correction guide",
         tags$p(style = "margin: 6px 0 6px 0;",
-          "Work on one token at a time — pick one in the sidebar, or step through with ",
-          HTML("&#9664;"), " / ", HTML("&#9654;"), ". ",
-          "Click a point on the f0 plot to select a single frame, or drag a ",
-          tags$strong("box / lasso"), " to select multiple frames. ",
-          "Then apply one of the edits in the sidebar."),
+          nows("Work on one token at a time. Pick one in the sidebar, or step ",
+               "through with ", HTML("&#9664;"), " / ", HTML("&#9654;"), ". ",
+               "Click a point on the f0 plot to select a single frame, or drag a ",
+               tags$strong("box / lasso"), " to select multiple frames. ",
+               "Then apply one of the edits in the sidebar.")),
         tags$ul(style = "margin-bottom: 4px; padding-left: 18px;",
-          tags$li(tags$strong("Quick edits:"), " ", tags$code("÷ 2"),
+          tags$li(nows(tags$strong("Quick edits:"), " ", tags$code("÷ 2"),
             " (fix octave doubling), ", tags$code("× 2"),
             " (fix octave halving), ", tags$code("Delete"),
-            " (set selected frames to NA)."),
-          tags$li(tags$strong("Smooth:"),
+            " (set selected frames to NA).")),
+          tags$li(nows(tags$strong("Smooth:"),
             " replace each selected frame by a centered ", tags$em("median"),
             " (recommended for f0) or ", tags$em("mean"), " over the ",
-            tags$em("window"), " — i.e. ", tags$em("N"),
-            " consecutive frames (3 / 5 / 7) centered on the selected one."),
-          tags$li(tags$strong("Interpolate / Extrapolate:"),
+            tags$em("window"), ", i.e. ", tags$em("N"),
+            " consecutive frames (3 / 5 / 7) centered on the selected one.")),
+          tags$li(nows(tags$strong("Interpolate / Extrapolate:"),
             " replace selected frames by a ", tags$em("linear"), ", ",
             tags$em("parabola"), " (local quadratic) or ",
             tags$em("spline"), " (cubic) fit through the nearest ",
             tags$em("N"), " non-selected valid frames (the ", tags$em("window"),
             "). If a selected frame is past the last valid anchor, the same fit ",
-            "extrapolates."),
+            "extrapolates.")),
           tags$li(tags$strong("Manual entry:"),
             " type a specific Hz value and click ", tags$code("Apply"),
             " to set every selected frame to it."),
-          tags$li(tags$strong("Whole token:"), " ",
+          tags$li(nows(tags$strong("Whole token:"), " ",
             tags$code("Discard token"),
-            " drops the token instead of repairing it — non-destructive: the ",
+            " drops the token instead of repairing it. Non-destructive: the ",
             "values are kept and the downloads mark it ",
             tags$code("token_dropped = TRUE"), " for you to filter out ",
-            "downstream. ", tags$code("Restore token"), " brings it back."),
+            "downstream. ", tags$code("Restore token"), " brings it back.")),
           tags$li(tags$strong("Praat candidates"),
             " (only when the token came from a ", tags$code(".Pitch"),
             " file): when exactly one frame is selected, alternative ",
             "Praat-extracted candidates appear in the sidebar with their ",
-            "strengths — click one to pick it.")
+            "strengths, then click one to pick it.")
         ),
         tags$p(style = "margin: 6px 0 0 0;",
           tags$strong("Undo last edit"), " reverts the most recent change. ",
@@ -2158,12 +2272,12 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                       "artefact flags get a ",
                       tags$strong("●"),
                       " in the token picker."),
-              tags$li("Big corpus? Click ",
-                      tags$span(class = "btn-chip", icon("ban"),
-                                " Discard all flagged tokens"),
-                      " to mark the whole flagged set as discarded in one ",
-                      "go, then step through and ", tags$strong("Restore"),
-                      " the ones worth repairing.")
+              tags$li(nows("Big corpus? Click ",
+                           tags$span(class = "btn-chip", icon("ban"),
+                                     " Discard all flagged tokens"),
+                           " to mark the whole flagged set as discarded in ",
+                           "one go, then review it and ", tags$strong("Restore"),
+                           " any worth repairing."))
             )
           )
         ),
@@ -2177,6 +2291,115 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           " if you only need ", tags$em("speaker"), " or ",
           tags$em("tone"), " filtering (no artefact flagging), skip step 2. ",
           "Upload the metadata-tagged CSV from step 1 directly in step 3."
+        )
+      ),
+
+      # ---- Bulk-discard workflow for big corpora (collapsible) ----
+      # Discard the flagged set, then review it. Same .resume-* CSS classes
+      # as the illustrations above for visual consistency; the Inspect
+      # summary and the flagged-CSV loader point here when the corpus size
+      # and flagged share make this route attractive (offer_bulk_triage()
+      # in global.R). nows() keeps punctuation flush against chips; see
+      # its definition in global.R.
+      tags$details(class = "resume-wrap",
+        tags$summary(icon("ban"),
+                     " Big corpus, small flagged set? Bulk discard and review ",
+                     tags$span(style = "color: #b08a35; font-weight: 400; font-size: 0.82rem;",
+                               "(click to expand)")),
+        tags$p(style = "margin: 10px 0 0 0; color: #5a4d2c; font-size: 0.88rem;",
+          nows("When only a small share of a large corpus is flagged, repairing ",
+               "every flagged token is rarely worth the time. Discard the whole ",
+               "flagged set in one click, then review the discards and keep back ",
+               "any worth repairing. Reviewing is optional: you can discard the ",
+               "set and move on. Discarding is ", tags$strong("non-destructive"),
+               ": every f0 value is kept, and the downloads mark the tokens with ",
+               tags$code("token_dropped = TRUE"), ".")),
+        tags$div(class = "resume-flow",
+
+          # ----- Step 1: flag artefacts -----
+          tags$div(class = "resume-card",
+            tags$div(class = "resume-card-title",
+              icon("magnifying-glass"), " Step 1. Flag artefacts"),
+            tags$div(class = "resume-card-subtitle",
+              tags$span(class = "tab-chip", "F0 Analysis"),
+              HTML(" &rarr; "),
+              tags$span(class = "tab-chip", "Inspect")),
+            tags$ol(class = "resume-steps",
+              tags$li(nows("In ", tags$span(class = "tab-chip", "Start"),
+                           ", upload the extracted f0 CSV.")),
+              tags$li(nows("Run the inspection in ",
+                           tags$span(class = "tab-chip", "Inspect"), ".")),
+              tags$li(nows("Click ",
+                           tags$span(class = "btn-chip", icon("download"),
+                                     " Download Inspected Data"),
+                           " (or the flagged-only subset)."))
+            )
+          ),
+
+          # ----- Step 2: discard all flagged -----
+          tags$div(class = "resume-card",
+            tags$div(class = "resume-card-title",
+              icon("ban"), " Step 2. Discard all flagged"),
+            tags$div(class = "resume-card-subtitle",
+              tags$span(class = "tab-chip", "F0 Processing"),
+              HTML(" &rarr; "),
+              tags$span(class = "tab-chip", "F0 Correction")),
+            tags$ol(class = "resume-steps",
+              tags$li(nows("Upload the CSV in the ",
+                           tags$strong("Filter by speaker, tone, or potential f0 artefacts"),
+                           " drawer.")),
+              tags$li(nows("Optionally untick some ",
+                           tags$strong("Keep flag types"),
+                           " to work one artefact class at a time, e.g. octave ",
+                           "jumps only.")),
+              tags$li(nows("Click ",
+                           tags$span(class = "btn-chip", icon("ban"),
+                                     " Discard all flagged tokens"),
+                           " and confirm. The dialog reports what share of the ",
+                           "corpus that is, and the whole set gets ",
+                           tags$strong("✗"), " in one go."))
+            )
+          ),
+
+          # ----- Step 3: review (optional) -----
+          tags$div(class = "resume-card",
+            tags$div(class = "resume-card-title",
+              icon("rotate-left"), " Step 3. Review (optional)"),
+            tags$div(class = "resume-card-subtitle",
+              tags$span(class = "tab-chip", "F0 Correction"),
+              HTML(" &rarr; "),
+              tags$span(class = "tab-chip", "Filter by edit / discard status")),
+            tags$ol(class = "resume-steps",
+              tags$li(nows("Pick ", tags$span(class = "btn-chip", "Only discarded"),
+                           " and step through with ", tags$kbd(","), " / ",
+                           tags$kbd("."), ", listening and checking the waveform.")),
+              tags$li(nows("Click ",
+                           tags$span(class = "btn-chip", icon("rotate-left"),
+                                     " Restore token"),
+                           " for any contour worth repairing (the picker advances ",
+                           "to the next discard), then fix its frames.")),
+              tags$li(nows("Happy to drop them all? Skip this step. Either way, ",
+                           "download ",
+                           tags$span(class = "btn-chip", icon("download"),
+                                     " All tokens"), " when done."))
+            )
+          )
+        ),
+
+        # Downstream note
+        tags$div(style = paste(
+            "margin-top: 14px; padding: 10px 14px;",
+            "background: #fff8f0; border-left: 3px solid #e8c860;",
+            "border-radius: 4px; font-size: 0.85rem; color: #5a4d2c;"),
+          nows(tags$strong(icon("arrow-right"), " Downstream:"),
+               " re-upload the downloaded CSV in ",
+               tags$span(class = "tab-chip", "F0 Analysis"),
+               HTML(" &rarr; "),
+               tags$span(class = "tab-chip", "Start"),
+               " and the discarded tokens are detected and excluded ",
+               "automatically (a sidebar checkbox brings them back). Outside ",
+               "the app, drop them yourself: ",
+               tags$code("subset(d, !token_dropped)"), ".")
         )
       ),
 
@@ -2222,8 +2445,8 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
             tags$div(class = "resume-card-title",
               icon("pen-to-square"), " Session 1: edit + download"),
             tags$ol(class = "resume-steps",
-              tags$li("Make your edits in ",
-                      tags$span(class = "tab-chip", "F0 Correction"), "."),
+              tags$li(nows("Make your edits in ",
+                      tags$span(class = "tab-chip", "F0 Correction"), ".")),
               tags$li("Click ",
                       tags$span(class = "btn-chip", icon("download"), " Download all tokens"),
                       " and save ", tags$code("all_correctedf0.csv"),
@@ -2603,7 +2826,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         tok %in% fp_dropped()) {
       fp_dropped(setdiff(fp_dropped(), tok))
       fp_edit_log(cur_log[-tail(tok_rows, 1), , drop = FALSE])
-      showNotification("Discard undone — token restored.",
+      showNotification("Discard undone, token restored.",
                        type = "message", duration = 2)
       return()
     }
@@ -2653,10 +2876,11 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     fp_dropped(union(fp_dropped(), tok))
     log_edit(tok, "Discard token", NA_integer_,
              "whole token; values kept, token_dropped = TRUE in downloads")
+    ds <- discard_share()
     showNotification(
-      sprintf(paste("Discarded %s. It stays in the downloads with",
-                    "token_dropped = TRUE; Restore token brings it back."),
-              tok),
+      sprintf(paste("Discarded %s. %d of %d tokens discarded so far (%.1f%%).",
+                    "Restore token brings it back."),
+              tok, ds$n, ds$total, ds$pct),
       type = "message", duration = 4)
   })
 
@@ -2691,7 +2915,24 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     strip_ext <- isTRUE(input$fp_corr_strip_ext)
     hit <- all_t[make_corr_key(all_t, strip_ext) %in%
                    make_corr_key(flagged, strip_ext)]
+    # Honour the flag-type keep-list, so "Discard all flagged tokens" can be
+    # aimed at one artefact class (e.g. octave jumps only).
+    ft_keys <- flag_type_keys()
+    if (!is.null(ft_keys)) {
+      hit <- hit[make_corr_key(hit, strip_ext) %in% ft_keys]
+    }
     setdiff(hit, fp_dropped())
+  }
+
+  # Share of the corpus currently discarded, as "N (P%)". Tokens are the
+  # unit users think in, so the denominator is every extracted token, not
+  # the filtered view.
+  discard_share <- function() {
+    df <- fp_f0_data()
+    n_drop <- length(fp_dropped())
+    n_all  <- if (is.null(df)) 0L else length(unique(as.character(df$token)))
+    list(n = n_drop, total = n_all,
+         pct = if (n_all > 0) 100 * n_drop / n_all else 0)
   }
 
   observeEvent(input$fp_corr_discard_flagged, {
@@ -2703,14 +2944,28 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                        type = "warning", duration = 5)
       return()
     }
+    ds   <- discard_share()
+    sel  <- input$fp_corr_flag_types
+    levs <- fp_flag_type_levels()
+    partial <- length(levs) > 0 && !is.null(sel) && !setequal(sel, levs)
     showModal(modalDialog(
       title = "Discard all flagged tokens?",
-      tags$p(sprintf("This marks %d flagged token(s) as discarded.",
-                     length(targets))),
+      tags$p(sprintf("This marks %d flagged token(s) as discarded, %.1f%% of the %d tokens in this dataset.",
+                     length(targets),
+                     100 * length(targets) / max(ds$total, 1), ds$total)),
+      if (ds$n > 0)
+        tags$p(style = "color:#666; font-size:0.9rem;",
+          nows(sprintf("%d token(s) are already discarded, so %d of %d (%.1f%%) will be discarded in total.",
+                       ds$n, ds$n + length(targets), ds$total,
+                       100 * (ds$n + length(targets)) / max(ds$total, 1)))),
+      if (partial)
+        tags$p(style = "color:#8a6d00; font-size:0.9rem;",
+          nows(icon("filter"), " Only the ticked flag types are included: ",
+               tags$strong(paste(sel, collapse = ", ")), ".")),
       tags$p(style = "color:#666; font-size:0.9rem;",
-        "Non-destructive: every f0 value is kept, and the downloads carry ",
-        tags$code("token_dropped = TRUE"), " for these tokens. You can ",
-        "Restore any token afterwards (or all at once)."),
+        nows("Non-destructive: every f0 value is kept, and the downloads carry ",
+             tags$code("token_dropped = TRUE"), " for these tokens. You can ",
+             "Restore any token afterwards, or all at once.")),
       footer = tagList(
         modalButton("Cancel"),
         actionButton("fp_corr_discard_flagged_confirm", "Discard all",
@@ -2735,11 +2990,13 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       frame_pct     = NA_character_,
       details       = "bulk: flagged by Inspect",
       stringsAsFactors = FALSE)))
+    ds <- discard_share()
     showNotification(
-      sprintf(paste("Discarded %d flagged token(s). Step through them",
-                    "(pick “Only discarded” in the edit / discard",
-                    "filter) and Restore any worth repairing."),
-              length(targets)),
+      sprintf(paste("Discarded %d flagged token(s): %d of %d tokens now",
+                    "discarded (%.1f%%). Step through them (pick",
+                    "“Only discarded” in the edit / discard filter)",
+                    "and Restore any worth repairing."),
+              length(targets), ds$n, ds$total, ds$pct),
       type = "message", duration = 6)
   })
 

@@ -311,7 +311,33 @@ inspect_ui <- function(input, output, session, dataset, inspect_result = reactiv
             tags$ul(style = "margin-bottom: 0; padding-left: 18px;", tone_items)
           )
         }
-      )
+      ),
+
+      # Bulk-discard offer: for a large corpus with a small flagged share
+      # (thresholds in global.R), repairing every flagged token one by one
+      # is rarely worth the time, so point at the F0 Correction tab's
+      # discard-the-set-then-review route instead.
+      if (offer_bulk_triage(n_tokens, n_flagged_tokens)) {
+        tags$div(style = paste(
+            "background-color: #e8f5f0; border-left: 4px solid #78c2ad;",
+            "padding: 10px 14px; margin-bottom: 12px; border-radius: 4px;",
+            "font-size: 0.88rem; color: #2c5f4f;"),
+          nows(icon("bolt"), " ",
+            tags$strong("Fast path for this corpus: "),
+            sprintf("only %.1f%% of %d tokens are flagged. ",
+                    100 * n_flagged_tokens / max(n_tokens, 1), n_tokens),
+            "Instead of repairing each one, consider a bulk discard: download ",
+            "the flagged tokens below, then in ",
+            tags$strong("F0 Processing → F0 Correction"),
+            " upload that CSV and click ",
+            tags$strong("Discard all flagged tokens"),
+            ". Reviewing the discards afterwards (",
+            tags$em("Only discarded"), ") is optional, and you can ",
+            tags$strong("Restore"),
+            " any worth repairing. The illustrated guide on that tab walks ",
+            "through it.")
+        )
+      }
     )
   })
 

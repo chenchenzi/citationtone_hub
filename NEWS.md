@@ -3,21 +3,33 @@
 * **F0 Correction tab: whole-token discard.** A new "Whole token" edit group
   adds **Discard token** / **Restore token** for tokens that are beyond
   repair: instead of fixing frames, the whole token is marked as dropped.
-  Non-destructive — the f0 values are kept, and both downloads gain a
+  Non-destructive, since the f0 values are kept and both downloads gain a
   `token_dropped` column (`TRUE` for discarded tokens) to filter on
   downstream. Discarded tokens show a ✗ in the token picker and a banner
   above the plot, appear in the edit log (Undo restores, as does the Restore
   button), survive the save/re-upload resume cycle via the new column, and a
   "Kept + discarded / Only kept / Only discarded" filter joins the
-  edit-status drawer.
+  edit-status drawer. The sidebar progress line and every discard
+  notification report the running share of the corpus discarded, e.g.
+  "Discarded: 812 of 8000 (10.2%)".
 * **F0 Correction tab: bulk discard of flagged tokens.** Once an Inspect-tab
   CSV is loaded in the filter drawer, a **Discard all flagged tokens** button
-  (with confirmation) marks the entire flagged set as discarded in one click
-  — the fast path for large corpora: drop all flagged tokens, then step
-  through ("Only discarded") and Restore the ones worth repairing. A
-  **Restore all** button next to the discard toggle un-discards *every*
-  discarded token — bulk and manual discards alike — and removes their
-  edit-log rows.
+  marks the entire flagged set as discarded in one click. The confirmation
+  dialog reports how many tokens that is and what share of the corpus they
+  represent. This is the fast route for large corpora: discard the flagged
+  set, then optionally review it ("Only discarded") and Restore any worth
+  repairing. A **Restore all** button next to the discard toggle un-discards
+  *every* discarded token, bulk and manual alike, and removes their edit-log
+  rows.
+* **F0 Correction tab: filter by flag type.** When the uploaded Inspect CSV
+  carries `flag_notes`, a **Keep flag types** checkbox group lists the
+  artefact classes present (extreme value, level, octave jump, jump by rate
+  of change, carryover, low intensity). Unticking a type hides tokens that
+  carry none of the ticked ones and narrows **Discard all flagged tokens** to
+  the same subset, so a corpus can be worked one artefact class at a time
+  (e.g. discard the octave jumps, review the level outliers by hand). It
+  combines with the discard-status filter, so the discarded set can be
+  reviewed one flag type at a time.
 * **Curate tab: "Flagged" now covers every Inspect check.** The amber
   highlight, the "Flagged" quick-select, and the flagged-count chip now use
   `flagged_token` (any check: extreme max/min, unusual level, frame-level
@@ -32,6 +44,12 @@
   The uploaded file itself is never modified. Previously the discarded
   tokens flowed silently into every downstream tab (Normalise, Inspect,
   Visualise, the models, Summarise).
+* **Bulk-discard guidance.** An illustrated "Big corpus, small flagged set?
+  Bulk discard and review" guide joins the F0 Correction tab, walking through
+  flagging in Inspect, discarding the set, and the optional review pass. When
+  a corpus is large but lightly flagged (at least 1000 tokens with at most
+  15% flagged; thresholds in `offer_bulk_triage()`), the Inspect summary and
+  the F0 Correction flagged-CSV loader suggest that route proactively.
 * `flag_outliers()` (the speaker-level extreme-value screen) is now
   **one-sided**: a token is flagged `too_high` only when its per-token
   maximum is unusually high (`z_max > z_threshold`), and `too_low` only when
