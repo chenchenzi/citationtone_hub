@@ -18,6 +18,12 @@
   **Restore all** button next to the discard toggle un-discards *every*
   discarded token — bulk and manual discards alike — and removes their
   edit-log rows.
+* **Curate tab: "Flagged" now covers every Inspect check.** The amber
+  highlight, the "Flagged" quick-select, and the flagged-count chip now use
+  `flagged_token` (any check: extreme max/min, unusual level, frame-level
+  jumps) instead of only the "level too high / low" notes, so the exclude
+  machinery can also serve as a whole-token disposal path for
+  artefact-flagged tokens.
 
 * `flag_outliers()` (the speaker-level extreme-value screen) is now
   **one-sided**: a token is flagged `too_high` only when its per-token

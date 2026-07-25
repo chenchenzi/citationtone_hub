@@ -68,6 +68,12 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
     if (length(hit)) hit[1] else NULL
   })
 
+  # All tokens the Inspect tab flagged (any check: extreme max/min, unusual
+  # level for the speaker × tone, or frame-level jumps). Drives the amber
+  # highlight, the "Flagged" quick-select, and the status chip, so the
+  # exclude machinery doubles as a whole-token disposal path for tokens
+  # Inspect caught. (Previously only "level too high / low" flags were
+  # used, which missed jump- and extreme-value-flagged tokens.)
   flagged_tokens <- reactive({
     ir <- if (!is.null(inspect_result)) inspect_result() else NULL
     if (is.null(ir)) return(character(0))
@@ -75,13 +81,6 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
     tokcol <- if (v$token %in% names(ir)) v$token else guess_var(names(ir), var_patterns$token, 1)
     keep <- if ("flagged_token" %in% names(ir)) ir$flagged_token %in% TRUE else rep(FALSE, nrow(ir))
     unique(as.character(ir[[tokcol]][keep]))
-  })
-  level_flagged_tokens <- reactive({
-    ir <- if (!is.null(inspect_result)) inspect_result() else NULL
-    if (is.null(ir) || !("flag_notes" %in% names(ir))) return(character(0))
-    v <- cvar()
-    tokcol <- if (v$token %in% names(ir)) v$token else guess_var(names(ir), var_patterns$token, 1)
-    unique(as.character(ir[[tokcol]][grepl("level too", ir$flag_notes)]))
   })
 
   log_curate <- function(action, tokens, to = NA_character_, note = "") {
@@ -103,8 +102,9 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
         "Re-label tokens whose tone category needs revising, or mark tokens to exclude.",
         "Use this for genuine <strong>linguistic variation</strong>: tone splits or mergers, variant",
         "readings (colloquial vs. literary, 文白异读), sandhi or sociolinguistic variants, or",
-        "mis-elicited tokens. It is <strong>not</strong> for pitch-tracking errors, which are",
-        "handled in <strong>Inspect</strong> and <strong>F0 Correction</strong>.",
+        "mis-elicited tokens. Pitch-tracking errors are best <em>repaired</em> in",
+        "<strong>Inspect</strong> and <strong>F0 Correction</strong>, but a token that is beyond",
+        "repair can be excluded here (whole-token drop).",
         "The key here is to identify contours whose shape or normalised height diverges markedly",
         "from the rest of the same tone category.")),
       tags$ul(style = "margin-bottom: 0; padding-left: 18px;",
@@ -170,7 +170,7 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
       tagList(
         step(1, "Normalise", "Normalise tab", "Put speakers on one scale so contour height is comparable.", norm_done),
         arrow,
-        step(2, "Inspect", "Inspect tab", "Flag level outliers as ready-made candidates to review.", insp_done),
+        step(2, "Inspect", "Inspect tab", "Flag outliers and artefacts as ready-made candidates to review.", insp_done),
         arrow,
         step(3, "Curate", NULL, "You are here. Select tokens, then relabel or exclude.", FALSE, here = TRUE)),
       taskstrip("layer-group", "Variant readings / forms",
@@ -360,7 +360,7 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
     facet_choices <- c("None" = "__none__",
                        "Speaker" = "__speaker__",
                        "Item / word" = "__item__")
-    has_inspect <- length(level_flagged_tokens()) > 0
+    has_inspect <- length(flagged_tokens()) > 0
 
     tagList(
       tags$h4("Identify and select tokens to curate"),
@@ -415,12 +415,14 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
         tags$div(style = "background:#fff8e1; border-left:4px solid #e0a800; padding:7px 12px; border-radius:5px; font-size:0.8rem; color:#8a6d00; margin-bottom:8px; line-height:1.55;",
           tags$span(style = "color:#e0a800; margin-right:5px;", icon("lightbulb")),
           HTML(paste(
-            "<strong>Amber</strong> marks tokens that <strong>Inspect</strong> flagged for sitting at an unusual",
-            "overall level relative to the rest of the tokens by the same speaker and tone",
-            "(<em>&ldquo;level too high / low&rdquo;</em>). These are potential variant candidates, so review",
-            "them: a flagged token may have an atypical yet valid contour. A token-level flag is summarised",
-            "from all its f0 points, so a few extreme points can skew it: flags are not always right, and they",
-            "can miss patterns too."))),
+            "<strong>Amber</strong> marks tokens that <strong>Inspect</strong> flagged on any of its checks:",
+            "an extreme maximum / minimum for the speaker, an unusual overall level for the same speaker and",
+            "tone (<em>&ldquo;level too high / low&rdquo;</em>), or frame-level jump artefacts. Level flags",
+            "are natural variant candidates; jump and extreme-value flags more often mean pitch-tracking",
+            "errors, which you can repair in <strong>F0 Correction</strong> — or, when a token is beyond",
+            "repair, select it here (the <strong>Flagged</strong> button grabs all flagged tokens in view)",
+            "and exclude it. Flags are heuristic, so review them: a flagged token may have an atypical yet",
+            "valid contour, and flags can miss patterns too."))),
       tags$p(style = "color: #888; font-size: 0.8rem; margin: 2px 0 6px 0;",
         "Drag a ", tags$strong("box"), " (or pick the ", tags$strong("lasso"),
         " in the plot toolbar) around a cluster, or ", tags$strong("click"),
@@ -477,7 +479,7 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
     } else { sub$.x <- sub[[time_guess[1]]]; xlab <- time_guess[1] }
 
     sub$.tok <- as.character(sub[[v$token]])
-    flagged <- level_flagged_tokens(); selected <- rv_selection()
+    flagged <- flagged_tokens(); selected <- rv_selection()
     sub$.status <- ifelse(sub$.tok %in% selected, "selected",
                    ifelse(sub$.tok %in% flagged, "flagged (Inspect)", "other"))
     sub$.status <- factor(sub$.status, levels = c("other", "flagged (Inspect)", "selected"))
@@ -550,11 +552,11 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
     unique(as.character(d[[v$token]][keep]))
   })
 
-  # Select level-flagged tokens within the current view
+  # Select Inspect-flagged tokens (any check) within the current view
   observeEvent(input$curate_sel_flagged, {
-    vt <- view_tokens(); add <- intersect(level_flagged_tokens(), vt)
+    vt <- view_tokens(); add <- intersect(flagged_tokens(), vt)
     if (length(add) == 0) {
-      showNotification("No level-flagged tokens in this view.", type = "warning", duration = 4); return() }
+      showNotification("No Inspect-flagged tokens in this view.", type = "warning", duration = 4); return() }
     rv_selection(union(rv_selection(), add))
   })
   # Select all tokens in the current view
@@ -566,16 +568,17 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
   })
   observeEvent(input$curate_clear_selection, { rv_selection(character(0)) })
 
-  # combined status box: two compact chips — how many tokens are level-flagged
-  # in the current view, and the current selection (replaces the two separate
-  # summary lines, which felt crowded stacked around the amber note).
+  # combined status box: two compact chips — how many tokens are
+  # Inspect-flagged (any check) in the current view, and the current selection
+  # (replaces the two separate summary lines, which felt crowded stacked
+  # around the amber note).
   output$curate_status_box <- renderUI({
     sel <- rv_selection()
-    has_flags <- length(level_flagged_tokens()) > 0
+    has_flags <- length(flagged_tokens()) > 0
     chips <- list()
 
     if (has_flags) {
-      vt <- view_tokens(); fl <- intersect(level_flagged_tokens(), vt)
+      vt <- view_tokens(); fl <- intersect(flagged_tokens(), vt)
       spk <- input$curate_view_speaker
       tone_lab <- if (identical(input$curate_view_tone, "__all__")) "all tones"
                   else sprintf("tone %s", input$curate_view_tone)
