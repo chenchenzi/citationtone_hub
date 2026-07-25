@@ -52,8 +52,9 @@
   the unvoiced candidate is not numbered.
 * **F0 Correction: plot mark legend.** A "Marks:" strip above the plot names
   every non-obvious mark: f0 value, selected frame, Praat candidates (dot 1
-  being Praat's own pick, click to apply), Inspect-flagged frames,
-  low-intensity frames, edited frames, and the outlined circle showing a
+  being Praat's own pick, click to apply), sample-level jump flags,
+  low-intensity frames (drawn as a bare amber ring, since the ring can sit
+  on any fill colour), edited frames, and the outlined circle showing a
   frame's value before the edit. Entries appear only when the corresponding
   data exists. When an Inspect CSV is loaded, a tinted status box under the
   key summarises the current token, its colour mirroring the plot: light
@@ -62,7 +63,7 @@
   at the whole contour for a token flagged at token level with no flagged
   frames (extreme value / level); green with an explicit "nothing flagged
   by Inspect". Flagged states add the reminder "Flags are leads, not
-  errors: verify by eye and ear before editing."
+  errors: verify by eye and ear before editing" on its own line.
 * **F0 Correction: low-intensity frames marked on the plot.** Frames the
   Inspect tab flagged as low intensity now carry an amber marker ring
   (reading `flag_low_intensity` when present, else the `flag_notes` text).

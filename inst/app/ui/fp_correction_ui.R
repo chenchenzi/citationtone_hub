@@ -407,13 +407,16 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     if (!is.null(frames_by_tok) && length(frames_by_tok) > 0) {
       entries <- c(entries, list(item(
         swatch("width:9px; height:9px; background:#d9534f; border:1px solid #2c5f4f;"),
-        "flagged by Inspect")))
+        "sample-level flag (jump)")))
     }
     lowint_by_tok <- fp_lowint_frames()
     if (!is.null(lowint_by_tok) && length(lowint_by_tok) > 0) {
       entries <- c(entries, list(item(
-        swatch("width:9px; height:9px; background:#5cb89a; border:2px solid #e0a800;"),
-        "flagged by low intensity")))
+        # Ring only: the amber ring is the mark and it can sit on any fill
+        # (green normal, red flagged, blue selected), so the swatch shows no
+        # particular dot colour.
+        swatch("width:9px; height:9px; background:transparent; border:2px solid #e0a800;"),
+        "flagged by low intensity (ring)")))
     }
 
     if (!is.null(edit_diff())) {
@@ -453,8 +456,9 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           "font-size:0.82rem; line-height:1.55;"), bg, border, colr),
         icon(ic), " ", ...)
       # Flags are screens, not verdicts; say so wherever a flag is reported.
-      not_a_verdict <- tags$span(style = "opacity:0.85;",
-        nows(" ", tags$em("Flags are leads, not errors"),
+      # A block div, so the reminder sits on its own line under the counts.
+      not_a_verdict <- tags$div(style = "opacity:0.85; margin-top:3px;",
+        nows(tags$em("Flags are leads, not errors"),
              ": verify by eye and ear before editing."))
       # Box colour mirrors the plot: light coral (dot-red border) when red
       # flagged frames are on screen, amber for advisory / token-level
