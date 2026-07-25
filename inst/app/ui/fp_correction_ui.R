@@ -2302,7 +2302,9 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       # in global.R). nows() keeps punctuation flush against chips; see
       # its definition in global.R.
       tags$details(class = "resume-wrap",
-        tags$summary(icon("ban"),
+        # bolt, matching the other two fast-path surfaces: the Inspect
+        # summary's offer box and the "Shortcut" note in the filter card.
+        tags$summary(icon("bolt"),
                      " Big corpus, small flagged set? Bulk discard and review ",
                      tags$span(style = "color: #b08a35; font-weight: 400; font-size: 0.82rem;",
                                "(click to expand)")),
