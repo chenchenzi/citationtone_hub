@@ -12,7 +12,6 @@
   the Restore button), survive the save/re-upload resume cycle via the
   new column, and a “Kept + discarded / Only kept / Only discarded”
   filter joins the edit-status drawer.
-
 - **F0 Correction tab: bulk discard of flagged tokens.** Once an
   Inspect-tab CSV is loaded in the filter drawer, a **Discard all
   flagged tokens** button (with confirmation) marks the entire flagged
@@ -21,14 +20,21 @@
   the ones worth repairing. A **Restore all** button next to the discard
   toggle un-discards *every* discarded token — bulk and manual discards
   alike — and removes their edit-log rows.
-
 - **Curate tab: “Flagged” now covers every Inspect check.** The amber
   highlight, the “Flagged” quick-select, and the flagged-count chip now
   use `flagged_token` (any check: extreme max/min, unusual level,
   frame-level jumps) instead of only the “level too high / low” notes,
   so the exclude machinery can also serve as a whole-token disposal path
   for artefact-flagged tokens.
-
+- **Start tab: discarded tokens honoured.** Uploading a CSV that carries
+  the F0 Correction tab’s `token_dropped` column
+  (e.g. `all_correctedf0.csv`) now pops a notification reporting how
+  many tokens are marked discarded and excludes those rows (and the flag
+  column) from the working dataset by default; a sidebar checkbox
+  (“Exclude discarded tokens”) restores them. The uploaded file itself
+  is never modified. Previously the discarded tokens flowed silently
+  into every downstream tab (Normalise, Inspect, Visualise, the models,
+  Summarise).
 - [`flag_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_outliers.md)
   (the speaker-level extreme-value screen) is now **one-sided**: a token
   is flagged `too_high` only when its per-token maximum is unusually
@@ -49,7 +55,6 @@
   [`flag_level_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_level_outliers.md)
   and
   [`flag_pitch_jumps()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_pitch_jumps.md)).
-
 - [`inspect_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/inspect_f0.md)
   now accepts `tone = NULL`, which skips the tone-relative token-level
   check
@@ -59,17 +64,14 @@
   The speaker-level extreme-value and sample-level jump checks still
   run, and the default remains `tone = "tone"`, so existing calls are
   unchanged.
-
 - **Inspect tab: optional tone.** The tone selector now offers
   `— none —`, which runs the two tone-free screens (speaker-level
   extreme-value and sample-level jumps) without a tone column, for the
   pre-tone-discovery workflow. Backed by `inspect_f0(tone = NULL)`.
-
 - **GAMM tab: on-demand diagnostics.** The “Run model diagnostics”
   button is shown in the sidebar from the start (disabled until a model
   is fitted), and diagnostics run when it is clicked rather than
   automatically after every fit, so fitting stays fast.
-
 - **GAMM diagnostics** (new).
   [`diagnose_gamm()`](https://chenchenzi.github.io/citationtone_hub/reference/diagnose_gamm.md)
   and a “Model diagnostics” section on the GAMM tab: after fitting, one
@@ -80,7 +82,6 @@
   download of all diagnostics. The ACF is computed per token (in the
   spirit of `itsadug::acf_resid()`) and AR1-whitened when the fit used
   an AR1 correction, so it shows whether the correction actually worked.
-
 - **GCA fit-over-data overlay** (new). The GCA tab now optionally
   overlays the observed per-tone mean contour (semi-transparent points,
   computed with
@@ -90,7 +91,6 @@
   2014). Toggle it with the “Overlay observed per-tone means” checkbox;
   turn it off for a cleaner plot on busy data. The overlay is included
   in the downloaded plot.
-
 - The GAMM tab’s **AR1 correction is now on by default**:
   densely-sampled f0 frames are strongly autocorrelated, so smooth
   p-values are anticonservative without it.
@@ -99,7 +99,6 @@
   `rho` from the lag-1 autocorrelation *within* tokens rather than
   across the flat concatenation, so token boundaries no longer bias the
   estimate.
-
 - [`run_app()`](https://chenchenzi.github.io/citationtone_hub/reference/run_app.md)
   now checks GitHub once per launch for a newer shinytone release
   (2-second timeout, silent when offline) and, when one exists, prints
