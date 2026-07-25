@@ -52,9 +52,26 @@
   the unvoiced candidate is not numbered.
 * **F0 Correction: plot mark legend.** A "Marks:" strip above the plot names
   every non-obvious mark: f0 value, selected frame, Praat candidates (dot 1
-  being Praat's own pick, click to apply), Inspect-flagged frames, edited
-  frames, and the outlined circle showing a frame's value before the edit.
-  Entries appear only when the corresponding data exists.
+  being Praat's own pick, click to apply), Inspect-flagged frames,
+  low-intensity frames, edited frames, and the outlined circle showing a
+  frame's value before the edit. Entries appear only when the corresponding
+  data exists. When an Inspect CSV is loaded, a second line summarises the
+  current token: how many flagged and low-intensity frames it has, or, for a
+  token flagged at token level with no flagged frames (extreme value /
+  level), a pointer to look at the whole contour, or an explicit "nothing
+  flagged by Inspect".
+* **F0 Correction: low-intensity frames marked on the plot.** Frames the
+  Inspect tab flagged as low intensity now carry an amber marker ring
+  (reading `flag_low_intensity` when present, else the `flag_notes` text).
+  Kept deliberately distinct from the red fill: red means a probable
+  tracking error, the amber ring only means the f0 estimate there is less
+  reliable. The ring co-exists with the red/blue fills, hover text says
+  "low intensity (f0 here is less reliable)", and the "Keep flag types"
+  filter's Low intensity class now has a visible counterpart on the plot.
+* **F0 Correction: the idle reminder dismisses itself.** The "Still
+  working?" note that appears after ten idle minutes used to stay until
+  closed by hand; the first interaction after it fires now takes it down
+  (it returns after the next ten idle minutes).
 * **Curate tab: "Flagged" now covers every Inspect check.** The amber
   highlight, the "Flagged" quick-select, and the flagged-count chip now use
   `flagged_token` (any check: extreme max/min, unusual level, frame-level

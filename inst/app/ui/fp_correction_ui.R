@@ -115,6 +115,12 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   fp_flag_types       <- reactiveVal(NULL)
   fp_flag_type_levels <- reactiveVal(character(0))
 
+  # Low-intensity frames from the same CSV, keyed by normalised token: a named
+  # list of numeric time vectors. Drawn as an amber marker ring rather than a
+  # red fill, since low intensity is advisory (the f0 there is less reliable)
+  # rather than a probable tracking error.
+  fp_lowint_frames <- reactiveVal(NULL)
+
   # flag_notes is free text assembled by inspect_f0(); group the individual
   # notes into the classes a user would filter by. Order is canonical
   # (token-level checks first, then frame-level, advisory last).
@@ -403,6 +409,12 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         swatch("width:9px; height:9px; background:#d9534f; border:1px solid #2c5f4f;"),
         "flagged by Inspect")))
     }
+    lowint_by_tok <- fp_lowint_frames()
+    if (!is.null(lowint_by_tok) && length(lowint_by_tok) > 0) {
+      entries <- c(entries, list(item(
+        swatch("width:9px; height:9px; background:#5cb89a; border:2px solid #e0a800;"),
+        "low intensity (advisory)")))
+    }
 
     if (!is.null(edit_diff())) {
       entries <- c(entries, list(
@@ -414,10 +426,55 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
              "value before the edit")))
     }
 
-    tags$p(style = paste("color:#888; font-size:0.82rem; margin:0 0 6px 0;",
-                         "line-height:1.9; display:flex; flex-wrap:wrap;",
-                         "align-items:center;"),
-      tags$strong(style = "margin-right:8px;", "Marks:"), entries)
+    # Second line: what the flags amount to for THIS token. Kept off the key
+    # itself so the legend stays a simple key; this is where "no red dots"
+    # is disambiguated (clean vs flagged-at-token-level, where the whole
+    # contour needs a look rather than particular frames).
+    tok_line <- NULL
+    if (!is.null(frames_by_tok) && length(frames_by_tok) > 0 &&
+        !is.null(tok) && nzchar(tok)) {
+      key <- make_corr_key(tok, isTRUE(input$fp_corr_strip_ext))
+      n_fl <- if (key %in% names(frames_by_tok)) nrow(frames_by_tok[[key]]) else 0L
+      n_li <- if (!is.null(lowint_by_tok) && key %in% names(lowint_by_tok))
+                length(lowint_by_tok[[key]]) else 0L
+      flagged_set <- fp_flagged_tokens()
+      tok_flagged <- !is.null(flagged_set) &&
+        key %in% make_corr_key(flagged_set, isTRUE(input$fp_corr_strip_ext))
+      classes <- {
+        m <- fp_flag_types()
+        if (!is.null(m) && key %in% names(m)) m[[key]] else character(0)
+      }
+      msg <- if (n_fl > 0) {
+        nows(sprintf("This token: %d flagged frame%s", n_fl,
+                     if (n_fl == 1) "" else "s"),
+             if (n_li > 0) sprintf(", %d low-intensity frame%s", n_li,
+                                   if (n_li == 1) "" else "s"),
+             if (length(classes) > 0)
+               paste0(" (", paste(classes, collapse = ", "), ")"),
+             ".")
+      } else if (tok_flagged) {
+        nows("This token: no flagged frames, but it is flagged at token ",
+             "level",
+             if (length(classes) > 0)
+               paste0(" (", paste(classes, collapse = ", "), ")"),
+             ", so look at the whole contour rather than particular frames.")
+      } else if (n_li > 0) {
+        nows(sprintf("This token: not flagged; %d low-intensity frame%s.",
+                     n_li, if (n_li == 1) "" else "s"))
+      } else {
+        "This token: nothing flagged by Inspect."
+      }
+      tok_line <- tags$p(style = paste("color:#999; font-size:0.78rem;",
+                                       "margin:-2px 0 6px 0; font-style:italic;"),
+                         msg)
+    }
+
+    tagList(
+      tags$p(style = paste("color:#888; font-size:0.82rem; margin:0 0 6px 0;",
+                           "line-height:1.9; display:flex; flex-wrap:wrap;",
+                           "align-items:center;"),
+        tags$strong(style = "margin-right:8px;", "Marks:"), entries),
+      tok_line)
   })
 
   # Banner shown above the plot when the current token has been discarded
@@ -1171,6 +1228,35 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     } else {
       fp_flagged_frames(NULL)
     }
+
+    # --- 3) Low-intensity frames (advisory, marked with an amber ring) ---
+    # Kept separate from the jump flags on purpose: red fill means "probably a
+    # tracking error", whereas low intensity only means the estimate is less
+    # reliable there. Read from flag_low_intensity when present, else from the
+    # flag_notes text, so either Inspect download works.
+    lowint_col <- if ("flag_low_intensity" %in% names(df)) "flag_low_intensity" else NULL
+    time_col2  <- if ("time" %in% names(df)) "time"
+                  else grep("^time$", names(df), ignore.case = TRUE, value = TRUE)[1]
+    li_mask <- if (!is.null(lowint_col)) {
+      suppressWarnings(as.logical(df[[lowint_col]])) %in% TRUE
+    } else if ("flag_notes" %in% names(df)) {
+      grepl("low intensity", as.character(df$flag_notes))
+    } else {
+      rep(FALSE, nrow(df))
+    }
+    if (any(li_mask) && !is.na(time_col2) && length(time_col2) > 0) {
+      sub_li <- df[li_mask, , drop = FALSE]
+      sub_li <- sub_li[!is.na(sub_li[[col]]) & !is.na(sub_li[[time_col2]]), , drop = FALSE]
+      if (nrow(sub_li) > 0) {
+        fp_lowint_frames(split(
+          as.numeric(sub_li[[time_col2]]),
+          make_corr_key(sub_li[[col]], isTRUE(input$fp_corr_strip_ext))))
+      } else {
+        fp_lowint_frames(NULL)
+      }
+    } else {
+      fp_lowint_frames(NULL)
+    }
   })
 
   # Normalise a token-like string for matching:
@@ -1486,6 +1572,21 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       flagged_idx <- unique(flagged_idx)
     }
 
+    # Low-intensity frames from the same CSV, matched the same way.
+    lowint_idx <- integer(0)
+    lowint_by_tok <- fp_lowint_frames()
+    if (!is.null(lowint_by_tok) && tok_key %in% names(lowint_by_tok)) {
+      lt <- lowint_by_tok[[tok_key]]
+      step <- if (nrow(f0_df) >= 2) median(diff(f0_df$time), na.rm = TRUE) else 0.005
+      if (is.na(step) || step <= 0) step <- 0.005
+      tol <- step / 2
+      for (k in seq_along(lt)) {
+        i <- which(abs(f0_df$time - lt[k]) <= tol)
+        if (length(i) > 0) lowint_idx <- c(lowint_idx, i[1])
+      }
+      lowint_idx <- unique(lowint_idx)
+    }
+
     # --- Pre-filter NA rows before plotting ---
     # Plotly silently drops NA y-values from x/y but KEEPS per-point arrays
     # (marker.color, .size) at their original length, mis-aligning colors with
@@ -1499,6 +1600,8 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     # Map flagged + selected indices from full-data → plot-data positions
     flagged_in_plot <- match(flagged_idx, plot_idx)
     flagged_in_plot <- flagged_in_plot[!is.na(flagged_in_plot)]
+    lowint_in_plot <- match(lowint_idx, plot_idx)
+    lowint_in_plot <- lowint_in_plot[!is.na(lowint_in_plot)]
     sel_in_plot <- match(sel, plot_idx)
     sel_in_plot <- sel_in_plot[!is.na(sel_in_plot)]
 
@@ -1528,6 +1631,15 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
 
     point_colors <- rep("#5cb89a", nrow(f0_plot))
     point_sizes  <- base_sizes
+    # Marker ring: the fill says what the frame IS (normal / flagged /
+    # selected), the ring carries the advisory low-intensity cue, so the two
+    # can co-occur on one dot without either hiding the other.
+    point_borders <- rep("#2c5f4f", nrow(f0_plot))
+    border_widths <- rep(1, nrow(f0_plot))
+    if (length(lowint_in_plot) > 0) {
+      point_borders[lowint_in_plot] <- "#e0a800"   # amber ring — low intensity
+      border_widths[lowint_in_plot] <- 2.5
+    }
     if (length(flagged_in_plot) > 0) {
       # Colour only — keep the intensity-driven size; red already marks the flag.
       point_colors[flagged_in_plot] <- "#d9534f"   # red — Inspect-flagged
@@ -1547,6 +1659,11 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         sprintf("%s<br>intensity: %.1f dB", hover_text[has_int], intens_plot[has_int])
       else
         sprintf("%s<br>intensity: %.2f (relative)", hover_text[has_int], intens_plot[has_int])
+    }
+    if (length(lowint_in_plot) > 0) {
+      hover_text[lowint_in_plot] <- paste0(
+        hover_text[lowint_in_plot],
+        "<br><b>low intensity</b> (f0 here is less reliable)")
     }
     if (length(flagged_in_plot) > 0) {
       hover_text[flagged_in_plot] <- paste0(hover_text[flagged_in_plot],
@@ -1681,7 +1798,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       type = "scatter", mode = "markers+lines",
       yaxis = "y",
       marker = list(size = point_sizes, color = point_colors,
-                    line = list(width = 1, color = "#2c5f4f")),
+                    line = list(width = border_widths, color = point_borders)),
       line = list(color = "#5cb89a", width = 1),
       customdata = plot_idx,               # original frame index
       text = hover_text, hoverinfo = "text",
@@ -2610,7 +2727,11 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       # Idle-timeout reminder: arm a client-side timer that nudges the user to
       # save before shinyapps.io drops an inactive session. Resets on any
       # interaction; fires input$fp_idle_warning after ~10 idle minutes.
-      tags$script(HTML("(function(){ if(window.__shinytoneIdleWarn) return; window.__shinytoneIdleWarn=true; var IDLE_MS=10*60*1000, t=null; function arm(){ if(t) clearTimeout(t); t=setTimeout(function(){ if(window.Shiny && Shiny.setInputValue){ Shiny.setInputValue('fp_idle_warning', Date.now(), {priority:'event'}); } }, IDLE_MS); } ['mousemove','mousedown','keydown','scroll','touchstart','click'].forEach(function(ev){ document.addEventListener(ev, arm, {passive:true}); }); arm(); })();")),
+      # The first interaction after the warning fires also dismisses it
+      # (fp_idle_resume -> removeNotification), so the message does not sit
+      # stale while the user is back at work; it returns after the next
+      # ten idle minutes.
+      tags$script(HTML("(function(){ if(window.__shinytoneIdleWarn) return; window.__shinytoneIdleWarn=true; var IDLE_MS=10*60*1000, t=null, fired=false; function arm(){ if(t) clearTimeout(t); if(fired){ fired=false; if(window.Shiny && Shiny.setInputValue){ Shiny.setInputValue('fp_idle_resume', Date.now(), {priority:'event'}); } } t=setTimeout(function(){ if(window.Shiny && Shiny.setInputValue){ fired=true; Shiny.setInputValue('fp_idle_warning', Date.now(), {priority:'event'}); } }, IDLE_MS); } ['mousemove','mousedown','keydown','scroll','touchstart','click'].forEach(function(ev){ document.addEventListener(ev, arm, {passive:true}); }); arm(); })();")),
 
       tags$h4("Audio"),
       uiOutput("fp_corr_audio"),
@@ -2803,6 +2924,11 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       tags$span(icon("clock"),
         HTML(" <strong>Still working?</strong> The app can disconnect after a stretch of inactivity, which would lose unsaved edits. To keep your progress, use <em>Download all tokens</em> (and, if you want the history, <em>Download edit log</em>) before stepping away.")),
       type = "warning", duration = NULL, id = "fp_idle_warning_note")
+  }, ignoreInit = TRUE)
+
+  # First interaction after the idle warning: take the note down again.
+  observeEvent(input$fp_idle_resume, {
+    removeNotification("fp_idle_warning_note")
   }, ignoreInit = TRUE)
 
   # ---- Edit handlers ----
