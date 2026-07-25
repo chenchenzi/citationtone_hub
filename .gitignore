@@ -29,3 +29,7 @@ node_modules/
 
 # Talk slides are kept local, not committed
 slides/
+
+# macOS Finder custom-folder-icon artifact (name contains a CR); breaks
+# rsconnect manifests if bundled
+Icon?
