@@ -52,17 +52,17 @@
   the unvoiced candidate is not numbered.
 * **F0 Correction: plot mark legend.** A "Marks:" strip above the plot names
   every non-obvious mark: f0 value, selected frame, Praat candidates (dot 1
-  being Praat's own pick, click to apply), sample-level jump flags,
-  low-intensity frames (drawn as a bare amber ring, since the ring can sit
-  on any fill colour), edited frames, and the outlined circle showing a
-  frame's value before the edit. Entries appear only when the corresponding
+  being Praat's own pick, click to apply), the two sample-level flags in
+  parallel wording ("jump or carryover", red fill; "low intensity", a bare
+  amber ring that can sit on any fill colour), edited frames, and the
+  outlined circle showing a frame's value before the edit. Entries appear only when the corresponding
   data exists. When an Inspect CSV is loaded, a tinted status box under the
-  key summarises the current token, its colour mirroring the plot: light
-  coral (dot-red border) with the flagged / low-intensity frame counts and
-  flag classes when red frames are on screen; amber with a pointer to look
-  at the whole contour for a token flagged at token level with no flagged
-  frames (extreme value / level); green with an explicit "nothing flagged
-  by Inspect". Flagged states add the reminder "Flags are leads, not
+  key summarises the current token: light coral (dot-red border) whenever the
+  token is flagged, with the frame counts and flag classes, or, for a
+  token-level flag with no flagged frames (extreme value / level), a
+  pointer to look at the whole contour; amber when the only signal is the
+  advisory low-intensity ring; green with an explicit "nothing flagged by
+  Inspect". Flagged states add the reminder "Flags are leads, not
   errors: verify by eye and ear before editing" on its own line.
 * **F0 Correction: low-intensity frames marked on the plot.** Frames the
   Inspect tab flagged as low intensity now carry an amber marker ring
