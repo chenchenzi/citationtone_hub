@@ -127,6 +127,17 @@ server <- function(input, output, session) {
   dataset <- reactive({
     raw <- raw_dataset()
     if (is.null(raw)) return(NULL)
+    # Whole-token discards from the F0 Correction tab travel in the CSV as
+    # token_dropped = TRUE (all_correctedf0.csv keeps every token). Excluded
+    # here by default — checkbox in the Start sidebar; NULL (not yet
+    # rendered) counts as on — so downstream tabs see only kept tokens. The
+    # raw upload itself stays untouched; unticking restores the full data.
+    if ("token_dropped" %in% names(raw) && !isFALSE(input$exclude_dropped)) {
+      td  <- suppressWarnings(as.logical(raw$token_dropped))
+      raw <- raw[!(td %in% TRUE), , drop = FALSE]
+      raw$token_dropped <- NULL   # constant FALSE now; keep pickers clean
+      rownames(raw) <- NULL
+    }
     m <- attached_metadata()
     if (!is.null(m) && !is.null(m$data) && !is.null(m$key) &&
         m$key %in% names(raw) && m$key %in% names(m$data)) {

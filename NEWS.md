@@ -24,7 +24,14 @@
   jumps) instead of only the "level too high / low" notes, so the exclude
   machinery can also serve as a whole-token disposal path for
   artefact-flagged tokens.
-
+* **Start tab: discarded tokens honoured.** Uploading a CSV that carries the
+  F0 Correction tab's `token_dropped` column (e.g. `all_correctedf0.csv`) now
+  pops a notification reporting how many tokens are marked discarded and
+  excludes those rows (and the flag column) from the working dataset by
+  default; a sidebar checkbox ("Exclude discarded tokens") restores them.
+  The uploaded file itself is never modified. Previously the discarded
+  tokens flowed silently into every downstream tab (Normalise, Inspect,
+  Visualise, the models, Summarise).
 * `flag_outliers()` (the speaker-level extreme-value screen) is now
   **one-sided**: a token is flagged `too_high` only when its per-token
   maximum is unusually high (`z_max > z_threshold`), and `too_low` only when

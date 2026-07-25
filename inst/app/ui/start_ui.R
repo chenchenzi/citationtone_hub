@@ -90,6 +90,12 @@ output$instruction_text <- renderUI({
       tags$li(tags$strong("speaker"), ": speaker ID (for by-speaker normalisation)"),
       tags$li(tags$strong("token"), ": unique recording / utterance ID")
     ),
+    tags$p(style = "color: #777; font-size: 0.82rem;",
+      "Continuing from the ", tags$strong("F0 Correction"), " tab? Upload its ",
+      tags$code("all_correctedf0.csv"), " here directly: tokens you discarded ",
+      "there (", tags$code("token_dropped = TRUE"), ") are detected on upload ",
+      "and excluded from the working dataset by default — a sidebar checkbox ",
+      "lets you keep them instead. The file itself is never modified."),
     tags$p("Here's what our sample data looks like (first 5 rows):"),
     {
       # Read the bundled sample CSV that lives in www/ alongside the JS
@@ -147,6 +153,64 @@ output$instruction_text <- renderUI({
     ),
     tags$hr()
   )
+})
+
+# ---- Discarded tokens (token_dropped) --------------------------------------
+# The F0 Correction tab's all_correctedf0.csv keeps every token and marks
+# whole-token discards with token_dropped = TRUE. Detect the column on upload,
+# tell the user how many tokens it flags, and offer a one-click exclusion
+# (default on). The filter itself lives in the shared dataset() reactive
+# (server.R); the raw upload is never modified, so unticking restores the
+# full data. Kept out of ui_fileUpload: re-rendering that output would
+# destroy the fileInput and wipe the upload.
+
+# Count discarded tokens in the raw upload. NULL when the column is absent.
+dropped_token_info <- reactive({
+  raw <- raw_dataset()
+  if (is.null(raw) || !"token_dropped" %in% names(raw)) return(NULL)
+  td <- suppressWarnings(as.logical(raw$token_dropped))
+  if ("token" %in% names(raw)) {
+    list(n_drop = length(unique(raw$token[td %in% TRUE])),
+         n_tot  = length(unique(raw$token)), unit = "token")
+  } else {
+    list(n_drop = sum(td %in% TRUE), n_tot = nrow(raw), unit = "row")
+  }
+})
+
+output$ui_dropped_tokens <- renderUI({
+  info <- dropped_token_info()
+  if (is.null(info)) return(NULL)
+  if (info$n_drop == 0) {
+    return(tags$div(style = "font-size: 0.78rem; color: #888; margin: -4px 0 6px 0;",
+      tags$code("token_dropped"), " column detected; no ",
+      paste0(info$unit, "s"), " are marked discarded."))
+  }
+  tagList(
+    tags$div(style = "margin-top: -4px;",
+      checkboxInput("exclude_dropped",
+                    sprintf("Exclude %d discarded %s%s (recommended)",
+                            info$n_drop, info$unit, if (info$n_drop == 1) "" else "s"),
+                    TRUE)),
+    tags$div(style = "font-size: 0.78rem; color: #888; margin: -10px 0 6px 0;",
+      sprintf("%d of %d %ss in this file carry ", info$n_drop, info$n_tot, info$unit),
+      tags$code("token_dropped = TRUE"),
+      " (whole-token discards from the ", tags$strong("F0 Correction"), " tab). ",
+      "Excluding removes those rows (and the flag column) from every F0 Analysis ",
+      "tab; the uploaded file itself is untouched.")
+  )
+})
+
+# One-off notification when an upload carries discarded tokens, so the
+# exclusion is never silent even if the user skips the sidebar.
+observeEvent(raw_dataset(), {
+  info <- dropped_token_info()
+  if (is.null(info) || info$n_drop == 0) return()
+  showNotification(
+    sprintf(paste0("This file marks %d of %d %ss as discarded (token_dropped). ",
+                   "They are excluded from the working dataset — untick ",
+                   "\"Exclude discarded %ss\" in the sidebar to keep them."),
+            info$n_drop, info$n_tot, info$unit, info$unit),
+    type = "message", duration = 8, id = "f0a_dropped_tokens")
 })
 
 # Observe when the file is uploaded and set the dataset name

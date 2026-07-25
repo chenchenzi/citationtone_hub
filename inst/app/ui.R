@@ -1719,8 +1719,11 @@ ui <- fluidPage(
                         sidebarPanel(
                           titlePanel("F0 Time-series"),
                           # Conditional UI based on tabs
-                          conditionalPanel("input.tabs_data == 'Start'", 
+                          conditionalPanel("input.tabs_data == 'Start'",
                                            uiOutput("ui_fileUpload"),
+                                           # Discarded-token (token_dropped) exclusion,
+                                           # shown only when the upload carries the column
+                                           uiOutput("ui_dropped_tokens"),
                                            # Horizontal line ----
                                            tags$hr(),
                                            uiOutput("ui_dataset_name"),
