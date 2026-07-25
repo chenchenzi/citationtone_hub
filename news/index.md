@@ -5,21 +5,83 @@
 - **F0 Correction tab: whole-token discard.** A new “Whole token” edit
   group adds **Discard token** / **Restore token** for tokens that are
   beyond repair: instead of fixing frames, the whole token is marked as
-  dropped. Non-destructive — the f0 values are kept, and both downloads
-  gain a `token_dropped` column (`TRUE` for discarded tokens) to filter
-  on downstream. Discarded tokens show a ✗ in the token picker and a
-  banner above the plot, appear in the edit log (Undo restores, as does
-  the Restore button), survive the save/re-upload resume cycle via the
-  new column, and a “Kept + discarded / Only kept / Only discarded”
-  filter joins the edit-status drawer.
+  dropped. Non-destructive, since the f0 values are kept and both
+  downloads gain a `token_dropped` column (`TRUE` for discarded tokens)
+  to filter on downstream. Discarded tokens show a ✗ in the token picker
+  and a banner above the plot, appear in the edit log (Undo restores, as
+  does the Restore button), survive the save/re-upload resume cycle via
+  the new column, and a “Kept + discarded / Only kept / Only discarded”
+  filter joins the edit-status drawer. The sidebar progress line and
+  every discard notification report the running share of the corpus
+  discarded, e.g. “Discarded: 812 of 8000 (10.2%)”.
 - **F0 Correction tab: bulk discard of flagged tokens.** Once an
   Inspect-tab CSV is loaded in the filter drawer, a **Discard all
-  flagged tokens** button (with confirmation) marks the entire flagged
-  set as discarded in one click — the fast path for large corpora: drop
-  all flagged tokens, then step through (“Only discarded”) and Restore
-  the ones worth repairing. A **Restore all** button next to the discard
-  toggle un-discards *every* discarded token — bulk and manual discards
-  alike — and removes their edit-log rows.
+  flagged tokens** button marks the entire flagged set as discarded in
+  one click. The confirmation dialog reports how many tokens that is and
+  what share of the corpus they represent. This is the fast route for
+  large corpora: discard the flagged set, then optionally review it
+  (“Only discarded”) and Restore any worth repairing. A **Restore all**
+  button next to the discard toggle un-discards *every* discarded token,
+  bulk and manual alike, and removes their edit-log rows.
+- **F0 Correction tab: filter by flag type.** When the uploaded Inspect
+  CSV carries `flag_notes`, a **Keep flag types** checkbox group lists
+  the artefact classes present (extreme value, level, octave jump, jump
+  by rate of change, carryover, low intensity). Unticking a type hides
+  tokens that carry none of the ticked ones and narrows **Discard all
+  flagged tokens** to the same subset, so a corpus can be worked one
+  artefact class at a time (e.g. discard the octave jumps, review the
+  level outliers by hand). It combines with the discard-status filter,
+  so the discarded set can be reviewed one flag type at a time.
+- **F0 Extraction: Praat is the default f0 source when pitch files are
+  uploaded.** Uploading `.Pitch` / `.PitchTier` files alongside the
+  audio now selects “Use uploaded .Pitch / .PitchTier (Praat)”
+  automatically and says so, instead of leaving the radio on wrassp and
+  silently extracting without Praat’s per-frame candidate lists. It
+  fires once per session, so a later manual choice is never overridden.
+- **F0 Correction: Praat candidates promoted to an edit group.** Picking
+  a candidate writes to the contour, pushes undo history and logs an
+  edit row, so the block now sits with the other edit groups (after
+  Manual entry) rather than below the Display checkboxes. When no
+  `.Pitch` data is loaded it shows a short hint explaining how to enable
+  the option, so the feature is discoverable from a `.wav`-only session.
+  The candidate list now spells out that `s` is Praat’s strength and
+  that the tick marks the frame’s current value, and the empty state
+  mentions that the grey numbered dots on the plot can be clicked
+  directly. The Display checkbox “Top-3 Praat candidates on f0 plot” is
+  greyed out and unticked when the data carries no candidates, rather
+  than sitting ticked over an overlay that cannot appear, and its
+  caption explains that dot 1 is the value Praat chose (2 and 3 are its
+  next alternatives), that not every frame has three candidates, and
+  that the unvoiced candidate is not numbered.
+- **F0 Correction: plot mark legend.** A “Marks:” strip above the plot
+  names every non-obvious mark: f0 value, selected frame, Praat
+  candidates (dot 1 being Praat’s own pick, click to apply), the two
+  sample-level flags in parallel wording (“jump or carryover”, red fill;
+  “low intensity”, a bare amber ring that can sit on any fill colour),
+  edited frames, and the outlined circle showing a frame’s value before
+  the edit. Entries appear only when the corresponding data exists. When
+  an Inspect CSV is loaded, a tinted status box under the key summarises
+  the current token: light coral (dot-red border) whenever the token is
+  flagged, with the frame counts and flag classes, or, for a token-level
+  flag with no flagged frames (extreme value / level), a pointer to look
+  at the whole contour; amber when the only signal is the advisory
+  low-intensity ring; green with an explicit “nothing flagged by
+  Inspect”. Flagged states add the reminder “Flags are leads, not
+  errors: verify by eye and ear before editing” on its own line.
+- **F0 Correction: low-intensity frames marked on the plot.** Frames the
+  Inspect tab flagged as low intensity now carry an amber marker ring
+  (reading `flag_low_intensity` when present, else the `flag_notes`
+  text). Kept deliberately distinct from the red fill: red means a
+  probable tracking error, the amber ring only means the f0 estimate
+  there is less reliable. The ring co-exists with the red/blue fills,
+  hover text says “low intensity (f0 here is less reliable)”, the legend
+  names it “flagged by low intensity”, and the “Keep flag types”
+  filter’s Low intensity class now has a visible counterpart on the
+  plot.
+- **F0 Correction: the idle reminder dismisses itself.** The “Still
+  working?” note that appears after ten idle minutes used to stay until
+  closed by hand; the first interaction after it fires now takes it down
+  (it returns after the next ten idle minutes).
 - **Curate tab: “Flagged” now covers every Inspect check.** The amber
   highlight, the “Flagged” quick-select, and the flagged-count chip now
   use `flagged_token` (any check: extreme max/min, unusual level,
@@ -35,6 +97,13 @@
   is never modified. Previously the discarded tokens flowed silently
   into every downstream tab (Normalise, Inspect, Visualise, the models,
   Summarise).
+- **Bulk-discard guidance.** An illustrated “Big corpus, small flagged
+  set? Bulk discard and review” guide joins the F0 Correction tab,
+  walking through flagging in Inspect, discarding the set, and the
+  optional review pass. When a corpus is large but lightly flagged (at
+  least 1000 tokens with at most 15% flagged; thresholds in
+  `offer_bulk_triage()`), the Inspect summary and the F0 Correction
+  flagged-CSV loader suggest that route proactively.
 - [`flag_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_outliers.md)
   (the speaker-level extreme-value screen) is now **one-sided**: a token
   is flagged `too_high` only when its per-token maximum is unusually
