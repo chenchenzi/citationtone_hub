@@ -413,7 +413,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     if (!is.null(lowint_by_tok) && length(lowint_by_tok) > 0) {
       entries <- c(entries, list(item(
         swatch("width:9px; height:9px; background:#5cb89a; border:2px solid #e0a800;"),
-        "low intensity (advisory)")))
+        "flagged by low intensity")))
     }
 
     if (!is.null(edit_diff())) {
@@ -454,12 +454,15 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         icon(ic), " ", ...)
       # Flags are screens, not verdicts; say so wherever a flag is reported.
       not_a_verdict <- tags$span(style = "opacity:0.85;",
-        nows(" ", tags$em("A flag is a pointer, not a verdict"),
-             ": flagged f0 can still be genuine, so look at the waveform ",
-             "and listen before editing."))
+        nows(" ", tags$em("Flags are leads, not errors"),
+             ": verify by eye and ear before editing."))
+      # Box colour mirrors the plot: light coral (dot-red border) when red
+      # flagged frames are on screen, amber for advisory / token-level
+      # states with no red dots, green for the all-clear.
+      coral <- function(...) flag_box("#fdf3f2", "#d9534f", "#7a2e26", "flag", ...)
       amber <- function(...) flag_box("#fff8e1", "#e0a800", "#6b5310", "flag", ...)
       tok_line <- if (n_fl > 0) {
-        amber(
+        coral(
           nows(tags$strong("This token: "),
                sprintf("%d flagged frame%s", n_fl, if (n_fl == 1) "" else "s"),
                if (n_li > 0) sprintf(", %d low-intensity frame%s", n_li,

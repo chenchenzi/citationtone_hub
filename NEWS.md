@@ -56,20 +56,21 @@
   low-intensity frames, edited frames, and the outlined circle showing a
   frame's value before the edit. Entries appear only when the corresponding
   data exists. When an Inspect CSV is loaded, a tinted status box under the
-  key summarises the current token: amber with the flagged / low-intensity
-  frame counts and flag classes, amber with a pointer to look at the whole
-  contour for a token flagged at token level with no flagged frames
-  (extreme value / level), or green with an explicit "nothing flagged by
-  Inspect". Flagged states add the reminder that a flag is a pointer, not a
-  verdict: flagged f0 can still be genuine, so look and listen before
-  editing.
+  key summarises the current token, its colour mirroring the plot: light
+  coral (dot-red border) with the flagged / low-intensity frame counts and
+  flag classes when red frames are on screen; amber with a pointer to look
+  at the whole contour for a token flagged at token level with no flagged
+  frames (extreme value / level); green with an explicit "nothing flagged
+  by Inspect". Flagged states add the reminder "Flags are leads, not
+  errors: verify by eye and ear before editing."
 * **F0 Correction: low-intensity frames marked on the plot.** Frames the
   Inspect tab flagged as low intensity now carry an amber marker ring
   (reading `flag_low_intensity` when present, else the `flag_notes` text).
   Kept deliberately distinct from the red fill: red means a probable
   tracking error, the amber ring only means the f0 estimate there is less
   reliable. The ring co-exists with the red/blue fills, hover text says
-  "low intensity (f0 here is less reliable)", and the "Keep flag types"
+  "low intensity (f0 here is less reliable)", the legend names it "flagged
+  by low intensity", and the "Keep flag types"
   filter's Low intensity class now has a visible counterpart on the plot.
 * **F0 Correction: the idle reminder dismisses itself.** The "Still
   working?" note that appears after ten idle minutes used to stay until
