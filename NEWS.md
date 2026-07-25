@@ -47,8 +47,7 @@
   the plot can be clicked directly. The Display checkbox "Top-3 Praat
   candidates on f0 plot" is greyed out and unticked when the data carries no
   candidates, rather than sitting ticked over an overlay that cannot appear,
-  and its caption notes that Praat often supplies only two candidates, so a
-  rank 3 dot is not always shown.
+  and its caption notes that not every frame has three candidates.
 * **F0 Correction: plot mark legend.** A "Marks:" strip above the plot names
   every non-obvious mark: f0 value, selected frame, Praat candidates ranked
   1 to 3 by strength (click one to apply), Inspect-flagged frames, edited

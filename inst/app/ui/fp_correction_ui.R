@@ -346,8 +346,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     if (has_cands) {
       tagList(cb, caption("#888",
         "Grey dots ranked 1 to 3 by strength. Click one to apply it to that ",
-        "frame. Praat often supplies only two, so a rank 3 dot is not always ",
-        "shown."))
+        "frame. Not every frame has three candidates."))
     } else {
       tagList(
         # tagQuery reaches the <input> itself; tagAppendAttributes would put
