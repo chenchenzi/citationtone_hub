@@ -1,5 +1,24 @@
 # shinytone (development version)
 
+* **F0 Correction tab: whole-token discard.** A new "Whole token" edit group
+  adds **Discard token** / **Restore token** for tokens that are beyond
+  repair: instead of fixing frames, the whole token is marked as dropped.
+  Non-destructive — the f0 values are kept, and both downloads gain a
+  `token_dropped` column (`TRUE` for discarded tokens) to filter on
+  downstream. Discarded tokens show a ✗ in the token picker and a banner
+  above the plot, appear in the edit log (Undo restores, as does the Restore
+  button), survive the save/re-upload resume cycle via the new column, and a
+  "Kept + discarded / Only kept / Only discarded" filter joins the
+  edit-status drawer.
+* **F0 Correction tab: bulk discard of flagged tokens.** Once an Inspect-tab
+  CSV is loaded in the filter drawer, a **Discard all flagged tokens** button
+  (with confirmation) marks the entire flagged set as discarded in one click
+  — the fast path for large corpora: drop all flagged tokens, then step
+  through ("Only discarded") and Restore the ones worth repairing. A
+  **Restore all** button next to the discard toggle un-discards *every*
+  discarded token — bulk and manual discards alike — and removes their
+  edit-log rows.
+
 * `flag_outliers()` (the speaker-level extreme-value screen) is now
   **one-sided**: a token is flagged `too_high` only when its per-token
   maximum is unusually high (`z_max > z_threshold`), and `too_low` only when

@@ -583,14 +583,18 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     }
     # Resume-from-previous-session metadata. If the uploaded CSV is a
     # shinytone all_correctedf0.csv from an earlier session, it carries
-    # `f0_corrected` and `edited` columns. Keep them so the Correction
-    # tab can restore previous edits, show ghost markers, and mark the
-    # tokens with ✎.
+    # `f0_corrected` and `edited` columns (and, since whole-token discards
+    # were added, `token_dropped`). Keep them so the Correction tab can
+    # restore previous edits and discards, show ghost markers, and mark the
+    # tokens with ✎ / ✗.
     if ("f0_corrected" %in% names(df)) {
       out$f0_corrected <- suppressWarnings(as.numeric(df$f0_corrected))
     }
     if ("edited" %in% names(df)) {
       out$edited <- suppressWarnings(as.logical(df$edited))
+    }
+    if ("token_dropped" %in% names(df)) {
+      out$token_dropped <- suppressWarnings(as.logical(df$token_dropped))
     }
     have_wav <- audio$basename[!is.na(audio$wav_path)]
     keep <- out$token %in% have_wav

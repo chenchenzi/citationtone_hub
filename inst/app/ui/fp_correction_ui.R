@@ -7,8 +7,11 @@
 #   * Halve f0 (octave-doubling fix)
 #   * Double f0 (octave-halving fix)
 #   * Delete frame(s)
+#   * Discard / Restore the whole token (beyond-repair tokens; also as a
+#     bulk action over every Inspect-flagged token)
 #   * Undo
-# Output: corrected f0 CSV with both original and corrected columns.
+# Output: corrected f0 CSV with original, corrected, and token_dropped
+# columns.
 ###############################################
 
 fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
@@ -69,6 +72,34 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     )
     fp_edit_log(rbind(cur, new_row))
   }
+  # Whole-token discards: token names the user marked as "drop the whole
+  # token" (instead of repairing frames). Non-destructive — the contour keeps
+  # its values; downloads carry a token_dropped column so downstream steps
+  # can filter, and Restore brings a token back at any time. Restoring also
+  # removes the token's "Discard token" row(s) from the edit log, mirroring
+  # how undo removes finalised edit rows.
+  fp_dropped <- reactiveVal(character(0))
+  # Signature of the discard set last applied from an uploaded CSV. The
+  # extraction tab's auto-load observer re-fires on unrelated changes (an
+  # extra .wav upload, a column-picker tweak) and re-emits fp_f0_data from
+  # the SAME file; without this guard every re-fire would clobber the
+  # discards and restores made since the upload. "" = nothing applied yet,
+  # which also matches a dataset with no discards.
+  fp_dropped_sig <- reactiveVal("")
+  # Previous filtered token list (non-reactive; UX hint only). When the
+  # current token vanishes from the filtered list (e.g. Restore under
+  # "Only discarded"), we advance to the nearest FOLLOWING token instead
+  # of snapping back to the first — otherwise the bulk-triage loop
+  # (discard all, review, restore keepers) restarts from the top on every
+  # Restore.
+  fp_prev_tokens <- character(0)
+  remove_discard_rows <- function(toks) {
+    cur <- fp_edit_log()
+    if (nrow(cur) == 0) return(invisible())
+    keep <- !(cur$token %in% toks & cur$action == "Discard token")
+    if (!all(keep)) fp_edit_log(cur[keep, , drop = FALSE])
+  }
+
   # Optional flagged-token filter: raw uploaded CSV + extracted token IDs.
   # fp_flagged_frames (if the CSV came from the Inspect tab) holds per-frame
   # flag info keyed by token: a named list, token -> data.frame(time, note).
@@ -110,35 +141,69 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   #   * current_f0() returns the corrected values for previously edited
   #     tokens, not the original,
   #   * the plot shows ghost markers + the edit-status banner, and
-  #   * ✎ keeps showing in the picker.
+  #   * ✎ / ✗ keep showing in the picker (whole-token discards come back
+  #     from the token_dropped column).
   # Runs whenever fp_f0_data() changes; only fires if the data carries
   # both f0_corrected and edited columns (the resume schema).
   observeEvent(fp_f0_data(), {
     df <- fp_f0_data()
     if (is.null(df)) return()
+
+    # Whole-token discards. Runs before the resume-schema guard so a swap
+    # to data WITHOUT the column (fresh extraction, an older save file)
+    # also resyncs — otherwise stale ✗ marks would leak token_dropped =
+    # TRUE into the downloads of a dataset the user never discarded from.
+    # The signature guard keeps re-emissions of the SAME file (extra .wav
+    # upload, column-picker tweak) from clobbering in-session discards and
+    # restores; the trade-off is that deliberately re-uploading an
+    # unchanged file does not re-apply its discard set.
+    toks_dropped <- character(0)
+    if ("token_dropped" %in% names(df)) {
+      td <- suppressWarnings(as.logical(df$token_dropped))
+      toks_dropped <- unique(as.character(df$token[!is.na(td) & td]))
+    }
+    sig <- paste(sort(toks_dropped), collapse = "\r")
+    dropped_applied <- FALSE
+    if (!identical(fp_dropped_sig(), sig)) {
+      fp_dropped(toks_dropped)
+      fp_dropped_sig(sig)
+      dropped_applied <- TRUE
+      # This session's "Discard token" log rows described the pre-resync
+      # state; restored-from-CSV discards carry no log rows, so keeping
+      # them would leave phantom rows that Undo/Restore can't reconcile.
+      remove_discard_rows(unique(fp_edit_log()$token))
+    }
+
     if (!all(c("f0_corrected", "edited") %in% names(df))) return()
 
     edited_mask <- !is.na(df$edited) & df$edited
     toks <- unique(df$token[edited_mask])
-    if (length(toks) == 0) return()
-
-    new_corr <- list()
-    for (tok in toks) {
-      sub <- df[df$token == tok, , drop = FALSE]
-      sub <- sub[order(sub$time), , drop = FALSE]
-      new_corr[[tok]] <- data.frame(
-        time = sub$time,
-        f0   = sub$f0_corrected,
-        stringsAsFactors = FALSE
-      )
+    if (length(toks) == 0 && !(dropped_applied && length(toks_dropped) > 0)) {
+      return()
     }
-    fp_corrections(new_corr)
-    fp_history(list())   # fresh undo stack; previous history is unrecoverable
+
+    if (length(toks) > 0) {
+      new_corr <- list()
+      for (tok in toks) {
+        sub <- df[df$token == tok, , drop = FALSE]
+        sub <- sub[order(sub$time), , drop = FALSE]
+        new_corr[[tok]] <- data.frame(
+          time = sub$time,
+          f0   = sub$f0_corrected,
+          stringsAsFactors = FALSE
+        )
+      }
+      fp_corrections(new_corr)
+      fp_history(list())   # fresh undo stack; previous history is unrecoverable
+    }
+    parts <- c(
+      if (length(toks) > 0) sprintf("%d edited token(s)", length(toks)),
+      if (dropped_applied && length(toks_dropped) > 0)
+        sprintf("%d discarded token(s)", length(toks_dropped)))
     showNotification(
-      sprintf(paste0("Restored previous corrections for %d token(s) from the ",
-                     "uploaded CSV. ✎ markers and ghost dots reflect the ",
-                     "earlier edits."),
-              length(toks)),
+      sprintf(paste0("Restored %s from the uploaded CSV. ✎ / ✗ markers and ",
+                     "ghost dots reflect the earlier session."),
+              paste(parts, collapse = " and ")),
       type = "message", duration = 6
     )
   }, ignoreNULL = TRUE)
@@ -161,6 +226,9 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   edited_tokens_set <- reactive({
     in_session <- {
       log_df <- fp_edit_log()
+      # "Discard token" rows are whole-token markers, not frame edits: a
+      # token that was only discarded must not show ✎ or count as edited.
+      log_df <- log_df[log_df$action != "Discard token", , drop = FALSE]
       if (nrow(log_df) > 0) unique(log_df$token) else character(0)
     }
     from_csv <- {
@@ -231,6 +299,31 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       tags$strong(sprintf("%d frame%s edited in this token.",
                           n, if (n == 1) "" else "s")),
       " Original values are shown on the plot as outlined grey markers."
+    )
+  })
+
+  # Banner shown above the plot when the current token has been discarded
+  # (whole-token drop). Complements the ✗ picker marker so the state is
+  # visible while actually looking at the token.
+  output$fp_corr_dropped_status <- renderUI({
+    tok <- input$fp_corr_token
+    if (is.null(tok) || !nzchar(tok) || !(tok %in% fp_dropped())) return(NULL)
+    tags$div(
+      style = paste(
+        "background: #fdecea;",
+        "border-left: 3px solid #d9534f;",
+        "padding: 8px 12px;",
+        "margin: 8px 0;",
+        "border-radius: 4px;",
+        "font-size: 0.88rem;",
+        "color: #5a1f1a;"
+      ),
+      icon("ban"), " ",
+      tags$strong("This token is discarded."),
+      " Its f0 values are kept and it stays in the downloads with ",
+      tags$code("token_dropped = TRUE"), " (drop those rows in your ",
+      "analysis), or click ", tags$strong("Restore token"),
+      " in the sidebar to keep it."
     )
   })
 
@@ -357,6 +450,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       tags$div(style = "color: #888; font-size: 0.72rem; margin-top: -8px; margin-bottom: 4px; font-style: italic; line-height: 1.45;",
         HTML(paste(
           "<strong>✎</strong> = has edited frames (this session, or from a previously uploaded corrected CSV);",
+          "<strong>✗</strong> = discarded (whole token; kept in downloads with <code>token_dropped = TRUE</code>);",
           "<strong>●</strong> = has frame-level f0 artefact flags from the Inspect tab.",
           "Unprefixed tokens are flagged for out-of-range values only (look at the whole contour) or haven't been edited yet.",
           sep = "<br>"))),
@@ -388,7 +482,11 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           uiOutput("fp_corr_tone_col_picker"),
           uiOutput("fp_corr_tone_keep_picker"),
           checkboxInput("fp_corr_only_flagged",
-                        "Only show flagged tokens", value = FALSE)
+                        "Only show flagged tokens", value = FALSE),
+          # Bulk triage: discard every Inspect-flagged token in one click,
+          # then step through them and Restore the ones worth repairing.
+          # Rendered only once a flagged set has been identified.
+          uiOutput("fp_corr_bulk_discard_ui")
         )
       ),
 
@@ -398,13 +496,23 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       # mid-session or from a re-uploaded corrected CSV.
       tags$details(style = "margin-top: 4px; margin-bottom: 4px;",
         tags$summary(style = "cursor:pointer; font-size: 0.85rem; color: #4a7868; font-weight: 600;",
-                     icon("pen-to-square"), " Filter by edit status"),
+                     icon("pen-to-square"), " Filter by edit / discard status"),
         div(style = "padding: 6px 0 2px 0;",
           radioButtons("fp_corr_edit_filter",
                        label = NULL,
                        choices = c("All tokens"     = "all",
                                    "Only unedited"  = "unedited",
                                    "Only edited"    = "edited"),
+                       selected = "all",
+                       inline = TRUE),
+          # Discard-status filter: "Only discarded" reviews what a bulk
+          # discard marked; "Only kept" hides discarded tokens from further
+          # editing passes. ANDs with the edit-status radio above.
+          radioButtons("fp_corr_drop_filter",
+                       label = NULL,
+                       choices = c("Kept + discarded" = "all",
+                                   "Only kept"        = "kept",
+                                   "Only discarded"   = "discarded"),
                        selected = "all",
                        inline = TRUE)
         )
@@ -488,6 +596,17 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         )
       ),
 
+      # ---- Group 5: Whole token ----
+      # Discard drops the whole token instead of repairing frames; Restore
+      # brings it back. The button toggles with the current token's state
+      # (rendered in fp_corr_discard_ui).
+      div(class = "fp-edit-group",
+        div(class = "fp-edit-group-label", "Whole token"),
+        div(class = "fp-edit-row",
+          uiOutput("fp_corr_discard_ui")
+        )
+      ),
+
       # ---- Undo (separated from edit groups) ----
       div(style = "margin-top: 12px;",
         actionButton("fp_corr_undo", "Undo last edit",
@@ -519,7 +638,10 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       tags$small(style = "color:#888; display:block; margin-top:4px; line-height: 1.5;",
         HTML(paste0(
           "<strong>Current token</strong> &rarr; <code>&lt;token&gt;_f0.csv</code><br>",
-          "<strong>All tokens</strong> &rarr; <code>all_correctedf0.csv</code>")))
+          "<strong>All tokens</strong> &rarr; <code>all_correctedf0.csv</code><br>",
+          "Discarded tokens stay in both files, marked ",
+          "<code>token_dropped = TRUE</code> — drop those rows in your ",
+          "analysis, e.g. <code>subset(d, !token_dropped)</code>.")))
     )
   })
   # Eager render so Shiny binds the selectInput even before the conditional
@@ -557,7 +679,8 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     # Tokens that have at least one edit, either in this session OR
     # carried over from a previously uploaded corrected CSV (see the
     # edited_tokens_set() reactive for details).
-    edited_set <- edited_tokens_set()
+    edited_set  <- edited_tokens_set()
+    dropped_set <- fp_dropped()
 
     # Tokens that have per-frame flags from an uploaded Inspect-tab CSV.
     frames_by_tok <- fp_flagged_frames()
@@ -572,6 +695,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       tok      <- toks[i]
       key      <- tok_keys[i]
       prefix   <- ""
+      if (tok %in% dropped_set)       prefix <- paste0(prefix, "✗ ")
       if (tok %in% edited_set)        prefix <- paste0(prefix, "✎ ")
       if (key %in% flagged_set)       prefix <- paste0(prefix, "● ")
       paste0(prefix, tok)
@@ -579,8 +703,24 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     named_choices <- setNames(toks, labels)
 
     current  <- isolate(input$fp_corr_token)
-    selected <- if (!is.null(current) && nzchar(current) && current %in% toks) current
-                else toks[1]
+    selected <- if (!is.null(current) && nzchar(current) && current %in% toks) {
+      current
+    } else {
+      # The current token just left the filtered list (typically: Restore
+      # under "Only discarded", or a filter change). Advance to the nearest
+      # token that FOLLOWED it in the previous list, so triage loops keep
+      # moving forward instead of snapping back to the first token.
+      pos <- if (!is.null(current)) match(current, fp_prev_tokens) else NA
+      nxt <- if (!is.na(pos)) {
+        after <- fp_prev_tokens[-seq_len(pos)]
+        cand  <- toks[toks %in% after]
+        if (length(cand) > 0) cand[1] else toks[length(toks)]
+      } else {
+        toks[1]
+      }
+      nxt
+    }
+    fp_prev_tokens <<- toks
     updateSelectInput(session, "fp_corr_token",
                       choices  = named_choices,
                       selected = selected)
@@ -610,6 +750,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     updateSelectInput(session,     "fp_corr_tone_col",    selected = "")
     updateCheckboxInput(session,   "fp_corr_only_flagged", value = FALSE)
     updateRadioButtons(session,    "fp_corr_edit_filter", selected = "all")
+    updateRadioButtons(session,    "fp_corr_drop_filter", selected = "all")
     # Confirm the effect explicitly: the selected token stays put after a clear,
     # so report how many tokens are now visible to make it obvious the filters
     # lifted (the alternative reads as "nothing happened").
@@ -717,6 +858,51 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   outputOptions(output, "fp_corr_speaker_keep_picker", suspendWhenHidden = FALSE)
   outputOptions(output, "fp_corr_tone_col_picker",     suspendWhenHidden = FALSE)
   outputOptions(output, "fp_corr_tone_keep_picker",    suspendWhenHidden = FALSE)
+
+  # ---- Whole-token discard: toggle button + restore-all ----
+  # The main button reflects the current token's state (Discard ↔ Restore);
+  # "Restore all" appears once anything is discarded. A re-rendered
+  # actionButton resets its input value to 0, which observeEvent ignores
+  # (shinyActionButtonValue semantics), so the toggle re-render is safe.
+  output$fp_corr_discard_ui <- renderUI({
+    tok <- input$fp_corr_token
+    has_tok <- !is.null(tok) && nzchar(tok)
+    dropped <- fp_dropped()
+    tagList(
+      if (has_tok && tok %in% dropped)
+        actionButton("fp_corr_restore", "Restore token",
+                     icon = icon("rotate-left"),
+                     title = "Keep this token after all (un-discard it)")
+      else
+        actionButton("fp_corr_discard", "Discard token",
+                     icon = icon("ban"),
+                     title = paste("Drop the whole token instead of repairing",
+                                   "it. Non-destructive: values are kept and",
+                                   "downloads mark it token_dropped = TRUE.")),
+      if (length(dropped) > 0)
+        actionButton("fp_corr_restore_all",
+                     sprintf("Restore all (%d)", length(dropped)),
+                     class = "btn-sm",
+                     title = "Un-discard every discarded token")
+    )
+  })
+  outputOptions(output, "fp_corr_discard_ui", suspendWhenHidden = FALSE)
+
+  # Bulk triage: shown in the CSV-filter drawer once a flagged set exists.
+  output$fp_corr_bulk_discard_ui <- renderUI({
+    flagged <- fp_flagged_tokens()
+    if (is.null(flagged) || length(flagged) == 0) return(NULL)
+    tagList(
+      actionButton("fp_corr_discard_flagged", "Discard all flagged tokens",
+                   icon = icon("ban"), class = "btn-sm",
+                   title = "Mark every flagged token as discarded (asks for confirmation)"),
+      tags$div(style = "color: #888; font-size: 0.72rem; font-style: italic; margin-top: 4px;",
+        "Fast triage for a big corpus: discard the whole flagged set in one ",
+        "click, then step through (", tags$em("Only discarded"),
+        " in the edit / discard filter) and Restore the ones worth repairing.")
+    )
+  })
+  outputOptions(output, "fp_corr_bulk_discard_ui", suspendWhenHidden = FALSE)
 
   # Extract the set of "flagged tokens" whenever the user (re-)picks the column.
   # Detection rules (first match wins):
@@ -868,6 +1054,16 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       }
     }
 
+    # 5) Discard-status filter ("Kept + discarded" / "Only kept" /
+    # "Only discarded"). "Only discarded" is the review pass after a bulk
+    # discard; "Only kept" excludes discarded tokens from further editing.
+    drop_mode <- input$fp_corr_drop_filter
+    if (!is.null(drop_mode) && drop_mode %in% c("kept", "discarded")) {
+      dropped <- fp_dropped()
+      keep <- if (drop_mode == "kept") keep[!(keep %in% dropped)]
+              else                     keep[keep %in% dropped]
+    }
+
     keep
   })
 
@@ -889,6 +1085,10 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       if (isTRUE(input$fp_corr_only_flagged)) active <- c(active, "flagged list")
       if (!is.null(input$fp_corr_speaker_col) && nzchar(input$fp_corr_speaker_col)) active <- c(active, "speaker")
       if (!is.null(input$fp_corr_tone_col)    && nzchar(input$fp_corr_tone_col))    active <- c(active, "tone")
+      if (!is.null(input$fp_corr_edit_filter) && input$fp_corr_edit_filter != "all")
+        active <- c(active, "edit status")
+      if (!is.null(input$fp_corr_drop_filter) && input$fp_corr_drop_filter != "all")
+        active <- c(active, "discard status")
       if (length(active) > 0) {
         return(sprintf("No tokens match the active filter%s (%s).",
                        if (length(active) > 1) "s" else "",
@@ -899,15 +1099,18 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     cur <- input$fp_corr_token
     idx <- if (is.null(cur) || !nzchar(cur)) 0L
            else { m <- match(cur, toks); if (is.na(m)) 0L else m }
-    n_edited <- length(fp_corrections())
+    n_edited  <- length(fp_corrections())
+    n_dropped <- length(fp_dropped())
+    dropped_part <- if (n_dropped > 0) sprintf("  ·  Discarded: %d", n_dropped)
+                    else ""
     flagged_total <- if (isTRUE(input$fp_corr_only_flagged) &&
                          !is.null(fp_flagged_tokens())) {
       sprintf("  ·  Flagged: %d", length(toks))
     } else {
       ""
     }
-    sprintf("Token %d / %d  ·  Edited: %d%s",
-            idx, length(toks), n_edited, flagged_total)
+    sprintf("Token %d / %d  ·  Edited: %d%s%s",
+            idx, length(toks), n_edited, dropped_part, flagged_total)
   })
 
   # Selection text: count + time / f0 readout of selected frame(s)
@@ -1534,6 +1737,10 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
             // Skip if focus is in a text-y input
             var t = e.target && e.target.tagName ? e.target.tagName.toLowerCase() : '';
             if (t === 'input' || t === 'textarea' || t === 'select') return;
+            // Skip while any modal is open (e.g. the bulk-discard
+            // confirmation): Delete/Backspace etc. must not edit the
+            // contour behind the dialog.
+            if (document.querySelector('.modal.in, .modal.show, .modal[style*=\"display: block\"]')) return;
             // Only act when F0 Correction tab is visible
             var fp = window.Shiny && Shiny.shinyapp ? Shiny.shinyapp.$inputValues : null;
             if (!fp || fp.tabs_fp !== 'F0 Correction') return;
@@ -1647,6 +1854,12 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           tags$li(tags$strong("Manual entry:"),
             " type a specific Hz value and click ", tags$code("Apply"),
             " to set every selected frame to it."),
+          tags$li(tags$strong("Whole token:"), " ",
+            tags$code("Discard token"),
+            " drops the token instead of repairing it — non-destructive: the ",
+            "values are kept and the downloads mark it ",
+            tags$code("token_dropped = TRUE"), " for you to filter out ",
+            "downstream. ", tags$code("Restore token"), " brings it back."),
           tags$li(tags$strong("Praat candidates"),
             " (only when the token came from a ", tags$code(".Pitch"),
             " file): when exactly one frame is selected, alternative ",
@@ -1944,7 +2157,13 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
               tags$li("Filters become live, and tokens with frame-level ",
                       "artefact flags get a ",
                       tags$strong("●"),
-                      " in the token picker.")
+                      " in the token picker."),
+              tags$li("Big corpus? Click ",
+                      tags$span(class = "btn-chip", icon("ban"),
+                                " Discard all flagged tokens"),
+                      " to mark the whole flagged set as discarded in one ",
+                      "go, then step through and ", tags$strong("Restore"),
+                      " the ones worth repairing.")
             )
           )
         ),
@@ -2023,7 +2242,8 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
             tags$div(class = "resume-file",
                      icon("file-csv"), " all_correctedf0.csv"),
             tags$div(class = "resume-file-note",
-              "carries ", tags$code("f0_corrected"), " + ", tags$code("edited")),
+              "carries ", tags$code("f0_corrected"), " + ", tags$code("edited"),
+              " + ", tags$code("token_dropped")),
             tags$div(class = "resume-file", style = "margin-top: 12px;",
                      icon("file-csv"), " edit_log_....csv"),
             tags$div(class = "resume-file-note",
@@ -2046,8 +2266,9 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                       " you saved at the end of session 1."),
               tags$li("Open ",
                       tags$span(class = "tab-chip", "F0 Correction"),
-                      ": a notification confirms the restore, and ✎ marks, edited ",
-                      "dots, and the edit-status banner recover automatically."),
+                      ": a notification confirms the restore, and ✎ / ✗ marks, ",
+                      "edited dots, discards, and the edit-status banner ",
+                      "recover automatically."),
               tags$li("(Optional) Still in ",
                       tags$span(class = "tab-chip", "F0 Correction"),
                       ", click ",
@@ -2055,7 +2276,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                       " and pick the ", tags$code("edit_log_....csv"),
                       " you saved to bring the action-by-action history back into the Edit log table."),
               tags$li("Open the ",
-                      tags$strong("Filter by edit status"),
+                      tags$strong("Filter by edit / discard status"),
                       " drawer and pick ",
                       tags$span(class = "btn-chip", "Only unedited"),
                       " to pick up exactly where you left off.")
@@ -2096,6 +2317,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                                    "background:#5cb89a; border:1px solid #2c5f4f; ",
                                    "box-shadow: 0 0 0 3px rgba(230,160,0,0.4); margin-left:8px; margin-right:2px;")),
           tags$span("edited frame"))),
+      uiOutput("fp_corr_dropped_status"),
       uiOutput("fp_corr_edit_status"),
       plotly::plotlyOutput("fp_corr_plot", height = "560px"),
       # Sonify the (edited) contour, placed below the plot so the top stays
@@ -2222,10 +2444,34 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     df <- df[, schema, drop = FALSE]
     df$n_frames <- suppressWarnings(as.integer(df$n_frames))
     cur <- fp_edit_log()
+    # "Discard token" rows are live state markers, not plain history: the
+    # discard state itself comes back from the corrected-f0 CSV
+    # (token_dropped), not from the log. Keep an uploaded discard row only
+    # when its token is currently discarded and doesn't already have one —
+    # anything else would leave phantom or duplicate rows that Undo /
+    # Restore cannot reconcile.
+    is_disc <- !is.na(df$action) & df$action == "Discard token"
+    n_disc_skipped <- 0L
+    if (any(is_disc)) {
+      have_row <- unique(cur$token[cur$action == "Discard token"])
+      cand <- which(is_disc & df$token %in% fp_dropped() &
+                      !(df$token %in% have_row))
+      cand <- cand[!duplicated(df$token[cand])]
+      keep <- !is_disc
+      keep[cand] <- TRUE
+      n_disc_skipped <- sum(!keep)
+      df <- df[keep, , drop = FALSE]
+    }
     fp_edit_log(rbind(cur, df))
     showNotification(
-      sprintf("Restored %d edit-log row(s).%s", nrow(df),
-              if (nrow(cur) > 0) sprintf(" Added to %d row(s) already in this session.", nrow(cur)) else ""),
+      sprintf("Restored %d edit-log row(s).%s%s", nrow(df),
+              if (nrow(cur) > 0) sprintf(" Added to %d row(s) already in this session.", nrow(cur)) else "",
+              if (n_disc_skipped > 0)
+                sprintf(paste(" Skipped %d 'Discard token' row(s) for tokens",
+                              "that are not currently discarded (discard",
+                              "state comes from the corrected-f0 CSV, not",
+                              "the log)."), n_disc_skipped)
+              else ""),
       type = "message", duration = 6)
   }, ignoreInit = TRUE)
 
@@ -2345,6 +2591,23 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   })
   observeEvent(input$fp_corr_undo, {
     tok <- input$fp_corr_token
+
+    # If the most recent logged action for this token is an active
+    # whole-token discard, undo restores the token. A discard pushes
+    # nothing onto the contour history, so falling through would pop (and
+    # lose) an older snapshot while removing the discard row.
+    cur_log <- fp_edit_log()
+    tok_rows <- which(cur_log$token == tok)
+    if (length(tok_rows) > 0 &&
+        cur_log$action[tail(tok_rows, 1)] == "Discard token" &&
+        tok %in% fp_dropped()) {
+      fp_dropped(setdiff(fp_dropped(), tok))
+      fp_edit_log(cur_log[-tail(tok_rows, 1), , drop = FALSE])
+      showNotification("Discard undone — token restored.",
+                       type = "message", duration = 2)
+      return()
+    }
+
     h <- fp_history()
     if (!(tok %in% names(h)) || length(h[[tok]]) == 0) {
       showNotification("Nothing to undo.", type = "warning", duration = 3)
@@ -2366,7 +2629,10 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     # that token ends up empty, which is what we want.
     cur_log <- fp_edit_log()
     if (nrow(cur_log) > 0) {
-      tok_rows <- which(cur_log$token == tok)
+      # Skip "Discard token" rows: they are whole-token markers, not frame
+      # edits, so a contour undo must not consume them.
+      tok_rows <- which(cur_log$token == tok &
+                          cur_log$action != "Discard token")
       if (length(tok_rows) > 0) {
         cur_log <- cur_log[-tail(tok_rows, 1), , drop = FALSE]
         fp_edit_log(cur_log)
@@ -2374,6 +2640,107 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     }
 
     showNotification("Undone.", type = "message", duration = 2)
+  })
+
+  # ---- Whole-token discard / restore ----
+  # Discard marks the current token as dropped instead of repairing its
+  # frames. Non-destructive by design: the contour keeps its values, the
+  # downloads carry token_dropped = TRUE, and Restore reverses it (also
+  # removing the token's "Discard token" row from the edit log).
+  observeEvent(input$fp_corr_discard, {
+    tok <- input$fp_corr_token
+    if (is.null(tok) || !nzchar(tok) || tok %in% fp_dropped()) return()
+    fp_dropped(union(fp_dropped(), tok))
+    log_edit(tok, "Discard token", NA_integer_,
+             "whole token; values kept, token_dropped = TRUE in downloads")
+    showNotification(
+      sprintf(paste("Discarded %s. It stays in the downloads with",
+                    "token_dropped = TRUE; Restore token brings it back."),
+              tok),
+      type = "message", duration = 4)
+  })
+
+  observeEvent(input$fp_corr_restore, {
+    tok <- input$fp_corr_token
+    if (is.null(tok) || !nzchar(tok) || !(tok %in% fp_dropped())) return()
+    fp_dropped(setdiff(fp_dropped(), tok))
+    remove_discard_rows(tok)
+    showNotification(sprintf("Restored %s.", tok),
+                     type = "message", duration = 3)
+  })
+
+  observeEvent(input$fp_corr_restore_all, {
+    dropped <- fp_dropped()
+    if (length(dropped) == 0) return()
+    fp_dropped(character(0))
+    remove_discard_rows(dropped)
+    showNotification(
+      sprintf("Restored all %d discarded token(s).", length(dropped)),
+      type = "message", duration = 4)
+  })
+
+  # Flagged tokens present in the extracted data (same key-normalised
+  # matching as filtered_tokens) that are not yet discarded — the target
+  # set of the bulk action, shared by the button and the modal confirm.
+  bulk_discard_targets <- function() {
+    df <- fp_f0_data(); flagged <- fp_flagged_tokens()
+    if (is.null(df) || is.null(flagged) || length(flagged) == 0) {
+      return(character(0))
+    }
+    all_t <- unique(as.character(df$token))
+    strip_ext <- isTRUE(input$fp_corr_strip_ext)
+    hit <- all_t[make_corr_key(all_t, strip_ext) %in%
+                   make_corr_key(flagged, strip_ext)]
+    setdiff(hit, fp_dropped())
+  }
+
+  observeEvent(input$fp_corr_discard_flagged, {
+    targets <- bulk_discard_targets()
+    if (length(targets) == 0) {
+      showNotification(paste("No flagged tokens left to discard (none match",
+                             "the extracted tokens, or all are already",
+                             "discarded)."),
+                       type = "warning", duration = 5)
+      return()
+    }
+    showModal(modalDialog(
+      title = "Discard all flagged tokens?",
+      tags$p(sprintf("This marks %d flagged token(s) as discarded.",
+                     length(targets))),
+      tags$p(style = "color:#666; font-size:0.9rem;",
+        "Non-destructive: every f0 value is kept, and the downloads carry ",
+        tags$code("token_dropped = TRUE"), " for these tokens. You can ",
+        "Restore any token afterwards (or all at once)."),
+      footer = tagList(
+        modalButton("Cancel"),
+        actionButton("fp_corr_discard_flagged_confirm", "Discard all",
+                     class = "btn-danger")),
+      easyClose = TRUE))
+  })
+
+  observeEvent(input$fp_corr_discard_flagged_confirm, {
+    removeModal()
+    targets <- bulk_discard_targets()   # recompute: state may have moved
+    if (length(targets) == 0) return()
+    fp_dropped(union(fp_dropped(), targets))
+    # One log row per token (so a per-token Restore removes exactly its
+    # row), appended in a single rbind to keep big corpora fast.
+    fp_edit_log(rbind(fp_edit_log(), data.frame(
+      date          = format(Sys.Date(), "%Y-%m-%d"),
+      token         = targets,
+      action        = "Discard token",
+      n_frames      = NA_integer_,
+      frame_indices = NA_character_,
+      frame_times_s = NA_character_,
+      frame_pct     = NA_character_,
+      details       = "bulk: flagged by Inspect",
+      stringsAsFactors = FALSE)))
+    showNotification(
+      sprintf(paste("Discarded %d flagged token(s). Step through them",
+                    "(pick “Only discarded” in the edit / discard",
+                    "filter) and Restore any worth repairing."),
+              length(targets)),
+      type = "message", duration = 6)
   })
 
   # ---- Praat candidate selection (only when current token came from .Pitch) ----
@@ -2527,6 +2894,9 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       if (is.na(a) || is.na(b)) return(TRUE)
       abs(a - b) > 1e-6
     }, out$f0, out$f0_corrected)
+    # Whole-token discards: rows keep their (corrected) values; downstream
+    # analyses filter on this column. Also the resume schema for fp_dropped.
+    out$token_dropped <- out$token %in% fp_dropped()
     out
   }
 
