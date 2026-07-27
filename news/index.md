@@ -25,6 +25,20 @@
   (“Only discarded”) and Restore any worth repairing. A **Restore all**
   button next to the discard toggle un-discards *every* discarded token,
   bulk and manual alike, and removes their edit-log rows.
+- **F0 Correction tab: discard-share breakdown by speaker and tone.**
+  The corpus-wide discarded share can look harmless while the discards
+  pile up in one speaker or tone — worst case, a whole speaker × tone
+  cell is emptied and vanishes from the retained data. When the filter
+  drawer’s speaker / tone columns are picked (auto-guessed from the
+  uploaded Inspect CSV), the bulk-discard confirmation dialog shows what
+  the discard set would look like per speaker × tone cell with marginals
+  (“After this discard”), and a **Breakdown** button next to the discard
+  toggle reopens the same table for the current state. Cells are
+  `discarded/total (%)`, tinted red when a group would be fully
+  discarded and amber at half or more, with tokens absent from the CSV
+  grouped as “(no metadata)”. With only one of the two columns picked
+  the table reduces to that margin; with neither, the dialog shows the
+  total plus a hint to pick them.
 - **F0 Correction tab: filter by flag type.** When the uploaded Inspect
   CSV carries `flag_notes`, a **Keep flag types** checkbox group lists
   the artefact classes present (extreme value, level, octave jump, jump
