@@ -1123,7 +1123,14 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         actionButton("fp_corr_restore_all",
                      sprintf("Restore all (%d)", length(dropped)),
                      class = "btn-sm",
-                     title = "Un-discard every discarded token")
+                     title = "Un-discard every discarded token"),
+      if (length(dropped) > 0)
+        actionButton("fp_corr_discard_breakdown", "Breakdown",
+                     icon = icon("table-cells"), class = "btn-sm",
+                     title = paste("Discarded share of the corpus: total and",
+                                   "by speaker / tone (needs the speaker /",
+                                   "tone columns picked in the filter",
+                                   "drawer)"))
     )
   })
   outputOptions(output, "fp_corr_discard_ui", suspendWhenHidden = FALSE)
@@ -2612,8 +2619,15 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                            tags$span(class = "btn-chip", icon("ban"),
                                      " Discard all flagged tokens"),
                            " and confirm. The dialog reports what share of the ",
-                           "corpus that is, and the whole set gets ",
-                           tags$strong("✗"), " in one go."))
+                           "corpus that is — overall and per speaker × tone, ",
+                           "with fully discarded groups highlighted — and the ",
+                           "whole set gets ", tags$strong("✗"), " in one go.")),
+              tags$li(nows("Afterwards, ",
+                           tags$span(class = "btn-chip", icon("table-cells"),
+                                     " Breakdown"),
+                           " (next to the Discard / Restore buttons) reopens ",
+                           "the same by-speaker / by-tone table for the ",
+                           "current state."))
             )
           ),
 
@@ -3198,6 +3212,139 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
          pct = if (n_all > 0) 100 * n_drop / n_all else 0)
   }
 
+  # ---- Discard-share breakdown (total + by speaker / tone / both) ----
+  # The corpus-wide share can look harmless while every discard sits in one
+  # speaker or tone; worst case a whole speaker x tone cell is emptied and
+  # that tone goes unrepresented for that speaker. The breakdown shows
+  # dropped / total per group so this is visible before (confirm modal) and
+  # after (Breakdown button) a bulk discard. Groups come from the speaker /
+  # tone columns picked for the flagged-token CSV in the filter drawer —
+  # the extracted f0 data itself carries no speaker / tone columns.
+  corr_group_map <- reactive({
+    df  <- fp_flagged_raw()
+    col <- input$fp_corr_flagged_col
+    if (is.null(df) || is.null(col) || !nzchar(col) || !(col %in% names(df)))
+      return(NULL)
+    scol <- input$fp_corr_speaker_col
+    tcol <- input$fp_corr_tone_col
+    has_s <- !is.null(scol) && nzchar(scol) && scol %in% names(df)
+    has_t <- !is.null(tcol) && nzchar(tcol) && tcol %in% names(df)
+    if (!has_s && !has_t) return(NULL)
+    map <- data.frame(
+      key     = make_corr_key(df[[col]], isTRUE(input$fp_corr_strip_ext)),
+      speaker = if (has_s) as.character(df[[scol]]) else NA_character_,
+      tone    = if (has_t) as.character(df[[tcol]]) else NA_character_,
+      stringsAsFactors = FALSE)
+    # The CSV is typically long format (one row per frame) — one row per
+    # token is enough for a token -> group lookup.
+    map <- map[!duplicated(map$key), , drop = FALSE]
+    list(map = map, has_speaker = has_s, has_tone = has_t)
+  })
+
+  # "(no metadata)" groups tokens with no row in the CSV; keep it last so
+  # real groups read first.
+  breakdown_levels <- function(x) {
+    levs <- sort(unique(x[x != "(no metadata)"]))
+    if (any(x == "(no metadata)")) levs <- c(levs, "(no metadata)")
+    levs
+  }
+
+  # Breakdown of `dropped` (a set of token names) over every extracted
+  # token: total line, then a speaker x tone cross-table with marginals
+  # (which contains the by-speaker, by-tone, and per-cell views at once),
+  # or a single margin table when only one of the two columns is picked.
+  discard_breakdown_ui <- function(dropped) {
+    df <- fp_f0_data()
+    if (is.null(df)) return(NULL)
+    toks   <- unique(as.character(df$token))
+    n_all  <- length(toks)
+    n_drop <- sum(toks %in% dropped)
+    total_line <- tags$p(style = "margin-bottom: 6px;",
+      sprintf("Total discarded: %d of %d token(s) (%.1f%%).",
+              n_drop, n_all, if (n_all > 0) 100 * n_drop / n_all else 0))
+
+    gm <- corr_group_map()
+    if (is.null(gm)) {
+      return(tagList(total_line,
+        tags$p(style = "color: #888; font-size: 0.8rem; font-style: italic;",
+          paste("To break this down by speaker and tone, upload a",
+                "flagged-token CSV in the filter drawer and pick its",
+                "speaker / tone columns."))))
+    }
+
+    idx <- match(make_corr_key(toks, isTRUE(input$fp_corr_strip_ext)),
+                 gm$map$key)
+    grp <- function(v) { v <- v[idx]; v[is.na(v) | !nzchar(v)] <- "(no metadata)"; v }
+    d <- toks %in% dropped
+
+    hd_css   <- "padding: 2px 8px; text-align: left; border-bottom: 1px solid #ddd; font-weight: 600;"
+    lab_css  <- "padding: 2px 8px; font-weight: 600;"
+    cell_css <- "padding: 2px 8px; white-space: nowrap;"
+    # "dropped/total (pct)". Red when the whole group is discarded (the
+    # group would vanish from the retained data), amber at half or more.
+    cell <- function(mask) {
+      nt <- sum(mask); nd <- sum(d & mask)
+      if (nt == 0) return(tags$td(style = paste0(cell_css, " color: #ccc;"), "—"))
+      pct <- 100 * nd / nt
+      bg  <- if (nd == nt) " background: #fde8e8;"
+             else if (pct >= 50) " background: #fff8e1;" else ""
+      tags$td(style = paste0(cell_css, bg),
+              nows(sprintf("%d/%d ", nd, nt),
+                   tags$span(style = "color: #888;", sprintf("(%.0f%%)", pct))))
+    }
+
+    spk <- if (gm$has_speaker) grp(gm$map$speaker) else NULL
+    tn  <- if (gm$has_tone)    grp(gm$map$tone)    else NULL
+
+    tbl <- if (gm$has_speaker && gm$has_tone) {
+      spk_levs <- breakdown_levels(spk)
+      tn_levs  <- breakdown_levels(tn)
+      tags$table(style = "border-collapse: collapse; font-size: 0.82rem;",
+        tags$tr(tags$th(style = hd_css, "Speaker \\ Tone"),
+                lapply(tn_levs, function(t) tags$th(style = hd_css, t)),
+                tags$th(style = hd_css, "All")),
+        lapply(spk_levs, function(s) tags$tr(
+          tags$td(style = lab_css, s),
+          lapply(tn_levs, function(t) cell(spk == s & tn == t)),
+          cell(spk == s))),
+        tags$tr(tags$td(style = lab_css, "All"),
+                lapply(tn_levs, function(t) cell(tn == t)),
+                cell(rep(TRUE, n_all))))
+    } else {
+      g    <- if (gm$has_speaker) spk else tn
+      levs <- breakdown_levels(g)
+      tags$table(style = "border-collapse: collapse; font-size: 0.82rem;",
+        tags$tr(tags$th(style = hd_css,
+                        if (gm$has_speaker) "Speaker" else "Tone"),
+                lapply(levs, function(l) tags$th(style = hd_css, l)),
+                tags$th(style = hd_css, "All")),
+        tags$tr(tags$td(style = lab_css, "Discarded"),
+                lapply(levs, function(l) cell(g == l)),
+                cell(rep(TRUE, n_all))))
+    }
+
+    tagList(total_line,
+      tags$div(style = "max-height: 320px; overflow: auto;", tbl),
+      tags$p(style = "color: #666; font-size: 0.78rem; margin-top: 6px;",
+        nows("Cells are discarded/total tokens. ",
+             tags$span(style = "background: #fde8e8; padding: 0 4px;", "Red"),
+             ": the whole group is discarded and would vanish from the ",
+             "retained data. ",
+             tags$span(style = "background: #fff8e1; padding: 0 4px;", "Amber"),
+             ": half or more discarded. Uneven discards bias the retained ",
+             "sample — consider Restoring and repairing those groups.")))
+  }
+
+  # Current-state breakdown, opened from the Breakdown button next to the
+  # Discard / Restore controls.
+  observeEvent(input$fp_corr_discard_breakdown, {
+    showModal(modalDialog(
+      title = "Discarded share",
+      discard_breakdown_ui(fp_dropped()),
+      footer = modalButton("Close"),
+      easyClose = TRUE, size = "l"))
+  })
+
   observeEvent(input$fp_corr_discard_flagged, {
     targets <- bulk_discard_targets()
     if (length(targets) == 0) {
@@ -3229,6 +3376,13 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         nows("Non-destructive: every f0 value is kept, and the downloads carry ",
              tags$code("token_dropped = TRUE"), " for these tokens. You can ",
              "Restore any token afterwards, or all at once.")),
+      # Prospective breakdown: the corpus-wide share can hide discards that
+      # pile up in one speaker or tone, so show what the discard set would
+      # look like per group before it is committed.
+      tags$hr(style = "margin: 8px 0;"),
+      tags$p(style = "font-weight: 600; margin-bottom: 4px;",
+             "After this discard:"),
+      discard_breakdown_ui(union(fp_dropped(), targets)),
       footer = tagList(
         modalButton("Cancel"),
         actionButton("fp_corr_discard_flagged_confirm", "Discard all",
