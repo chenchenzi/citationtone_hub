@@ -39,6 +39,16 @@
   grouped as “(no metadata)”. With only one of the two columns picked
   the table reduces to that margin; with neither, the dialog shows the
   total plus a hint to pick them.
+- **GCA and GAMM guides: pointer to model structures the UI does not
+  cover.** Both guide boxes now close with a **Beyond the built-in
+  options** note. The checkboxes and dropdowns cover the structures most
+  often used for tone contours, but `lme4` and `mgcv` support many more
+  — by-speaker tone slopes `(1 + (ot1 + ot2) * tone | speaker)` or
+  uncorrelated terms via `||` for GCA; tensor-product interactions such
+  as `te(time_norm, duration)`, or smooths varying by a further factor,
+  for GAMMs. The note directs users to **Show R code**, which already
+  emits a runnable script reproducing the current fit, as the starting
+  point for editing the model formula.
 - **F0 Correction tab: filter by flag type.** When the uploaded Inspect
   CSV carries `flag_notes`, a **Keep flag types** checkbox group lists
   the artefact classes present (extreme value, level, octave jump, jump
