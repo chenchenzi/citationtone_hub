@@ -76,6 +76,17 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
               "AR1 assumes ", tags$strong("evenly-spaced frames within each token."),
               " It is robust to the occasional dropped frame, but treat rho with more caution for contours with long voiceless gaps (e.g. a medial voiceless consonant). Use the ",
               tags$strong("Run model diagnostics"), " ACF panel to check the correction worked."))
+        ),
+        tags$p(style = "margin-bottom: 0; margin-top: 8px;",
+          tags$strong("Beyond the built-in options:"),
+          " The controls above cover the smooth and random-smooth structures",
+          " most often used for tone contours, but mgcv supports many more,",
+          " e.g. tensor-product interactions with a covariate such as duration, ",
+          tags$code(style = code_style, "te(time_norm, duration)"),
+          ", or smooths that vary by a further factor such as prosodic",
+          " position. Click ", tags$strong("Show R code"), " to get a runnable",
+          " script that reproduces the current fit, then edit its model formula",
+          " to fit any structure mgcv accepts."
         )
       ),
       # --- Collapsible illustrated guide for multisyllabic words ---

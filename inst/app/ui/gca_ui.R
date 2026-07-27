@@ -51,8 +51,21 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
           tags$li(tags$strong("ot2"), " (quadratic) captures the curvature of the contour."),
           tags$li(tags$strong("ot3"), " (cubic) captures the asymmetry of curvature.")
         ),
-        tags$p(style = "margin-bottom: 0;",
+        tags$p(style = "margin-bottom: 8px;",
           tags$strong("Contrast coding:"), " Treatment (Dummy) Coding is used here."
+        ),
+        tags$p(style = "margin-bottom: 0;",
+          tags$strong("Beyond the built-in options:"),
+          " The checkboxes cover the common random-effect structures",
+          " (intercepts and polynomial slopes by speaker and by item), but",
+          " lme4 supports many more, e.g. by-speaker tone slopes, ",
+          tags$code(style = code_style, "(1 + (ot1 + ot2) * tone | speaker)"),
+          ", or uncorrelated terms via ",
+          tags$code(style = code_style, "||"), ".",
+          " Click ", tags$strong("Show R code"), " to get a runnable script that",
+          " reproduces the current fit, then edit its model formula to fit any",
+          " structure lme4 accepts. Other contrast codings can be set there in",
+          " the same way."
         )
       )
     )
