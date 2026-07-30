@@ -33,3 +33,6 @@ slides/
 # macOS Finder custom-folder-icon artifact (name contains a CR); breaks
 # rsconnect manifests if bundled
 Icon?
+
+# R fallback graphics device (headless plotting artefact)
+Rplots.pdf
