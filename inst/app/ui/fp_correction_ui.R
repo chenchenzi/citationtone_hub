@@ -181,6 +181,43 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     df <- fp_f0_data()
     if (is.null(df)) return()
 
+    # Prune corrections that no longer align with the data. Re-extracting
+    # (other engine, other frame step) replaces fp_f0_data but used to leave
+    # fp_corrections keyed by the same token names holding contours on the
+    # OLD frame grid. current_f0() then serves the stale contour and
+    # edit_diff() returns NULL on the row-count mismatch, so edits appear to
+    # apply but ghost markers, halos, and the edited banner all silently
+    # vanish. A correction survives only if the new data has the same frames
+    # for its token (same count, same times); the resume path below re-adds
+    # aligned corrections from an uploaded CSV afterwards.
+    corr <- fp_corrections()
+    if (length(corr) > 0) {
+      stale <- vapply(names(corr), function(tk) {
+        tt <- sort(df$time[df$token == tk])
+        length(tt) != nrow(corr[[tk]]) ||
+          !isTRUE(all.equal(tt, corr[[tk]]$time, tolerance = 1e-8))
+      }, logical(1))
+      if (any(stale)) {
+        gone <- names(corr)[stale]
+        fp_corrections(corr[!stale])
+        h <- fp_history(); h[gone] <- NULL; fp_history(h)
+        lg <- fp_edit_log()
+        if (nrow(lg) > 0) {
+          # Frame edits die with their grid; whole-token discards are
+          # name-keyed and still apply to the re-extracted token (fp_dropped
+          # keeps them), so their log rows stay.
+          fp_edit_log(lg[!(lg$token %in% gone &
+                             lg$action != "Discard token"), , drop = FALSE])
+        }
+        showNotification(
+          sprintf(paste("The extracted data changed (new engine or frame",
+                        "grid), so earlier edits no longer line up:",
+                        "cleared the edits of %d token(s). The new",
+                        "extraction is shown unedited."), length(gone)),
+          type = "warning", duration = 8, id = "fp_corr_stale_edits")
+      }
+    }
+
     # Whole-token discards. Runs before the resume-schema guard so a swap
     # to data WITHOUT the column (fresh extraction, an older save file)
     # also resyncs — otherwise stale ✗ marks would leak token_dropped =
