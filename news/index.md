@@ -104,6 +104,15 @@
   names it “flagged by low intensity”, and the “Keep flag types”
   filter’s Low intensity class now has a visible counterpart on the
   plot.
+- **F0 Correction: re-extraction no longer strands earlier edits.**
+  After re-extracting on a different engine or frame grid (e.g. Praat
+  first, then wrassp), edits made on the old grid were kept keyed by
+  token name: the tab silently served the stale contour, and because the
+  row counts no longer matched, ghost markers, the amber halo, and the
+  “N frames edited” banner all vanished for that token while edits still
+  appeared to apply. Frame edits that no longer align with the data are
+  now cleared on re-extraction (with a notification); whole-token
+  discards, which are name-keyed and still meaningful, survive.
 - **F0 Correction: the idle reminder dismisses itself.** The “Still
   working?” note that appears after ten idle minutes used to stay until
   closed by hand; the first interaction after it fires now takes it down
