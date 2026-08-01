@@ -404,15 +404,50 @@ model_ui <- function(input, output, session, dataset, normalised_data, curated_d
 
     # Scatter axes for the plotting section: mirror the app's current picks
     # (falling back to the plot block's own defaults) so the snippet
-    # reproduces the scatter the user is looking at.
+    # reproduces the scatter the user is looking at — including the Z axis,
+    # which switches the app plot (and hence the snippet) to 3-D plotly.
     plot_x <- if (!is.null(input$model_plot_x) &&
                   input$model_plot_x %in% coef_names) input$model_plot_x
               else if (degree >= 2) "c1" else "c0"
     plot_y <- if (!is.null(input$model_plot_y) &&
                   input$model_plot_y %in% coef_names) input$model_plot_y
               else if (degree >= 2) "c2" else "c1"
+    plot_z <- if (!is.null(input$model_plot_z) && nzchar(input$model_plot_z) &&
+                  input$model_plot_z %in% coef_names) input$model_plot_z
+              else NA_character_
     coef_gloss <- c(c0 = "mean level", c1 = "slope",
                     c2 = "curvature", c3 = "asymmetry")
+    axis_lab <- function(v) paste0(v, " (", coef_gloss[[v]], ")")
+
+    plot_section <- if (is.na(plot_z)) {
+      paste0(
+        '# Coefficient-space scatter, as in this tab: each point is one token,\n',
+        '# coloured by tone\n',
+        'library(ggplot2)\n',
+        'ggplot(results, aes(x = ', plot_x, ', y = ', plot_y, ',\n',
+        '                    colour = factor(', tone_var, '))) +\n',
+        '  geom_point(alpha = 0.8, size = 2) +\n',
+        '  labs(x = "', axis_lab(plot_x), '",\n',
+        '       y = "', axis_lab(plot_y), '",\n',
+        '       colour = "', tone_var, '") +\n',
+        '  theme_minimal()'
+      )
+    } else {
+      paste0(
+        '# Coefficient-space scatter (3-D), as in this tab: each point is one\n',
+        '# token, coloured by tone; drag to rotate\n',
+        'library(plotly)\n',
+        'plot_ly(results,\n',
+        '        x = ~', plot_x, ', y = ~', plot_y, ', z = ~', plot_z, ',\n',
+        '        color = ~factor(', tone_var, '),\n',
+        '        type = "scatter3d", mode = "markers",\n',
+        '        marker = list(size = 4, opacity = 0.8)) |>\n',
+        '  layout(scene = list(\n',
+        '    xaxis = list(title = "', axis_lab(plot_x), '"),\n',
+        '    yaxis = list(title = "', axis_lab(plot_y), '"),\n',
+        '    zaxis = list(title = "', axis_lab(plot_z), '")))'
+      )
+    }
 
     # Use the actual uploaded filename if known so the snippet visually
     # matches the dataset; users may need to adjust the path on disk.
@@ -463,16 +498,7 @@ model_ui <- function(input, output, session, dataset, normalised_data, curated_d
       '  left_join(meta, by = "', token_var, '") %>%\n',
       '  select(', token_var, ', ', speaker_var, ', ', tone_var, ', ', paste(coef_names, collapse = ", "), ')\n\n',
       'head(results)\n\n',
-      '# Coefficient-space scatter, as in this tab: each point is one token,\n',
-      '# coloured by tone\n',
-      'library(ggplot2)\n',
-      'ggplot(results, aes(x = ', plot_x, ', y = ', plot_y, ',\n',
-      '                    colour = factor(', tone_var, '))) +\n',
-      '  geom_point(alpha = 0.8, size = 2) +\n',
-      '  labs(x = "', plot_x, ' (', coef_gloss[[plot_x]], ')",\n',
-      '       y = "', plot_y, ' (', coef_gloss[[plot_y]], ')",\n',
-      '       colour = "', tone_var, '") +\n',
-      '  theme_minimal()'
+      plot_section
     )
 
     tagList(

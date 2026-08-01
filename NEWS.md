@@ -49,10 +49,13 @@
   The tab's generated script used to stop at the coefficient table, leaving
   the coefficient-space scatter as the one part of the tab with no
   reproducible counterpart outside the app. The snippet now ends with a
-  `ggplot2` section that rebuilds the scatter — one point per token,
-  coloured by tone — using the X / Y axes currently selected in the tab
-  (falling back to the plot's own defaults) and axis labels carrying the
-  phonetic gloss (`c1` slope, `c2` curvature, ...).
+  plotting section that rebuilds the scatter — one point per token, coloured
+  by tone — using the axes currently selected in the tab (falling back to
+  the plot's own defaults) and axis labels carrying the phonetic gloss
+  (`c1` slope, `c2` curvature, ...). With no Z axis it emits a static
+  `ggplot2` scatter; with a Z axis selected it emits the matching 3-D
+  `plotly::plot_ly(type = "scatter3d")` call instead, mirroring what the
+  tab shows.
 * **F0 Correction tab: filter by flag type.** When the uploaded Inspect CSV
   carries `flag_notes`, a **Keep flag types** checkbox group lists the
   artefact classes present (extreme value, level, octave jump, jump by rate
