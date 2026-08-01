@@ -49,6 +49,14 @@
   for GAMMs. The note directs users to **Show R code**, which already
   emits a runnable script reproducing the current fit, as the starting
   point for editing the model formula.
+- **Model: Polynomials — Show R code now reproduces the coefficient
+  scatter.** The tab’s generated script used to stop at the coefficient
+  table, leaving the coefficient-space scatter as the one part of the
+  tab with no reproducible counterpart outside the app. The snippet now
+  ends with a `ggplot2` section that rebuilds the scatter — one point
+  per token, coloured by tone — using the X / Y axes currently selected
+  in the tab (falling back to the plot’s own defaults) and axis labels
+  carrying the phonetic gloss (`c1` slope, `c2` curvature, …).
 - **F0 Correction tab: filter by flag type.** When the uploaded Inspect
   CSV carries `flag_notes`, a **Keep flag types** checkbox group lists
   the artefact classes present (extreme value, level, octave jump, jump
