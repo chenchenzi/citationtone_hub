@@ -402,6 +402,18 @@ model_ui <- function(input, output, session, dataset, normalised_data, curated_d
     coef_names <- paste0("c", 0:degree)
     coef_str   <- paste0('"', coef_names, '"', collapse = ", ")
 
+    # Scatter axes for the plotting section: mirror the app's current picks
+    # (falling back to the plot block's own defaults) so the snippet
+    # reproduces the scatter the user is looking at.
+    plot_x <- if (!is.null(input$model_plot_x) &&
+                  input$model_plot_x %in% coef_names) input$model_plot_x
+              else if (degree >= 2) "c1" else "c0"
+    plot_y <- if (!is.null(input$model_plot_y) &&
+                  input$model_plot_y %in% coef_names) input$model_plot_y
+              else if (degree >= 2) "c2" else "c1"
+    coef_gloss <- c(c0 = "mean level", c1 = "slope",
+                    c2 = "curvature", c3 = "asymmetry")
+
     # Use the actual uploaded filename if known so the snippet visually
     # matches the dataset; users may need to adjust the path on disk.
     ds_name <- if (!is.null(input$dataset_name) && nzchar(input$dataset_name))
@@ -450,7 +462,17 @@ model_ui <- function(input, output, session, dataset, normalised_data, curated_d
       'results <- results %>%\n',
       '  left_join(meta, by = "', token_var, '") %>%\n',
       '  select(', token_var, ', ', speaker_var, ', ', tone_var, ', ', paste(coef_names, collapse = ", "), ')\n\n',
-      'head(results)'
+      'head(results)\n\n',
+      '# Coefficient-space scatter, as in this tab: each point is one token,\n',
+      '# coloured by tone\n',
+      'library(ggplot2)\n',
+      'ggplot(results, aes(x = ', plot_x, ', y = ', plot_y, ',\n',
+      '                    colour = factor(', tone_var, '))) +\n',
+      '  geom_point(alpha = 0.8, size = 2) +\n',
+      '  labs(x = "', plot_x, ' (', coef_gloss[[plot_x]], ')",\n',
+      '       y = "', plot_y, ' (', coef_gloss[[plot_y]], ')",\n',
+      '       colour = "', tone_var, '") +\n',
+      '  theme_minimal()'
     )
 
     tagList(
