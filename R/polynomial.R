@@ -19,7 +19,11 @@
 #'
 #' 1. Compute the per-token range of `time` and rescale it linearly to
 #'    the interval `[-1, 1]`, which is where Legendre polynomials are
-#'    orthogonal.
+#'    orthogonal. If the time column is *already* normalised to `[0, 1]`
+#'    (detected with [time_already_normalised()], or declared via
+#'    `time_normalised`), the fixed map `2 * t - 1` is used instead, so
+#'    tokens whose samples do not span the full unit interval are not
+#'    stretched a second time.
 #' 2. Build the Legendre basis up to the requested `degree`.
 #' 3. Solve the ordinary least-squares problem with [stats::lm.fit()] to
 #'    recover the coefficients.
@@ -53,10 +57,16 @@
 #' @param tone Column name of tone category, carried through to the
 #'   output. Default `"tone"`.
 #' @param degree Polynomial degree. One of `1`, `2`, or `3`. Default `2`.
+#' @param time_normalised One of `"auto"` (default: detect an
+#'   already-normalised `[0, 1]` time column and map it to `[-1, 1]`
+#'   with the fixed transform `2 * t - 1`), `"no"` (always rescale to
+#'   `[-1, 1]` within each token), or `"yes"` (declare the column
+#'   already normalised to `[0, 1]`). See [resolve_time_norm()].
 #'
 #' @return A token-level data frame with one row per token, containing
 #'   the `token`, `speaker`, `tone`, and coefficient columns `c0`,
-#'   `c1`, ..., `c{degree}`.
+#'   `c1`, ..., `c{degree}`. The attribute `time_prenormalised` records
+#'   whether the time column was treated as already normalised.
 #'
 #' @seealso
 #' * [normalise_f0()] for the upstream normalisation step.
@@ -97,8 +107,10 @@ fit_polynomial <- function(data,
                            time    = "time",
                            speaker = "speaker",
                            tone    = "tone",
-                           degree  = 2) {
+                           degree  = 2,
+                           time_normalised = c("auto", "no", "yes")) {
 
+  time_normalised <- match.arg(time_normalised)
   if (!degree %in% 1:3) {
     stop("`degree` must be 1, 2, or 3.", call. = FALSE)
   }
@@ -117,9 +129,15 @@ fit_polynomial <- function(data,
   }
 
   # Tag f0 internally so the per-group worker doesn't have to re-evaluate
-  # the column name on every group.
+  # the column name on every group. Time is resolved once to [0, 1] — either
+  # the column as-is (already normalised) or a per-token min-max rescale — so
+  # the worker's fixed 2*t - 1 map lands on [-1, 1] either way; for the
+  # rescale path that reproduces the historical per-token [-1, 1] stretch
+  # exactly.
+  ts <- resolve_time_norm(data, time, token, time_normalised)
   data <- data |>
     dplyr::mutate(.f0_fit = .data[[f0]])
+  data$.t01 <- ts$time_norm
 
   # Per-token metadata (first occurrence of speaker, tone).
   token_meta <- data |>
@@ -135,15 +153,17 @@ fit_polynomial <- function(data,
     dplyr::arrange(.data[[token]], .data[[time]]) |>
     dplyr::group_by(.data[[token]]) |>
     dplyr::group_modify(
-      ~ fit_one_token_polynomial(.x, degree = degree, time_col = time)
+      ~ fit_one_token_polynomial(.x, degree = degree, time_col = ".t01")
     ) |>
     dplyr::ungroup()
 
   # Attach metadata and fix column order.
   coef_names <- paste0("c", 0:degree)
-  coef_df |>
+  out <- coef_df |>
     dplyr::left_join(token_meta, by = token) |>
     dplyr::select(dplyr::all_of(c(token, speaker, tone, coef_names)))
+  attr(out, "time_prenormalised") <- ts$prenormalised
+  out
 }
 
 
@@ -171,6 +191,9 @@ legendre_basis <- function(t, degree) {
 
 # -----------------------------------------------------------------------------
 # Internal: fit one token. Returns a 1-row data.frame of coefficients.
+# `time_col` holds the resolved [0, 1] time from resolve_time_norm(), so the
+# fixed 2*t - 1 map below yields the per-token [-1, 1] rescale when time was
+# unnormalised, and the untouched proportional positions when it was.
 # Used by fit_polynomial() via group_modify(); not exported.
 # -----------------------------------------------------------------------------
 fit_one_token_polynomial <- function(token_data, degree, time_col) {
@@ -186,7 +209,7 @@ fit_one_token_polynomial <- function(token_data, degree, time_col) {
     return(as.data.frame(as.list(result)))
   }
 
-  t_norm <- 2 * (t_raw - t_min) / (t_max - t_min) - 1
+  t_norm <- 2 * t_raw - 1
   y <- token_data$.f0_fit
   valid <- !is.na(t_norm) & !is.na(y)
 

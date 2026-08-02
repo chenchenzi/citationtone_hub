@@ -46,6 +46,16 @@ fp_praat_script_ui <- function(input, output, session) {
 #                                    Output_csv picker points. Upload directly in
 #                                    F0 Analysis > Start if you do not need
 #                                    frame-level correction.
+#
+# Note on equal-N sampling ("f0 every 5% / 10% of the syllable"):
+#   this script deliberately writes every native pitch frame at the fixed
+#   Time_step. A .Pitch file IS a fixed-step frame object, and resampling it
+#   here would discard the per-frame candidate lists that Shinytone\'s F0
+#   Correction tab needs. Do the resampling in the app instead: F0 Processing >
+#   F0 Extraction > F0 Data Export, where you pick a Region (whole file /
+#   voiced region / TextGrid interval such as the vowel or rhyme) and a
+#   Sampling (native frames / N equal points across that region). One
+#   implementation, and the correction workflow stays intact.
 ###############################################################
 
 # ============================================================

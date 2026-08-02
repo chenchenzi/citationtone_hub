@@ -11,7 +11,8 @@ fit_polynomial(
   time = "time",
   speaker = "speaker",
   tone = "tone",
-  degree = 2
+  degree = 2,
+  time_normalised = c("auto", "no", "yes")
 )
 }
 \arguments{
@@ -32,11 +33,18 @@ output. Default \code{"speaker"}.}
 output. Default \code{"tone"}.}
 
 \item{degree}{Polynomial degree. One of \code{1}, \code{2}, or \code{3}. Default \code{2}.}
+
+\item{time_normalised}{One of \code{"auto"} (default: detect an
+already-normalised \verb{[0, 1]} time column and map it to \verb{[-1, 1]}
+with the fixed transform \code{2 * t - 1}), \code{"no"} (always rescale to
+\verb{[-1, 1]} within each token), or \code{"yes"} (declare the column
+already normalised to \verb{[0, 1]}). See \code{\link[=resolve_time_norm]{resolve_time_norm()}}.}
 }
 \value{
 A token-level data frame with one row per token, containing
 the \code{token}, \code{speaker}, \code{tone}, and coefficient columns \code{c0},
-\code{c1}, ..., \verb{c\{degree\}}.
+\code{c1}, ..., \verb{c\{degree\}}. The attribute \code{time_prenormalised} records
+whether the time column was treated as already normalised.
 }
 \description{
 For each token, normalises the time axis to \verb{[-1, 1]}, constructs a
@@ -53,7 +61,11 @@ For each token:
 \enumerate{
 \item Compute the per-token range of \code{time} and rescale it linearly to
 the interval \verb{[-1, 1]}, which is where Legendre polynomials are
-orthogonal.
+orthogonal. If the time column is \emph{already} normalised to \verb{[0, 1]}
+(detected with \code{\link[=time_already_normalised]{time_already_normalised()}}, or declared via
+\code{time_normalised}), the fixed map \code{2 * t - 1} is used instead, so
+tokens whose samples do not span the full unit interval are not
+stretched a second time.
 \item Build the Legendre basis up to the requested \code{degree}.
 \item Solve the ordinary least-squares problem with \code{\link[stats:lm.fit]{stats::lm.fit()}} to
 recover the coefficients.

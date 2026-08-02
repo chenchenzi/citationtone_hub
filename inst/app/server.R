@@ -211,6 +211,7 @@ server <- function(input, output, session) {
   fp_audio_data       <- reactiveVal(NULL)   # data.frame: basename, wav_path, tg_path, pitch_path, sr, bit, dur, channels
   fp_f0_data          <- reactiveVal(NULL)   # extracted/parsed f0 contours (long format)
   fp_pitch_candidates <- reactiveVal(list()) # named list: token -> list of per-frame data.frame(frequency, strength). Populated only for tokens parsed from .Pitch files.
+  fp_corrected_data   <- reactiveVal(NULL)   # fp_f0_data + f0_corrected/edited/token_dropped, mirrored from the F0 Correction tab so the F0 Extraction analysis export can measure corrected contours
   fp_metadata         <- reactiveVal(NULL)   # optional user-uploaded metadata CSV (data.frame). Joined to fp_f0_data at download time on a filename column the user selects.
 
   # Call the Start tab UI and server logic (start_ui function)
@@ -231,8 +232,8 @@ server <- function(input, output, session) {
 
   # f0 processing tab modules
   fp_start_ui(input, output, session, fp_audio_data)
-  fp_extraction_ui(input, output, session, fp_audio_data, fp_f0_data, fp_pitch_candidates, fp_metadata)
-  fp_correction_ui(input, output, session, fp_audio_data, fp_f0_data, fp_pitch_candidates)
+  fp_extraction_ui(input, output, session, fp_audio_data, fp_f0_data, fp_pitch_candidates, fp_metadata, fp_corrected_data)
+  fp_correction_ui(input, output, session, fp_audio_data, fp_f0_data, fp_pitch_candidates, fp_corrected_data)
   fp_praat_script_ui(input, output, session)
 
   # Feature-card navigation from the About tab.

@@ -10,12 +10,39 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
   output$gca_multisyl_note <- renderUI({
     tv <- input$gca_time_var
     if (is.null(tv) || !grepl("_(tseq|t01)$", tv)) return(NULL)
+    # normalise_time_token() writes exactly "token_t01" (whole-token
+    # proportional time, a perfectly good axis); normalise_time_landmarks()
+    # writes "<set>_t01", which resets at every segment boundary. Keyed on the
+    # name the producer guarantees, not on a companion column that a trimmed
+    # re-upload may have lost.
+    if (identical(tv, "token_t01")) return(NULL)
     tags$div(
       style = paste("background-color:#fff8e1; border-left:4px solid #e0a800;",
                     "padding:10px 14px; margin:8px 0; border-radius:4px;",
                     "color:#7a5d00; font-size:0.9rem;"),
       tags$span(style = "color:#e0a800;", icon("wand-magic-sparkles")),
       " Are you modelling a multisyllabic time axis? Polynomial/GCA coefficients here summarise single-syllable shapes; for multisyllabic words, consider GAMM for these contours.")
+  })
+
+  # Value-based check: a time column that is already proportional ([0, 1] per
+  # token) is used as-is by fit_gca() rather than rescaled again — say so
+  # before the user clicks Fit.
+  output$gca_timenorm_note <- renderUI({
+    tv  <- input$gca_time_var
+    tok <- input$gca_token_var
+    if (is.null(tv) || is.null(tok) || grepl("_tseq$", tv)) return(NULL)
+    df <- tryCatch(active_data(), error = function(e) NULL)
+    if (is.null(df) || !all(c(tv, tok) %in% names(df))) return(NULL)
+    # A landmark set's within-segment <set>_t01 gets the multisyllabic nudge
+    # above, not this note; only the whole-token token_t01 falls through.
+    if (grepl("_t01$", tv) && !identical(tv, "token_t01")) return(NULL)
+    if (!time_already_normalised(df[[tv]], df[[tok]])) return(NULL)
+    tags$div(
+      style = paste("background-color:#e8f5f0; border-left:4px solid #78c2ad;",
+                    "padding:10px 14px; margin:8px 0; border-radius:4px;",
+                    "color:#2a7a5a; font-size:0.9rem;"),
+      icon("circle-info"),
+      HTML(sprintf(" <code>%s</code> looks already normalised to [0, 1] (every value lies in that range and a typical token covers most of it; some tokens may cover less). The fit will use it as-is instead of rescaling per token, so tokens that cover only part of the interval keep their position. To force per-token rescaling, call <code>fit_gca(..., time_normalised = \"no\")</code> in R.", tv)))
   })
 
   # --- Guide text ---
@@ -29,7 +56,9 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
           tags$li(tags$strong("f0:"), " An f0-related variable. Normalised f0 (e.g. semitone or z-score) is recommended for more interpretable and comparable coefficients across speakers.",
             " Use the ", tags$strong("Normalise"), " tab first, then select ", tags$em("Normalised data"),
             " from the dataset dropdown to access ", tags$code(style = code_style, "f0_st"), " or ", tags$code(style = code_style, "f0_zscore"), "."),
-          tags$li(tags$strong("Time:"), " The time variable that orders f0 samples within each token. Will be normalised to [0, 1] per token before fitting."),
+          tags$li(tags$strong("Time:"), " The time variable that orders f0 samples within each token. Will be normalised to [0, 1] per token before fitting. A column that is already normalised (e.g. ",
+            tags$code(style = code_style, "token_t01"), " from the Normalise tab, or ",
+            tags$code(style = code_style, "time_prop"), " from equal-point extraction) is detected and used as-is, so partial-span tokens are not stretched."),
           tags$li(tags$strong("Speaker:"), " Grouping variable for by-speaker random effects."),
           tags$li(tags$strong("Item:"), " The word or syllable type (e.g. different segmental compositions). Grouping variable for by-item random effects."),
           tags$li(tags$strong("Tone category:"), " Fixed effect factor interacted with time polynomial terms.")
@@ -594,11 +623,19 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
                  paste0(input$dataset_name, ".csv")
                else "your_data.csv"
 
-    code_text <- paste0(
-      'library(dplyr)\n',
-      'library(lme4)\n\n',
-      '# Read your data (adjust path to where the file is on your machine)\n',
-      'dat <- read.csv("', ds_name, '", stringsAsFactors = FALSE)\n\n',
+    # Mirror fit_gca()'s auto-detection so the snippet reproduces the app's
+    # fit: an already-normalised [0, 1] time column is used as-is, anything
+    # else gets the per-token min-max rescale.
+    df_now  <- tryCatch(active_data(), error = function(e) NULL)
+    prenorm <- !is.null(df_now) && all(c(time_var, token_var) %in% names(df_now)) &&
+      time_already_normalised(df_now[[time_var]], df_now[[token_var]])
+    norm_block <- if (prenorm) {
+      paste0(
+      '# ', time_var, ' is already normalised to [0, 1] — use it as-is\n',
+      '# (no per-token rescale, so partial-span tokens keep their position)\n',
+      'dat$time_norm <- pmin(pmax(dat$', time_var, ', 0), 1)\n\n')
+    } else {
+      paste0(
       '# Normalise time to [0, 1] within each token\n',
       'dat <- dat %>%\n',
       '  group_by(', token_var, ') %>%\n',
@@ -606,7 +643,15 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
       '    time_norm = (', time_var, ' - min(', time_var, ')) / \n',
       '                (max(', time_var, ') - min(', time_var, '))\n',
       '  ) %>%\n',
-      '  ungroup()\n\n',
+      '  ungroup()\n\n')
+    }
+
+    code_text <- paste0(
+      'library(dplyr)\n',
+      'library(lme4)\n\n',
+      '# Read your data (adjust path to where the file is on your machine)\n',
+      'dat <- read.csv("', ds_name, '", stringsAsFactors = FALSE)\n\n',
+      norm_block,
       '# Generate orthogonal polynomial time terms\n',
       'poly_matrix <- poly(dat$time_norm, ', degree, ')\n',
       paste0(sapply(1:degree, function(k) {

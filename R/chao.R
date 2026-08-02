@@ -21,7 +21,10 @@
 #' Internally:
 #'
 #' 1. Within each token, normalise the time axis to `[0, 1]` so tokens
-#'    of different durations can be averaged across the same grid.
+#'    of different durations can be averaged across the same grid. A
+#'    time column that is *already* normalised is detected with
+#'    [time_already_normalised()] and used as-is (override with
+#'    `time_normalised`), matching what [fit_gca()] and [fit_gamm()] do.
 #' 2. Round each sample's normalised time onto one of `n_bins`
 #'    equally-spaced bins.
 #' 3. For each (tone, time-bin) cell, compute the mean of `f0` across
@@ -37,6 +40,10 @@
 #' @param n_bins Number of evenly-spaced time bins across `[0, 1]`.
 #'   Default `50`. Larger values give a smoother contour at the cost
 #'   of noisier per-bin estimates if some bins are sparsely populated.
+#' @param time_normalised One of `"auto"` (default: detect an
+#'   already-normalised `[0, 1]` time column and use it as-is), `"no"`
+#'   (always rescale to `[0, 1]` within each token), or `"yes"` (declare
+#'   the column already normalised). See [resolve_time_norm()].
 #'
 #' @return A data frame with columns `tone`, `time`, `f0_predicted`,
 #'   one row per (tone, time-bin).
@@ -66,7 +73,9 @@ compute_mean_contour <- function(data,
                                  f0    = "f0",
                                  time  = "time",
                                  tone  = "tone",
-                                 n_bins = 50) {
+                                 n_bins = 50,
+                                 time_normalised = c("auto", "no", "yes")) {
+  time_normalised <- match.arg(time_normalised)
   required <- c(token, f0, time, tone)
   missing_cols <- setdiff(required, names(data))
   if (length(missing_cols) > 0) {
@@ -74,18 +83,12 @@ compute_mean_contour <- function(data,
          paste(missing_cols, collapse = ", "), call. = FALSE)
   }
 
-  dat <- data |>
-    dplyr::group_by(.data[[token]]) |>
-    dplyr::mutate(
-      .time_norm = {
-        t_raw <- .data[[time]]
-        t_min <- min(t_raw, na.rm = TRUE)
-        t_max <- max(t_raw, na.rm = TRUE)
-        if (is.na(t_min) || t_max == t_min) rep(0.5, dplyr::n())
-        else (t_raw - t_min) / (t_max - t_min)
-      }
-    ) |>
-    dplyr::ungroup()
+  # Same time handling as the model fits (see resolve_time_norm), so the
+  # observed mean contours share the fitted models' time axis: per-token
+  # min-max rescale, unless the column is already normalised to [0, 1].
+  ts  <- resolve_time_norm(data, time, token, time_normalised)
+  dat <- data
+  dat$.time_norm <- ts$time_norm
 
   dat$.time_bin <- round(dat$.time_norm * (n_bins - 1)) / (n_bins - 1)
   dat$.f0       <- as.numeric(dat[[f0]])

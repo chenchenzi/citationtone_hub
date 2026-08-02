@@ -9,6 +9,10 @@
 #   * conventional random effects on speaker and item
 #
 # For non-standard model structures, use lme4::lmer() directly.
+#
+# The [0, 1] step honours an already-normalised time column (see
+# resolve_time_norm() in time_norm.R): a column that is already proportional
+# is used as-is instead of being stretched again per token.
 # =============================================================================
 
 #' Fit a Growth Curve Analysis (GCA) model to f0 contours
@@ -31,7 +35,12 @@
 #' @details
 #' ## What the function does internally
 #'
-#' 1. Within each token, normalise the time axis to `[0, 1]`.
+#' 1. Within each token, normalise the time axis to `[0, 1]`. If the time
+#'    column is *already* normalised (e.g. `token_t01` from
+#'    [normalise_time_token()]), it is detected with
+#'    [time_already_normalised()] and used as-is, so tokens whose samples do
+#'    not span the full unit interval are not stretched a second time;
+#'    override with `time_normalised`.
 #' 2. Build orthogonal polynomial terms `ot1`, `ot2`, ..., `otK` on the
 #'    normalised time using [stats::poly()], caching the basis
 #'    coefficients so that [predict_gca()] can reuse them.
@@ -76,6 +85,10 @@
 #'   by-speaker or by-item random slopes on the orthogonal-polynomial
 #'   terms (`ot1` ... `otK`). Default `TRUE` for speaker, `FALSE` for
 #'   item.
+#' @param time_normalised One of `"auto"` (default: detect an
+#'   already-normalised `[0, 1]` time column and use it as-is), `"no"`
+#'   (always rescale to `[0, 1]` within each token), or `"yes"` (declare
+#'   the column already normalised). See [resolve_time_norm()].
 #'
 #' @return An S3 object of class `"shinytone_gca"`, a list with:
 #' * `model`: the fitted [lme4::lmerMod-class] object.
@@ -85,6 +98,8 @@
 #' * `degree`: polynomial degree.
 #' * `col_names`: original column names (for back-mapping in summary
 #'   tables).
+#' * `time_prenormalised`: logical; was the time column used as-is
+#'   because it was already normalised to `[0, 1]`?
 #' * `convergence_warning`: `NULL` or the captured warning message.
 #'
 #' @seealso
@@ -140,8 +155,10 @@ fit_gca <- function(data,
                     random_intercept_speaker  = TRUE,
                     random_intercept_item     = TRUE,
                     random_slope_speaker      = TRUE,
-                    random_slope_item         = FALSE) {
+                    random_slope_item         = FALSE,
+                    time_normalised           = c("auto", "no", "yes")) {
 
+  time_normalised <- match.arg(time_normalised)
   if (!degree %in% 1:3) {
     stop("`degree` must be 1, 2, or 3.", call. = FALSE)
   }
@@ -156,19 +173,12 @@ fit_gca <- function(data,
          call. = FALSE)
   }
 
-  # --- Data prep: per-token time normalisation to [0, 1] ---------------------
-  dat <- data |>
-    dplyr::group_by(.data[[token]]) |>
-    dplyr::mutate(
-      .time_norm = {
-        t_raw <- .data[[time]]
-        t_min <- min(t_raw, na.rm = TRUE)
-        t_max <- max(t_raw, na.rm = TRUE)
-        if (is.na(t_min) || t_max == t_min) rep(0.5, dplyr::n())
-        else (t_raw - t_min) / (t_max - t_min)
-      }
-    ) |>
-    dplyr::ungroup()
+  # --- Data prep: time normalisation to [0, 1] -------------------------------
+  # Per-token min-max rescale, unless the column is already normalised
+  # (detected, or declared via time_normalised) — then it is used as-is.
+  ts  <- resolve_time_norm(data, time, token, time_normalised)
+  dat <- data
+  dat$.time_norm <- ts$time_norm
 
   # Orthogonal polynomials; cache coefs so predict_gca() can reuse the basis.
   poly_matrix <- stats::poly(dat$.time_norm, degree)
@@ -241,6 +251,7 @@ fit_gca <- function(data,
       degree              = degree,
       col_names           = list(f0 = f0, time = time, token = token,
                                  tone = tone, speaker = speaker, item = item),
+      time_prenormalised  = ts$prenormalised,
       convergence_warning = warn_msg
     ),
     class = "shinytone_gca"

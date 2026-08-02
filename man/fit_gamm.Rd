@@ -19,7 +19,8 @@ fit_gamm(
   random_intercept_speaker = TRUE,
   random_intercept_item = TRUE,
   random_smooth = c("none", "speaker", "speaker_tone", "speaker_by_tone", "ref_diff"),
-  use_ar1 = FALSE
+  use_ar1 = FALSE,
+  time_normalised = c("auto", "no", "yes")
 )
 }
 \arguments{
@@ -47,6 +48,11 @@ include the corresponding \code{s(..., bs = "re")} random intercept.}
 
 \item{use_ar1}{Logical. If \code{TRUE}, fit once, estimate \code{rho} from the
 residuals' lag-1 autocorrelation, then refit with that \code{rho}.}
+
+\item{time_normalised}{One of \code{"auto"} (default: detect an
+already-normalised \verb{[0, 1]} time column and use it as-is), \code{"no"}
+(always rescale to \verb{[0, 1]} within each token), or \code{"yes"} (declare
+the column already normalised). See \code{\link[=resolve_time_norm]{resolve_time_norm()}}.}
 }
 \value{
 An S3 object of class \code{"shinytone_gamm"}, a list with:
@@ -58,6 +64,8 @@ An S3 object of class \code{"shinytone_gamm"}, a list with:
 \item \code{smooth_type}, \code{random_smooth}: passed through (needed by
 \code{\link[=predict_gamm]{predict_gamm()}}).
 \item \code{col_names}: original column names, for back-mapping.
+\item \code{time_prenormalised}: logical; was the time column used as-is
+because it was already normalised to \verb{[0, 1]}?
 }
 }
 \description{
@@ -77,7 +85,12 @@ with an AR1 correlation. For non-standard model structures, call
 \details{
 \subsection{What the function does internally}{
 \enumerate{
-\item Normalise time to \verb{[0, 1]} per token.
+\item Normalise time to \verb{[0, 1]} per token. If the time column is
+\emph{already} normalised (e.g. \code{token_t01} from
+\code{\link[=normalise_time_token]{normalise_time_token()}}), it is detected with
+\code{\link[=time_already_normalised]{time_already_normalised()}} and used as-is, so tokens whose samples
+do not span the full unit interval are not stretched a second time;
+override with \code{time_normalised}.
 \item Coerce \code{tone}, \code{speaker}, \code{item}, and (for difference smooths) an
 ordered \code{tone_ord} to factors with treatment contrasts.
 \item Build the formula based on \code{smooth_type} and \code{random_smooth}.

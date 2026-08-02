@@ -12,7 +12,8 @@
 ###############################################
 
 fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
-                             fp_pitch_candidates = NULL, fp_metadata = NULL) {
+                             fp_pitch_candidates = NULL, fp_metadata = NULL,
+                             fp_corrected_data = NULL) {
 
   # Which f0 source the sidebar starts on. Flipped to "praat" by the
   # pitch-file observer further down; declared here so the sidebar
@@ -110,13 +111,45 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         uiOutput("fp_meta_split_preview")
       ),
       tags$hr(),
+      # ---- F0 data export: region + sampling ----
+      # These shape the DOWNLOAD only. The in-app data (and so F0 Correction)
+      # always keeps the full native grid, so changing them can never
+      # invalidate frame edits.
+      h5("F0 Data Export"),
+      tags$p(style = "color: #777; font-size: 0.8rem; margin-bottom: 6px;",
+        "Export f0 data after extraction. ",
+        tags$em("See the guide for what each choice does.")),
+      tags$strong(style = "font-size: 0.85rem;", "Region"),
+      radioButtons("fp_region", NULL,
+                   choices = c("Whole token (voiced region)" = "voiced",
+                               "TextGrid interval"           = "interval"),
+                   selected = "voiced"),
+      conditionalPanel("input.fp_region == 'interval'",
+        uiOutput("fp_region_interval_ui")),
+      tags$strong(style = "font-size: 0.85rem;", "Sampling"),
+      radioButtons("fp_sampling_mode", NULL,
+                   choices = c("Native frame times"          = "native",
+                               "Equidistant points across the region" = "equal"),
+                   selected = "native"),
+      conditionalPanel("input.fp_sampling_mode == 'equal'",
+        numericInput("fp_sampling_n", "Points per token:",
+                     value = 21, min = 2, max = 1000, step = 1),
+        tags$div(style = "color: #888; font-size: 0.75rem; font-style: italic; margin-top: -4px; margin-bottom: 8px;",
+          "21 points = one every 5%; 11 = every 10%."),
+        radioButtons("fp_sampling_method", "Value at each point:",
+                     choices = c("Linear interpolation" = "linear",
+                                 "Nearest measured frame" = "nearest"),
+                     selected = "linear")),
+      tags$hr(),
+
       h5("Download"),
       textInput("fp_extract_filename", "Enter filename (without extension):", value = "extracted_f0"),
       downloadButton("fp_extract_download", "Download f0 (CSV)"),
       conditionalPanel("output.fp_have_f0 !== 'yes'",
         tags$div(style = "color: #888; font-size: 0.8rem; margin-top: 6px; font-style: italic;",
                  "Run extraction first to generate the file.")
-      )
+      ),
+      uiOutput("fp_export_summary")
     )
   })
 
@@ -381,40 +414,178 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     box_style <- "background-color: #f0faf7; border-left: 4px solid #78c2ad; padding: 10px 14px; margin-bottom: 12px; border-radius: 4px; font-size: 0.88rem; color: #555;"
     tagList(
       guide_box("F0 Extraction guide",
-        tags$p(style = "margin: 6px 0 0 0;",
-          HTML("Choose how to obtain f0 contours from your audio files, then click <strong>Run extraction</strong>.")),
-        tags$ul(style = "margin-bottom: 0; padding-left: 18px;",
+        tags$p(style = "margin: 6px 0 8px 0;",
+          HTML(paste0(
+            "The sidebar runs top to bottom: pick where the f0 comes from and run the extraction, ",
+            "optionally attach metadata and TextGrid landmarks, then choose what the download contains."))),
+
+        tags$strong("F0 extraction:"),
+        tags$ul(class = "glist",
           tags$li(HTML(paste0(
-            "<strong>wrassp</strong> runs the ksvF0 pitch algorithm ",
-            "(Sch&auml;fer-Vincent, 1983) in R, with no external dependencies, ",
-            "and deploys cleanly on shinyapps.io (",
+            "<strong>wrassp</strong> runs the ksvF0 pitch algorithm (Sch&auml;fer-Vincent, 1983) in R, ",
+            "with no external dependencies, and deploys cleanly on shinyapps.io (",
             "<a href='https://cran.r-project.org/package=wrassp' target='_blank'>CRAN</a> &middot; ",
             "<a href='https://github.com/IPS-LMU/wrassp' target='_blank'>GitHub</a>",
-            "). It also computes a per-frame <strong>intensity</strong> (dB) track from ",
-            "short-term RMS, used by the Inspect tab's low-intensity check."))),
+            "). It also computes a per-frame <strong>intensity</strong> (dB) track from short-term RMS, ",
+            "used by the Inspect tab&#39;s low-intensity check."))),
           tags$li(HTML(paste0(
-            "<strong>Praat</strong> uses the .Pitch / .PitchTier files you uploaded alongside ",
-            "the .wav files. Choose this if you've already extracted pitch in Praat with custom settings."))),
+            "<strong>Praat</strong> uses the .Pitch / .PitchTier files you uploaded alongside the .wav ",
+            "files. Choose this if you have already extracted pitch in Praat with custom settings; it ",
+            "keeps the per-frame candidates that F0 Correction can offer as alternatives."))),
           tags$li(HTML(paste0(
-            "<strong>Upload existing f0 CSV</strong> skips extraction entirely. Useful if you've already ",
-            "run wrassp / Praat / any other tool elsewhere and just want to use F0 Correction or the ",
-            "metadata join. The CSV needs columns for token / filename, time, and f0 — ",
-            "Shinytone auto-detects common column names and lets you remap if needed. ",
-            "Token values must match the .wav basenames uploaded in Start."))),
+            "<strong>Upload existing f0 CSV</strong> skips extraction entirely: use it when you ",
+            "already have the f0 data from another tool. The CSV needs columns for token / filename, ",
+            "time, and f0; common names are ",
+            "auto-detected and you can remap. Token values must match the .wav basenames from Start.")))
+        ),
+
+        tags$strong("Metadata and landmarks (optional):"),
+        tags$ul(class = "glist",
           tags$li(HTML(paste0(
-            "<strong>Metadata (optional):</strong> either upload a metadata CSV (one row per audio file) ",
-            "or have Shinytone derive metadata by splitting each filename on a separator (default ",
-            "<code>_</code>) and naming the segments. Either way, the metadata is joined to the f0 ",
-            "output so the download is ready for F0 Analysis."))),
+            "<strong>Metadata</strong> either comes from a CSV (one row per audio file) or is derived ",
+            "by splitting each filename on a separator (default <code>_</code>) and naming the ",
+            "segments. Either way it is joined to the f0 output, so the download is ready for F0 ",
+            "Analysis."))),
           tags$li(HTML(paste0(
-            "<strong>Landmarks from TextGrid (optional):</strong> if you uploaded <code>.TextGrid</code> ",
-            "files, pick one or more <em>interval</em> tiers (e.g. <code>syllable</code>, <code>phoneme</code>, ",
-            "<code>vowel</code>, <code>rhyme</code>). Each tier tags every f0 frame with the segment it falls in, ",
-            "adding <code>&lt;tier&gt;</code>, <code>&lt;tier&gt;_start</code>, <code>&lt;tier&gt;_end</code>, and ",
-            "<code>&lt;tier&gt;_i</code> (segment index) columns. Downstream, the <strong>Visualise</strong> tab ",
-            "can align contours by these landmarks, including syllable by syllable for multi-syllable words.")))
+            "<strong>Landmarks from TextGrid</strong> tag every f0 frame with the segment it falls in. ",
+            "Pick one or more <em>interval</em> tiers (<code>syllable</code>, <code>phoneme</code>, ",
+            "<code>vowel</code>, <code>rhyme</code>); each adds <code>&lt;tier&gt;</code>, ",
+            "<code>&lt;tier&gt;_start</code>, <code>&lt;tier&gt;_end</code> and <code>&lt;tier&gt;_i</code> ",
+            "columns. The <strong>Visualise</strong> tab can then align contours by them, syllable by ",
+            "syllable for multi-syllable words.")))
+        ),
+
+        tags$strong("F0 Data Export:"),
+        tags$p(class = "gnote",
+          HTML(paste0(
+            "These shape the <em>download</em> only. F0 Correction always works on the extracted data ",
+            "exactly as it arrived, never on the export, so changing them cannot disturb your frame ",
+            "edits. How much detail Correction has therefore depends on the source: wrassp and ",
+            "<code>.Pitch</code> give it every frame, while a <code>.PitchTier</code> or an uploaded CSV ",
+            "give it only the rows that file contains."))),
+        tags$ul(class = "glist",
+          tags$li(HTML("<strong>Region</strong> is what the measurement covers."),
+            tags$ul(class = "gsub",
+              tags$li(HTML(paste0(
+                "<em>Whole token</em>: first to last voiced frame. Silence carries no f0, and an edge ",
+                "needs two voiced frames in a row, so a lone frame stranded in silence (a tracking ",
+                "error) cannot stretch it."))),
+              tags$li(HTML(paste0(
+                "<em>TextGrid interval</em>: a tier&#39;s vowels (found automatically), the rhyme, or ",
+                "labels you provide. Vowel matching ignores length marks, tone digits and diacritics, ",
+                "and counts di-/triphthongs and syllabic nasals."))))),
+          tags$li(HTML("<strong>Sampling</strong> is how densely."),
+            tags$ul(class = "gsub",
+              tags$li(HTML("<em>Native frame times</em>: every frame the tracker produced.")),
+              tags$li(HTML(paste0(
+                "<em>Equidistant points</em>: N points across the region (21 = every 5%, 11 = every ",
+                "10%). This is time normalisation at the sampling stage, so every token lands on the ",
+                "same 0 to 100% axis. It adds <code>point</code> (1 to N) and <code>time_prop</code> ",
+                "(0 to 1), which the Model tabs recognise as an already-normalised time axis."))))),
+          tags$li(HTML(paste0(
+            "<strong>Value at each point</strong> works the same as Praat&#39;s ",
+            "<code>Pitch: Get value at time...</code> command, with the same two interpolation ",
+            "choices, so the numbers match a Praat script querying the same times.")),
+            tags$ul(class = "gsub",
+              tags$li(HTML(paste0(
+                "<em>Linear interpolation</em>: a weighted average of the two frames on either side, ",
+                "favouring the nearer one. If only the far frame is unvoiced, the nearer frame&#39;s ",
+                "measured value is kept; if the nearer frame itself is unvoiced, the point is empty."))),
+              tags$li(HTML(paste0(
+                "<em>Nearest measured frame</em>: the frame the point falls in, so every value is one ",
+                "the tracker measured."))))),
+          tags$li(HTML(paste0(
+            "<strong>Unvoiced stretches are never averaged across</strong> when the input marks them, ",
+            "as wrassp and <code>.Pitch</code> do. A <code>.PitchTier</code> or a CSV of only voiced ",
+            "samples has no such frames, so a silent stretch there reads as a plain gap and is ",
+            "interpolated across, exactly as Praat would."))),
+          tags$li(HTML("<strong>Two checks run on every export.</strong>"),
+            tags$ul(class = "gsub",
+              tags$li(HTML(paste0(
+                "<code>has_gap</code> and <code>n_missing</code> mark tokens whose voicing was ",
+                "interrupted mid-region. Measured on the native frames before resampling, since ",
+                "resampling can fill a short dropout from the nearer frame."))),
+              tags$li(HTML(paste0(
+                "<code>voiced_s</code> and <code>voiced_prop</code> in the summary table above give ",
+                "each token&#39;s voiced span and its share of the recording ",
+                "(<code>voiced_s</code> / <code>duration_s</code>). Cells below half the corpus median ",
+                "are shaded, and the summary under the Download button names those tokens: their ",
+                "percentage positions are squeezed into whatever was tracked, so they are not ",
+                "comparable with the others. The comparison is median-relative because some silence ",
+                "around a token is normal.")))))
+        ),
+
+        tags$p(class = "gnote",
+          HTML(paste0(
+            "The complete frame grid, silence rows included, is still available from F0 Correction&#39;s ",
+            "download if you need the raw extraction."))),
+        tags$style(HTML("
+          .glist{margin:4px 0 10px 0;padding-left:18px;}
+          .glist>li{margin-bottom:6px;}
+          .gsub{margin:3px 0 0 0;padding-left:16px;list-style-type:circle;}
+          .gsub>li{margin-bottom:3px;}
+          .gnote{color:#5f6b66;font-size:0.85rem;margin:4px 0 6px;}
+        "))
+      ),
+
+        # --- Collapsible illustrated guide for the f0 data export ---
+        tags$details(class = "msg-route",
+          tags$style(HTML("
+            details.msg-route{background:#f3f8fc;border:1px solid #cfe2f1;border-radius:8px;padding:7px 14px 11px;margin:6px 0 0;}
+            .msg-route>summary{cursor:pointer;font-weight:700;color:#2c5d80;font-size:0.9rem;list-style:none;padding:1px 0;}
+            .msg-route>summary::-webkit-details-marker{display:none;}
+            .msg-route>summary::before{content:'\\25B8';color:#5b9bd5;display:inline-block;margin-right:8px;transition:transform .15s ease;}
+            .msg-route[open]>summary::before{transform:rotate(90deg);}
+            .msg-hint{color:#7aa6cc;font-weight:400;font-size:0.78rem;margin-left:6px;}
+            .msg-route[open] .msg-hint{display:none;}
+            .msg-intro{color:#3f5a72;font-size:0.83rem;line-height:1.5;margin:9px 0 0;}
+            .msg-illus{margin:11px 0 3px;}
+            .msg-illus svg{width:100%;height:auto;display:block;}
+            .msg-opts{display:flex;gap:9px;margin-top:11px;flex-wrap:wrap;}
+            .msg-step{flex:1 1 165px;background:#fff;border:1px solid #e1e9f2;border-radius:7px;padding:8px 12px;}
+            .msg-stitle{font-weight:700;color:#2c5f4f;font-size:0.86rem;}
+            .msg-swhy{font-size:0.76rem;color:#5f6b66;line-height:1.4;margin-top:2px;}
+            .msg-tab{display:inline-block;background:#e8f5f0;color:#2c5f4f;padding:1px 7px;border-radius:10px;font-size:0.72rem;font-weight:600;white-space:nowrap;}
+            .msg-tip{font-size:0.78rem;color:#33536f;background:#eaf3fb;border:1px solid #d3e6f5;border-radius:6px;padding:6px 11px;margin-top:11px;line-height:1.55;}
+            .msg-tip .fa,.msg-tip svg{color:#5b9bd5;margin-right:4px;}
+          ")),
+          tags$summary(icon("ruler-horizontal"),
+                       " What should I export? Monosyllables and multisyllables",
+                       tags$span(class = "msg-hint", "(click to expand)")),
+          tags$p(class = "msg-intro",
+            HTML(paste0(
+              "The default, <strong>native frame times</strong> across the ",
+              "<strong>whole token</strong>, is the right starting point for both ",
+              "monosyllabic and multisyllabic data: it keeps every measurement the ",
+              "pitch tracker made, and drops only the silence that carries no f0. ",
+              "Change it when your analysis needs something more specific."))),
+          tags$div(class = "msg-illus", HTML('<svg width="100%" viewBox="0 0 680 206" role="img" xmlns="http://www.w3.org/2000/svg"> <title>Sampling and region choices for the analysis export</title> <desc>Left: native frame times give a dense fixed-step grid, equidistant points give the same count at the same percentage positions in every token. Right: the region is either the whole token from first to last voiced frame, or a TextGrid interval such as the vowel or the rhyme.</desc> <text x="160" y="14" font-size="12" font-weight="700" fill="#2c5d80" text-anchor="middle">Sampling</text> <text x="500" y="14" font-size="12" font-weight="700" fill="#2c5d80" text-anchor="middle">Region</text> <line x1="330" y1="6" x2="330" y2="200" stroke="#d9e6f1" stroke-width="1"/> <!-- SAMPLING: native --> <text x="160" y="34" font-size="11" font-weight="600" fill="#48667e" text-anchor="middle">Native frame times</text> <rect x="30" y="42" width="45" height="24" fill="#f3f6f8" stroke="#e2e8ee" stroke-width="1"/> <rect x="75" y="42" width="180" height="24" fill="#e8f2fa" stroke="#b8d2e8" stroke-width="1"/> <rect x="255" y="42" width="35" height="24" fill="#f3f6f8" stroke="#e2e8ee" stroke-width="1"/> <g stroke="#5b9bd5" stroke-width="1.4"> <line x1="78" y1="44" x2="78" y2="64"/><line x1="87" y1="44" x2="87" y2="64"/><line x1="96" y1="44" x2="96" y2="64"/> <line x1="105" y1="44" x2="105" y2="64"/><line x1="114" y1="44" x2="114" y2="64"/><line x1="123" y1="44" x2="123" y2="64"/> <line x1="132" y1="44" x2="132" y2="64"/><line x1="141" y1="44" x2="141" y2="64"/><line x1="150" y1="44" x2="150" y2="64"/> <line x1="159" y1="44" x2="159" y2="64"/><line x1="168" y1="44" x2="168" y2="64"/><line x1="177" y1="44" x2="177" y2="64"/> <line x1="186" y1="44" x2="186" y2="64"/><line x1="195" y1="44" x2="195" y2="64"/><line x1="204" y1="44" x2="204" y2="64"/> <line x1="213" y1="44" x2="213" y2="64"/><line x1="222" y1="44" x2="222" y2="64"/><line x1="231" y1="44" x2="231" y2="64"/> <line x1="240" y1="44" x2="240" y2="64"/><line x1="249" y1="44" x2="249" y2="64"/> </g> <text x="52" y="78" font-size="9" fill="#a8b3bb" text-anchor="middle">silence</text> <text x="165" y="78" font-size="9" fill="#7f97ad" text-anchor="middle">voiced</text> <text x="160" y="92" font-size="10" fill="#5f6b66" text-anchor="middle">one frame every 10 ms, so a longer token gets more</text> <!-- SAMPLING: equidistant points --> <text x="160" y="118" font-size="11" font-weight="600" fill="#48667e" text-anchor="middle">Equidistant points across the region</text> <rect x="30" y="126" width="45" height="24" fill="#f3f6f8" stroke="#e2e8ee" stroke-width="1"/> <rect x="75" y="126" width="180" height="24" fill="#e8f2fa" stroke="#b8d2e8" stroke-width="1"/> <rect x="255" y="126" width="35" height="24" fill="#f3f6f8" stroke="#e2e8ee" stroke-width="1"/> <g stroke="#2f9e79" stroke-width="2"> <line x1="75" y1="128" x2="75" y2="148"/><line x1="93" y1="128" x2="93" y2="148"/><line x1="111" y1="128" x2="111" y2="148"/> <line x1="129" y1="128" x2="129" y2="148"/><line x1="147" y1="128" x2="147" y2="148"/><line x1="165" y1="128" x2="165" y2="148"/> <line x1="183" y1="128" x2="183" y2="148"/><line x1="201" y1="128" x2="201" y2="148"/><line x1="219" y1="128" x2="219" y2="148"/> <line x1="237" y1="128" x2="237" y2="148"/><line x1="255" y1="128" x2="255" y2="148"/> </g> <text x="75" y="162" font-size="9" fill="#97a4ac" text-anchor="middle">0%</text> <text x="165" y="162" font-size="9" fill="#97a4ac" text-anchor="middle">50%</text> <text x="255" y="162" font-size="9" fill="#97a4ac" text-anchor="middle">100%</text> <text x="160" y="178" font-size="10" fill="#5f6b66" text-anchor="middle">same count, same % positions, in every token</text> <!-- REGION --> <rect x="352" y="30" width="30" height="24" fill="#f3f6f8" stroke="#e2e8ee" stroke-width="1"/> <rect x="382" y="30" width="50" height="24" fill="#eef4f9" stroke="#b8d2e8" stroke-width="1"/> <rect x="432" y="30" width="100" height="24" fill="#e3f1ea" stroke="#8dc4ac" stroke-width="1"/> <rect x="532" y="30" width="50" height="24" fill="#eef4f9" stroke="#b8d2e8" stroke-width="1"/> <rect x="582" y="30" width="30" height="24" fill="#f3f6f8" stroke="#e2e8ee" stroke-width="1"/> <text x="407" y="46" font-size="11" fill="#48667e" text-anchor="middle">m</text> <text x="482" y="46" font-size="11" font-weight="700" fill="#2c5f4f" text-anchor="middle">a</text> <text x="557" y="46" font-size="11" fill="#48667e" text-anchor="middle">n</text> <text x="367" y="24" font-size="8" fill="#a8b3bb" text-anchor="middle">sil</text> <text x="597" y="24" font-size="8" fill="#a8b3bb" text-anchor="middle">sil</text> <path d="M382,68 v5 h200 v-5" fill="none" stroke="#3a7ca5" stroke-width="1.8"/> <text x="482" y="88" font-size="10" font-weight="600" fill="#2c5d80" text-anchor="middle">Whole token (voiced region)</text> <text x="482" y="101" font-size="9" fill="#5f6b66" text-anchor="middle">first to last voiced frame</text> <path d="M432,116 v5 h100 v-5" fill="none" stroke="#2f9e79" stroke-width="1.8"/> <text x="482" y="136" font-size="10" font-weight="600" fill="#2c5f4f" text-anchor="middle">TextGrid interval: vowel</text> <text x="482" y="149" font-size="9" fill="#5f6b66" text-anchor="middle">the nucleus only</text> <path d="M432,164 v5 h150 v-5" fill="none" stroke="#2f9e79" stroke-width="1.8"/> <text x="507" y="184" font-size="10" font-weight="600" fill="#2c5f4f" text-anchor="middle">TextGrid interval: rhyme</text> <text x="507" y="196" font-size="9" fill="#5f6b66" text-anchor="middle">vowel + coda, monosyllables only</text> </svg>')),
+          tags$div(class = "msg-illus", HTML('<svg width="100%" viewBox="0 0 680 250" role="img" xmlns="http://www.w3.org/2000/svg"> <title>How each equidistant point takes its f0, following Praat</title> <desc>The tracker measures f0 on its own frame grid every 10 ms, drawn as filled dots where it found f0 and hollow dots where the sound was unvoiced. Resampling lays an evenly spaced grid over the same span. Following Praat, a point is a weighted average of the two frames around it, favouring the nearer one; if only the far frame is unvoiced the nearer frame value is kept; if the nearer frame is unvoiced the point is NA.</desc> <text x="340.0" y="13" font-size="12" font-weight="700" fill="#2c5d80" text-anchor="middle">How each point takes its f0 (linear interpolation)</text> <g stroke="#cfe8dc" stroke-width="1" stroke-dasharray="3,3"> <line x1="95.2" y1="34" x2="95.2" y2="150"/><line x1="185.87" y1="34" x2="185.87" y2="150"/> <line x1="276.53" y1="34" x2="276.53" y2="150"/><line x1="367.2" y1="34" x2="367.2" y2="150"/> <line x1="457.87" y1="34" x2="457.87" y2="150"/><line x1="548.53" y1="34" x2="548.53" y2="150"/> <line x1="639.2" y1="34" x2="639.2" y2="150"/> </g> <polyline points="95.2,100 149.6,92 204.0,84 258.4,76 312.8,70" fill="none" stroke="#9fc4dd" stroke-width="2"/> <polyline points="476.0,64 530.4,58 584.8,54 639.2,50" fill="none" stroke="#9fc4dd" stroke-width="2"/> <g fill="#2b6f9e" stroke="#fff" stroke-width="1"> <circle cx="95.2" cy="100" r="4.6"/><circle cx="149.6" cy="92" r="4.6"/><circle cx="204.0" cy="84" r="4.6"/> <circle cx="258.4" cy="76" r="4.6"/><circle cx="312.8" cy="70" r="4.6"/> <circle cx="476.0" cy="64" r="4.6"/><circle cx="530.4" cy="58" r="4.6"/><circle cx="584.8" cy="54" r="4.6"/> <circle cx="639.2" cy="50" r="4.6"/> </g> <g fill="#fff" stroke="#c9b7ab" stroke-width="1.8"> <circle cx="367.2" cy="67" r="4.6"/><circle cx="421.6" cy="65" r="4.6"/> </g> <g fill="#2f9e79" stroke="#fff" stroke-width="0.8"> <circle cx="95.2" cy="100" r="3.4"/><circle cx="185.87" cy="86.67" r="3.4"/> <circle cx="276.53" cy="74" r="3.4"/><circle cx="457.87" cy="64" r="3.4"/> <circle cx="548.53" cy="56.67" r="3.4"/><circle cx="639.2" cy="50" r="3.4"/> </g> <text x="367.2" y="46" font-size="10.5" font-weight="700" fill="#b08a72" text-anchor="middle">NA</text> <text x="276.53" y="30" font-size="11" font-weight="700" fill="#2f9e79" text-anchor="middle">1</text> <text x="367.2" y="30" font-size="11" font-weight="700" fill="#b08a72" text-anchor="middle">2</text> <text x="457.87" y="30" font-size="11" font-weight="700" fill="#2f9e79" text-anchor="middle">3</text> <line x1="81.6" y1="122" x2="652.8" y2="122" stroke="#c8d6e0" stroke-width="1"/> <g stroke="#2b6f9e" stroke-width="1.8"> <line x1="95.2" y1="116" x2="95.2" y2="128"/><line x1="149.6" y1="116" x2="149.6" y2="128"/> <line x1="204.0" y1="116" x2="204.0" y2="128"/><line x1="258.4" y1="116" x2="258.4" y2="128"/> <line x1="312.8" y1="116" x2="312.8" y2="128"/><line x1="367.2" y1="116" x2="367.2" y2="128"/> <line x1="421.6" y1="116" x2="421.6" y2="128"/><line x1="476.0" y1="116" x2="476.0" y2="128"/> <line x1="530.4" y1="116" x2="530.4" y2="128"/><line x1="584.8" y1="116" x2="584.8" y2="128"/> <line x1="639.2" y1="116" x2="639.2" y2="128"/> </g> <text x="340.0" y="140" font-size="9.5" fill="#5a7285" text-anchor="middle">native frames, one every 10 ms (more of them in a longer token)</text> <line x1="81.6" y1="156" x2="652.8" y2="156" stroke="#bfe0d2" stroke-width="1"/> <g stroke="#2f9e79" stroke-width="2.8"> <line x1="95.2" y1="149" x2="95.2" y2="163"/><line x1="185.87" y1="149" x2="185.87" y2="163"/> <line x1="276.53" y1="149" x2="276.53" y2="163"/><line x1="367.2" y1="149" x2="367.2" y2="163"/> <line x1="457.87" y1="149" x2="457.87" y2="163"/><line x1="548.53" y1="149" x2="548.53" y2="163"/> <line x1="639.2" y1="149" x2="639.2" y2="163"/> </g> <text x="95.2" y="175" font-size="9" fill="#97a4ac" text-anchor="middle">0%</text> <text x="367.2" y="175" font-size="9" fill="#97a4ac" text-anchor="middle">50%</text> <text x="639.2" y="175" font-size="9" fill="#97a4ac" text-anchor="middle">100%</text> <text x="231.2" y="175" font-size="9.5" fill="#3f7d67" text-anchor="middle">the equidistant grid</text> <circle cx="35.36" cy="194" r="4.6" fill="#2b6f9e" stroke="#fff" stroke-width="1"/> <text x="47.6" y="197" font-size="9" fill="#7f8b93">native frame with f0</text> <circle cx="206.72" cy="194" r="4.6" fill="#fff" stroke="#c9b7ab" stroke-width="1.8"/> <text x="218.96" y="197" font-size="9" fill="#7f8b93">unvoiced frame</text> <circle cx="342.72" cy="194" r="3.4" fill="#2f9e79"/> <text x="354.96" y="197" font-size="9" fill="#7f8b93">resampled point</text> <text x="27.2" y="214" font-size="10" fill="#2f9e79" font-weight="700">1</text> <text x="43.52" y="214" font-size="10" fill="#5f6b66">both frames around it have f0: a weighted average of the two, favouring the nearer.</text> <text x="27.2" y="228" font-size="10" fill="#b08a72" font-weight="700">2</text> <text x="43.52" y="228" font-size="10" fill="#5f6b66">the nearer frame is unvoiced: NA, since nothing was measured there.</text> <text x="27.2" y="242" font-size="10" fill="#2f9e79" font-weight="700">3</text> <text x="43.52" y="242" font-size="10" fill="#5f6b66">only the far frame is unvoiced: the nearer frame value is kept, never averaged across.</text> </svg>')),
+          
+          tags$div(class = "msg-opts",
+            tags$div(class = "msg-step",
+              tags$div(class = "msg-stitle", "Monosyllabic words"),
+              tags$div(class = "msg-swhy",
+                HTML(paste0(
+                  "Keep the default. Switch to <strong>equidistant points</strong> when you need a fixed ",
+                  "number of measurements per token, and narrow the region to the vowel or rhyme when the ",
+                  "onset consonant is not considered in your study.")))),
+            tags$div(class = "msg-step",
+              tags$div(class = "msg-stitle", "Multisyllabic words"),
+              tags$div(class = "msg-swhy",
+                HTML(paste0(
+                  "Keep the default here too, and align by landmarks rather than by percentage: tick the ",
+                  "<code>syllable</code> tier under <strong>Landmarks from TextGrid</strong>, then build the ",
+                  "<code>&lt;tier&gt;_tseq</code> axis in <span class=\"msg-tab\">Normalise</span>."))))
+          ),
+          tags$div(class = "msg-tip",
+            icon("lightbulb"),
+            HTML(paste0(
+              " These settings shape the download only, so nothing is lost by trying one: ",
+              "F0 Correction keeps working on the extracted data as it arrived. Corrections you ",
+              "make in this session are picked up by the export with no upload needed; only if you ",
+              "close the app and come back do you need to re-upload the corrected CSV.")))
         )
-      )
     )
   })
 
@@ -580,6 +751,238 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     out
   }
 
+  # ---- F0 data export: region + sampling ----------------------------------
+  # fp_f0_data ALWAYS holds the full native grid, so F0 Correction's frame
+  # edits can never be invalidated by a change here. Region and sampling are
+  # applied on the way out, as a derived dataset for download.
+  #
+  #   region   : which rows count  (whole file / voiced span / TextGrid interval)
+  #   sampling : how they are measured (native frame times / N equidistant points)
+
+  # Interval-region controls, shown only when that region is chosen.
+  output$fp_region_interval_ui <- renderUI({
+    tiers <- fp_tg_tiers()
+    if (length(tiers) == 0) {
+      return(tags$div(style = "color: #999; font-size: 0.78rem; font-style: italic; margin-bottom: 8px;",
+        "Upload .TextGrid files in the Start tab to measure across an interval."))
+    }
+    tagList(
+      selectInput("fp_region_tier", "Tier:", choices = tiers, selectize = FALSE),
+      radioButtons("fp_region_mode", NULL,
+                   choices = c("Vowel (automatic, IPA labels)" = "vowel",
+                               "Rhyme (for monosyllables only)" = "rhyme",
+                               "Custom labels"                  = "labels"),
+                   selected = "vowel"),
+      conditionalPanel("input.fp_region_mode == 'labels'",
+        textInput("fp_region_labels", "Labels to keep:",
+                  placeholder = "e.g. a, ai, an")),
+      conditionalPanel("input.fp_region_mode == 'rhyme'",
+        tags$div(style = "color: #888; font-size: 0.75rem; font-style: italic; margin-top: -4px; margin-bottom: 8px;",
+          "Keeps labelled intervals from the first vowel to the end of the ",
+          "token (vowel + coda). Only valid for monosyllabic tokens.")),
+      conditionalPanel("input.fp_region_mode == 'vowel'",
+        tags$div(style = "color: #888; font-size: 0.75rem; font-style: italic; margin-top: -4px; margin-bottom: 8px;",
+          "Matches labels made only of IPA vowel letters. Length marks, tone ",
+          "digits and diacritics are ignored, di-/triphthongs and syllabic ",
+          "nasals count."))
+    )
+  })
+
+  # Apply the chosen region to the full grid. Returns list(data, note) where
+  # `note` explains any token loss; NULL when the region cannot be built.
+  apply_region <- function(d) {
+    region <- input$fp_region
+    if (is.null(region)) region <- "all"
+    if (identical(region, "all")) return(list(data = d, note = NULL))
+
+    n_tok0 <- length(unique(d$token))
+    if (identical(region, "voiced")) {
+      out <- tryCatch(trim_to_voiced(d), error = function(e) NULL)
+      if (is.null(out)) return(list(data = d, note = "Could not find voiced regions; exporting the whole file."))
+      lost <- n_tok0 - length(unique(out$token))
+      return(list(data = out,
+                  note = if (lost > 0)
+                    sprintf("%d token(s) have no voiced frame and are excluded.", lost)))
+    }
+
+    # TextGrid interval region.
+    tier <- input$fp_region_tier
+    if (is.null(tier) || !nzchar(tier)) return(NULL)
+    mode <- input$fp_region_mode
+    if (is.null(mode)) mode <- "vowel"
+
+    # Attach the tier to a minimal token/time frame, then graft its landmark
+    # columns on, so a tier that was not ticked as a landmark still works.
+    key <- d[, c("token", "time"), drop = FALSE]
+    res <- tryCatch(attach_landmarks(key, fp_audio_data(), tier),
+                    error = function(e) NULL)
+    if (is.null(res)) return(NULL)
+    new_cols <- setdiff(names(res), names(key))
+    lab_col  <- new_cols[paste0(new_cols, "_start") %in% new_cols][1]
+    if (is.na(lab_col)) return(NULL)
+    d2 <- d
+    for (cl in new_cols) d2[[cl]] <- res[[cl]]
+
+    labels <- NULL
+    if (identical(mode, "labels")) {
+      raw <- input$fp_region_labels
+      if (is.null(raw)) raw <- ""
+      labels <- trimws(unlist(strsplit(raw, "[,;]")))
+      labels <- labels[nzchar(labels)]
+      if (length(labels) == 0) return(NULL)
+    }
+    sub <- tryCatch(filter_interval_rows(d2, lab_col, mode = mode, labels = labels),
+                    error = function(e) NULL)
+    if (is.null(sub)) return(NULL)
+
+    no_lab <- sum(tapply(is.na(d2[[lab_col]]), d2$token, all))
+    list(data = sub,
+         note = if (no_lab > 0)
+           sprintf(paste("%d token(s) have no labelled interval on this tier",
+                         "(no matching TextGrid, no tier of that name, or no",
+                         "frame inside its span) and are excluded."), no_lab))
+  }
+
+  # The dataset the Download button writes: fp_f0_data -> region -> sampling.
+  # Returns list(data, region, sampling, notes, dropped) or NULL.
+  fp_export_data <- reactive({
+    d <- fp_f0_data()
+    if (is.null(d) || nrow(d) == 0) return(NULL)
+
+    # Measure the CORRECTED contours when F0 Correction has produced any:
+    # f0_corrected replaces f0, and whole-token discards drop out. Falls back
+    # to the raw extraction when nothing has been corrected yet.
+    n_edited <- 0L; n_discarded <- 0L
+    cd <- if (is.null(fp_corrected_data)) NULL else fp_corrected_data()
+    if (!is.null(cd) && nrow(cd) == nrow(d) && "f0_corrected" %in% names(cd)) {
+      if ("edited" %in% names(cd)) {
+        n_edited <- length(unique(cd$token[cd$edited %in% TRUE]))
+      }
+      d$f0 <- cd$f0_corrected
+      if ("token_dropped" %in% names(cd)) {
+        drop <- cd$token_dropped %in% TRUE
+        n_discarded <- length(unique(cd$token[drop]))
+        d <- d[!drop, , drop = FALSE]
+      }
+      if (nrow(d) == 0) return(NULL)
+    }
+
+    reg <- apply_region(d)
+    if (is.null(reg)) return(NULL)
+    out   <- reg$data
+    notes <- reg$note
+
+    # Equidistant percentages are relative to the REGION, so a token whose
+    # voicing was only partly tracked has its points squeezed into whatever
+    # was found: its 50% is not the same linguistic position as everyone
+    # else's. Flag the tokens whose voiced span is far shorter than the rest
+    # of the corpus, rather than let that pass silently. Compared against the
+    # corpus median, since a healthy share (silence padding) is normal.
+    if (identical(input$fp_region, "voiced") && nrow(out) > 0) {
+      span <- function(x) if (length(x) > 1) diff(range(x, na.rm = TRUE)) else NA_real_
+      full <- tapply(d$time, d$token, span)
+      kept <- tapply(out$time, out$token, span)
+      prop <- kept[names(kept) %in% names(full)] / full[names(kept)]
+      prop <- prop[is.finite(prop)]
+      if (length(prop) >= 4) {
+        med <- stats::median(prop)
+        odd <- names(prop)[prop < 0.5 * med]
+        if (length(odd) > 0) {
+          notes <- c(notes, sprintf(paste("%d token(s) are voiced across a much shorter span than",
+                                          "the rest (%s), so their percentage positions are not",
+                                          "comparable with the others. Worth a look in F0 Correction."),
+                                    length(odd),
+                                    paste(utils::head(odd, 3), collapse = ", ")))
+        }
+      }
+    }
+    dropped <- character(0)
+
+    # Mark unvoiced stretches on the NATIVE frames of the region, before any
+    # resampling: the Praat rule fills a point from its nearer frame, so a
+    # short dropout can leave no NA in the resampled grid even though voicing
+    # really was interrupted. resample_f0_equal() carries these token-constant
+    # columns through, so the flags describe the voicing either way.
+    out <- tryCatch(flag_f0_gaps(out), error = function(e) out)
+
+    if (identical(input$fp_sampling_mode, "equal") && nrow(out) > 0) {
+      n <- suppressWarnings(as.integer(input$fp_sampling_n))
+      if (is.na(n) || n < 2) {
+        notes <- c(notes, "Points per token must be at least 2, so the export keeps the native frame times.")
+      } else {
+        meth <- input$fp_sampling_method
+        if (is.null(meth) || !meth %in% c("linear", "nearest")) meth <- "linear"
+        rs <- tryCatch(resample_f0_equal(out, n = n, method = meth),
+                       error = function(e) NULL)
+        if (is.null(rs)) {
+          notes <- c(notes, "Could not resample, so the export keeps the native frame times.")
+        } else {
+          out <- rs
+          dropped <- attr(out, "dropped_columns")
+          if (is.null(dropped)) dropped <- character(0)
+        }
+      }
+    }
+    n_gap <- if ("has_gap" %in% names(out)) {
+      length(unique(out$token[out$has_gap %in% TRUE]))
+    } else 0L
+    if (n_gap > 0) {
+      notes <- c(notes, sprintf(paste("%d token(s) had an unvoiced gap inside the",
+                                      "measured region (marked has_gap in the download).",
+                                      "Resampling may fill some of those points from",
+                                      "the nearer frame, so the flag can outlive the NA."),
+                                n_gap))
+    }
+    if (n_edited > 0) {
+      notes <- c(notes, sprintf("Using corrected f0 for %d edited token(s).", n_edited))
+    }
+    if (n_discarded > 0) {
+      notes <- c(notes, sprintf("%d token(s) discarded in F0 Correction are excluded.",
+                                n_discarded))
+    }
+    list(data = out,
+         region = if (is.null(input$fp_region)) "voiced" else input$fp_region,
+         sampling = input$fp_sampling_mode,
+         notes = notes, dropped = dropped)
+  })
+
+  # One-line description of what the Download button will write.
+  output$fp_export_summary <- renderUI({
+    res <- fp_export_data()
+    d   <- fp_f0_data()
+    if (is.null(d) || nrow(d) == 0) return(NULL)
+    if (is.null(res)) {
+      return(tags$div(style = "color: #8a6d00; font-size: 0.75rem; font-style: italic; margin-top: 6px;",
+        "Finish choosing the region (tier / labels) to build the export."))
+    }
+    region_txt <- switch(res$region,
+                         all      = "the whole file",   # legacy value, no UI path
+                         voiced   = "each whole token (voiced region)",
+                         interval = sprintf("the %s intervals of tier '%s'",
+                                            switch(input$fp_region_mode,
+                                                   vowel = "vowel", rhyme = "rhyme",
+                                                   labels = "selected", "selected"),
+                                            input$fp_region_tier))
+    sampling_txt <- if (identical(res$sampling, "equal") &&
+                        "time_prop" %in% names(res$data)) {
+      sprintf("%d equidistant points", length(unique(res$data$time_prop)))
+    } else "native frame times"
+    cap <- sprintf("Export: %s across %s. %s rows, %d token(s).",
+                   sampling_txt, region_txt,
+                   format(nrow(res$data), big.mark = ","),
+                   length(unique(res$data$token)))
+    if (length(res$dropped) > 0) {
+      cap <- paste0(cap, sprintf(" Resampling dropped frame-level column(s): %s.",
+                                 paste(res$dropped, collapse = ", ")))
+    }
+    tagList(
+      tags$div(style = "color: #666; font-size: 0.75rem; font-style: italic; margin-top: 6px;", cap),
+      if (length(res$notes) > 0)
+        tags$div(style = "color: #8a6d00; font-size: 0.75rem; margin-top: 4px;",
+                 paste(res$notes, collapse = " "))
+    )
+  })
+
   # ---- CSV column auto-detection + auto-load ----
   # When the user picks a CSV in "Upload existing f0 CSV" mode, we read it
   # once into a reactive cache, surface three column-pickers (token / time / f0)
@@ -702,6 +1105,25 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       )
       return()
     }
+    # A re-uploaded F0 Data Export is recognisable by its computed columns.
+    # Correcting it works (times are absolute, so the points still line up with
+    # the waveform), but it corrects the resampled points rather than the frames
+    # they came from, and Praat candidates are gone. The intended order is
+    # correct first, then export, since the export follows corrections.
+    if (all(c("point", "time_prop") %in% names(df))) {
+      showNotification(
+        tags$div(
+          tags$strong("This looks like an F0 Data Export (resampled points)."),
+          tags$div(style = "margin-top:4px;",
+            "You can still correct it, and the points line up with the waveform, ",
+            "but you would be editing the resampled points rather than the pitch ",
+            "frames they came from, and Praat pitch candidates are not available."),
+          tags$div(style = "margin-top:4px;",
+            "For frame-level correction, load the original audio instead: correct ",
+            "first, then export. The export always follows your corrections.")),
+        type = "warning", duration = 14, id = "fp_csv_is_export")
+    }
+
     # Only fire the success toast when fp_f0_data is actually changing.
     cur <- isolate(fp_f0_data())
     same <- !is.null(cur) && identical(cur, out)
@@ -872,6 +1294,9 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         }
         fp_f0_data(attach_landmarks_if_any(do.call(rbind, lapply(results, `[[`, "df"))))
         if (!is.null(fp_pitch_candidates)) {
+          # The in-app grid is always the native one, so the .Pitch frames
+          # line up one-to-one and the Correction tab's candidate picker
+          # stays usable whatever the export settings are.
           cands <- list()
           for (b in names(results)) {
             if (!is.null(results[[b]]$candidates)) cands[[b]] <- results[[b]]$candidates
@@ -953,7 +1378,10 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         "Use the camera icon for a high-resolution PNG."),
       plotly::plotlyOutput("fp_f0_overview", height = "450px"),
       tags$h4(style = "margin-top: 20px;", "Per-token summary"),
-      DT::dataTableOutput("fp_f0_summary_table")
+      DT::dataTableOutput("fp_f0_summary_table"),
+      tags$h4(style = "margin-top: 20px;", "Export preview"),
+      uiOutput("fp_export_preview_note"),
+      DT::dataTableOutput("fp_export_preview")
     )
   })
 
@@ -1058,7 +1486,28 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         )
       summary_df <- dplyr::left_join(summary_df, mi, by = "token")
     }
-    DT::datatable(
+
+    # Voiced span per token, on the same definition the "Whole token" region
+    # uses, plus its share of the recording. This is where a token that the
+    # tracker only partly voiced shows up: with equidistant sampling its
+    # percentage positions are squeezed into voiced_s, so a low voiced_prop
+    # means its 50% is not the same position as the other tokens' 50%.
+    vs <- tryCatch({
+      tv <- trim_to_voiced(df)
+      if (nrow(tv) == 0) NULL else
+        tv |>
+          dplyr::group_by(token) |>
+          dplyr::summarise(voiced_s = round(max(time) - min(time), 3),
+                           .groups = "drop")
+    }, error = function(e) NULL)
+    if (!is.null(vs)) {
+      summary_df <- summary_df |>
+        dplyr::left_join(vs, by = "token") |>
+        dplyr::mutate(voiced_prop = ifelse(duration_s > 0,
+                                           round(voiced_s / duration_s, 2), NA_real_))
+    }
+
+    dt <- DT::datatable(
       summary_df,
       rownames = FALSE, filter = "top",
       options = list(
@@ -1066,6 +1515,57 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         columnDefs = list(list(className = "dt-center", targets = "_all"))
       )
     )
+    # Shade the tokens voiced across far less of their recording than the
+    # rest, so they can be spotted without reading every row.
+    if ("voiced_prop" %in% names(summary_df)) {
+      vp  <- summary_df$voiced_prop
+      med <- suppressWarnings(stats::median(vp, na.rm = TRUE))
+      if (is.finite(med) && med > 0 && sum(!is.na(vp)) >= 4) {
+        dt <- DT::formatStyle(dt, "voiced_prop",
+                              backgroundColor = DT::styleInterval(0.5 * med,
+                                                                  c("#fdecea", "")))
+      }
+    }
+    dt
+  })
+
+  # ---- Export preview: exactly what the Download button will write ----
+  # Reads fp_export_data(), so region, sampling and any corrections are all
+  # reflected; the metadata join is applied here too, as at download time.
+  fp_export_preview_data <- reactive({
+    res <- fp_export_data()
+    if (is.null(res) || nrow(res$data) == 0) return(NULL)
+    out <- res$data
+    md  <- if (!is.null(fp_metadata)) fp_metadata() else NULL
+    keycol <- active_keycol()
+    if (!is.null(md) && nrow(md) > 0 && !is.null(keycol)) {
+      out <- tryCatch(metadata_join(out, md, keycol,
+                                    strip_ext = isTRUE(input$fp_meta_strip_ext))$joined,
+                      error = function(e) out)
+    }
+    out
+  })
+
+  output$fp_export_preview_note <- renderUI({
+    df <- fp_export_preview_data()
+    if (is.null(df)) {
+      return(tags$div(style = "color: #888; font-size: 0.85rem; font-style: italic;",
+        "Finish choosing the export options to preview the file."))
+    }
+    tags$p(style = "color: #777; font-size: 0.85rem;",
+      sprintf("The first rows of the file the Download button will write: %s rows x %d columns, %d token(s).",
+              format(nrow(df), big.mark = ","), ncol(df), length(unique(df$token))))
+  })
+
+  output$fp_export_preview <- DT::renderDataTable({
+    df <- fp_export_preview_data()
+    req(df)
+    num <- names(df)[vapply(df, is.numeric, logical(1))]
+    dt <- DT::datatable(utils::head(df, 50), rownames = FALSE,
+                        options = list(pageLength = 10, scrollX = TRUE,
+                                       dom = "tp", autoWidth = TRUE))
+    if (length(num)) dt <- DT::formatSignif(dt, num, 5)
+    dt
   })
 
   # ---- Download f0 CSV (joined with metadata if available) ----
@@ -1074,16 +1574,27 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       paste0(input$fp_extract_filename, ".csv")
     },
     content = function(file) {
-      df <- fp_f0_data()
-      if (is.null(df) || nrow(df) == 0) {
+      if (is.null(fp_f0_data()) || nrow(fp_f0_data()) == 0) {
         showNotification(
-          "No f0 data yet — click Run extraction first.",
+          "No f0 data yet. Click Run extraction first.",
           type = "warning", duration = 5
         )
         # Write a one-line placeholder so the browser doesn't hang on the request
-        writeLines("# Shinytone: no f0 data — run extraction first.", file)
+        writeLines("# Shinytone: no f0 data. Run extraction first.", file)
         return()
       }
+      # Region + sampling are applied here, on the way out; the in-app grid
+      # (and so F0 Correction) is untouched. Defaults reproduce the full
+      # native grid exactly.
+      res <- fp_export_data()
+      if (is.null(res) || nrow(res$data) == 0) {
+        showNotification(
+          "The chosen region is empty. Check the tier, mode, and labels.",
+          type = "warning", duration = 6)
+        writeLines("# Shinytone: the chosen export region is empty.", file)
+        return()
+      }
+      df <- res$data
       md <- if (!is.null(fp_metadata)) fp_metadata() else NULL
       keycol <- active_keycol()
       out <- df

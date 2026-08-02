@@ -10,12 +10,39 @@ model_ui <- function(input, output, session, dataset, normalised_data, curated_d
   output$model_multisyl_note <- renderUI({
     tv <- input$model_time_var
     if (is.null(tv) || !grepl("_(tseq|t01)$", tv)) return(NULL)
+    # normalise_time_token() writes exactly "token_t01" (whole-token
+    # proportional time, a perfectly good axis); normalise_time_landmarks()
+    # writes "<set>_t01", which resets at every segment boundary. Keyed on the
+    # name the producer guarantees, not on a companion column that a trimmed
+    # re-upload may have lost.
+    if (identical(tv, "token_t01")) return(NULL)
     tags$div(
       style = paste("background-color:#fff8e1; border-left:4px solid #e0a800;",
                     "padding:10px 14px; margin:8px 0; border-radius:4px;",
                     "color:#7a5d00; font-size:0.9rem;"),
       tags$span(style = "color:#e0a800;", icon("wand-magic-sparkles")),
       " Are you modelling a multisyllabic time axis? Polynomial/GCA coefficients here summarise single-syllable shapes; for multisyllabic words, consider GAMM for these contours.")
+  })
+
+  # Value-based check: a time column that is already proportional ([0, 1] per
+  # token) is mapped onto the Legendre domain with the fixed 2t - 1 transform
+  # instead of a per-token stretch — say so before the user clicks Fit.
+  output$model_timenorm_note <- renderUI({
+    tv  <- input$model_time_var
+    tok <- input$model_token_var
+    if (is.null(tv) || is.null(tok) || grepl("_tseq$", tv)) return(NULL)
+    df <- tryCatch(active_data(), error = function(e) NULL)
+    if (is.null(df) || !all(c(tv, tok) %in% names(df))) return(NULL)
+    # A landmark set's within-segment <set>_t01 gets the multisyllabic nudge
+    # above, not this note; only the whole-token token_t01 falls through.
+    if (grepl("_t01$", tv) && !identical(tv, "token_t01")) return(NULL)
+    if (!time_already_normalised(df[[tv]], df[[tok]])) return(NULL)
+    tags$div(
+      style = paste("background-color:#e8f5f0; border-left:4px solid #78c2ad;",
+                    "padding:10px 14px; margin:8px 0; border-radius:4px;",
+                    "color:#2a7a5a; font-size:0.9rem;"),
+      icon("circle-info"),
+      HTML(sprintf(" <code>%s</code> looks already normalised to [0, 1] (every value lies in that range and a typical token covers most of it; some tokens may cover less). The fit will map it onto the Legendre domain with the fixed transform 2&thinsp;t&nbsp;&minus;&nbsp;1, so tokens that cover only part of the interval are not stretched. To force the per-token [&minus;1, 1] rescale instead, call <code>fit_polynomial(..., time_normalised = \"no\")</code> in R.", tv)))
   })
 
   # --- Guide text ---
@@ -32,7 +59,10 @@ model_ui <- function(input, output, session, dataset, normalised_data, curated_d
           tags$li(tags$strong("Time:"),
             " The time variable that orders f0 samples within each token. Each token's time is rescaled to ",
             tags$strong("[-1, 1]"),
-            " internally before fitting (the Legendre basis below is defined on that range)."),
+            " internally before fitting (the Legendre basis below is defined on that range).",
+            " A column that is already normalised to [0, 1] (e.g. ",
+            tags$code(style = code_style, "token_t01"), " from the Normalise tab, or ",
+            tags$code(style = code_style, "time_prop"), " from equal-point extraction) is detected and mapped with the fixed transform 2t − 1 instead, so tokens covering only part of the interval are not stretched."),
           tags$li(tags$strong("Speaker / Tone category:"), " Meta information to keep in the output.")
         ),
         tags$strong("Legendre polynomial basis on [-1, 1]:"),
@@ -455,6 +485,21 @@ model_ui <- function(input, output, session, dataset, normalised_data, curated_d
                  paste0(input$dataset_name, ".csv")
                else "your_data.csv"
 
+    # Mirror fit_polynomial()'s auto-detection so the snippet reproduces the
+    # app's fit: an already-normalised [0, 1] time column gets the fixed
+    # 2t - 1 map, anything else the per-token min-max rescale.
+    df_now  <- tryCatch(active_data(), error = function(e) NULL)
+    prenorm <- !is.null(df_now) && all(c(time_var, token_var) %in% names(df_now)) &&
+      time_already_normalised(df_now[[time_var]], df_now[[token_var]])
+    t_norm_lines <- if (prenorm) {
+      paste0(
+      '  # ', time_var, ' is already normalised to [0, 1]: map it onto the\n',
+      '  # Legendre domain without stretching each token\n',
+      '  t_norm <- 2 * t_raw - 1\n')
+    } else {
+      '  t_norm <- 2 * (t_raw - min(t_raw)) / (max(t_raw) - min(t_raw)) - 1\n'
+    }
+
     code_text <- paste0(
       'library(dplyr)\n\n',
       '# Read your data (adjust path to where the file is on your machine)\n',
@@ -472,7 +517,7 @@ model_ui <- function(input, output, session, dataset, normalised_data, curated_d
       '# Fit one token\n',
       'fit_token <- function(df, degree) {\n',
       '  t_raw <- df$', time_var, '\n',
-      '  t_norm <- 2 * (t_raw - min(t_raw)) / (max(t_raw) - min(t_raw)) - 1\n',
+      t_norm_lines,
       '  B <- legendre_basis(t_norm, degree)\n',
       '  fit <- lm.fit(B, df$', f0_var, ')\n',
       '  setNames(fit$coefficients, paste0("c", 0:degree))\n',

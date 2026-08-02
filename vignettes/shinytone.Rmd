@@ -90,8 +90,10 @@ head(normed[, c("speaker", "tone", "f0_Hz", "speaker_mean", "f0_st")])
 ```
 
 Now `f0_st` puts every speaker on a comparable scale. To plot the mean
-contour per tone, use [compute_mean_contour()], which normalises time
-to `[0, 1]` *within each token* before averaging. The package function
+contour per tone, use [compute_mean_contour()], which puts time on a
+`[0, 1]` axis before averaging: it rescales within each token, unless the
+time column is already proportional, which it detects and leaves alone
+(`time_normalised` overrides either way). The package function
 returns its result in the same `time / f0_predicted / tone` schema used
 by [predict_gca()] and [predict_gamm()]:
 

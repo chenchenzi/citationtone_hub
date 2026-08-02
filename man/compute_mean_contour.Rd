@@ -10,7 +10,8 @@ compute_mean_contour(
   f0 = "f0",
   time = "time",
   tone = "tone",
-  n_bins = 50
+  n_bins = 50,
+  time_normalised = c("auto", "no", "yes")
 )
 }
 \arguments{
@@ -21,6 +22,11 @@ compute_mean_contour(
 \item{n_bins}{Number of evenly-spaced time bins across \verb{[0, 1]}.
 Default \code{50}. Larger values give a smoother contour at the cost
 of noisier per-bin estimates if some bins are sparsely populated.}
+
+\item{time_normalised}{One of \code{"auto"} (default: detect an
+already-normalised \verb{[0, 1]} time column and use it as-is), \code{"no"}
+(always rescale to \verb{[0, 1]} within each token), or \code{"yes"} (declare
+the column already normalised). See \code{\link[=resolve_time_norm]{resolve_time_norm()}}.}
 }
 \value{
 A data frame with columns \code{tone}, \code{time}, \code{f0_predicted},
@@ -37,7 +43,10 @@ normalised dataset as the input.
 Internally:
 \enumerate{
 \item Within each token, normalise the time axis to \verb{[0, 1]} so tokens
-of different durations can be averaged across the same grid.
+of different durations can be averaged across the same grid. A
+time column that is \emph{already} normalised is detected with
+\code{\link[=time_already_normalised]{time_already_normalised()}} and used as-is (override with
+\code{time_normalised}), matching what \code{\link[=fit_gca]{fit_gca()}} and \code{\link[=fit_gamm]{fit_gamm()}} do.
 \item Round each sample's normalised time onto one of \code{n_bins}
 equally-spaced bins.
 \item For each (tone, time-bin) cell, compute the mean of \code{f0} across

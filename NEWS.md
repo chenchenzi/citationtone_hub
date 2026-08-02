@@ -1,5 +1,70 @@
 # shinytone (development version)
 
+* **F0 Extraction tab: F0 Data Export (region + sampling).** A new block
+  decides what the downloaded dataset contains, without touching the data in
+  the app: F0 Correction keeps working on the extraction exactly as it
+  arrived, so changing these settings can never disturb frame edits.
+  **Region** is what the measurement covers — *Whole token* runs from a
+  token's first to its last voiced frame, so leading and trailing silence
+  (which carries no f0) is excluded, and an edge needs two consecutive voiced
+  frames so a lone voiced frame stranded in silence cannot stretch it; or a
+  *TextGrid interval*. **Sampling** is how densely — every *native frame
+  time*, or *N equidistant points* across the region, which is time
+  normalisation applied at the sampling stage and adds `point` (1...N) and
+  `time_prop` (0–1). An **export preview** shows the first rows of the file
+  the Download button will write, metadata join included. New exported
+  functions: `resample_f0_equal()`, `trim_to_voiced()`, `flag_f0_gaps()`.
+* **Resampling follows Praat's own rule.** `resample_f0_equal()` ports
+  `Sampled_getValueAtX()`, which is what `Pitch: Get value at time...` runs,
+  so a contour resampled here matches one a Praat script gets querying the
+  same times. Of the two frames bracketing a point, the nearer is *near* and
+  the other *far*: both voiced blends them, *far* unvoiced keeps *near*'s
+  measured value, *near* unvoiced gives `NA`. The `method` argument offers
+  Praat's two choices, `"linear"` (default) and `"nearest"`. Unvoiced
+  stretches are respected only when the input marks them as `NA` (or 0 Hz)
+  rows; sparse input such as a `.PitchTier` has no such rows, so a silent
+  stretch there is a plain gap between anchors and is interpolated across,
+  exactly as Praat does.
+* **F0 Extraction tab: subset f0 by TextGrid interval.** Export only the f0
+  falling inside chosen intervals: vowels found automatically, the rhyme
+  (first vowel to the end of the token; monosyllables only), or labels you
+  type. New exported `ipa_vowel_label()` and `filter_interval_rows()`.
+  `ipa_vowel_label()` handles length marks, stress marks, tone digits and
+  Chao letters, combining diacritics, precomposed pinyin tone marks
+  (`ā ǎ ū ǔ` ...) in either Unicode normalisation, di- and triphthongs
+  including `j`/`w`/`ɥ` offglide spellings (`aj`, `ɔw`) as well as `ai` and
+  `au`, and syllabic nasals (`m̩`, `n̩`, `ŋ̩`) as vowel-equivalent nuclei.
+* **Two checks that make silent problems visible.** `flag_f0_gaps()` adds
+  `n_missing` and `has_gap`, marking tokens whose voicing was interrupted
+  mid-region — measured on the native frames *before* resampling, since
+  resampling can fill a short dropout from the nearer frame. And the
+  per-token summary reports `voiced_s` with `voiced_prop`
+  (`voiced_s / duration_s`), shading and naming tokens voiced across a far
+  shorter span than the rest of the corpus: with equidistant sampling their
+  percentage positions are squeezed into whatever was tracked, so they are
+  not comparable with the other tokens.
+* **Modelling: an already-normalised time column is used as-is.**
+  `fit_gca()`, `fit_gamm()`, `fit_polynomial()` and `compute_mean_contour()`
+  gained `time_normalised` (`"auto"`, `"no"`, `"yes"`). Under the default
+  `"auto"`, a column that is already proportional — `token_t01` from
+  `normalise_time_token()`, or `time_prop` from equal-point extraction — is
+  detected by the new `time_already_normalised()` and used as-is, rather than
+  min-max rescaled a second time, which stretched any token not spanning the
+  full unit interval. The Model, GCA and GAMM tabs say when this applies and
+  their **Show R code** output reflects whichever branch ran; `fit_gca()` and
+  `fit_gamm()` record `time_prenormalised` in the returned object,
+  `fit_polynomial()` as an attribute. Detection is deliberately conservative
+  and has two documented limits: a set in which *every* token is a partial
+  span cannot be distinguished from ordinary variable-duration time and is
+  rescaled as before (pass `"yes"`), and raw seconds in which every token
+  lasts just under one second is detected as proportional (pass `"no"`).
+* **0 Hz counts as unvoiced** in the new f0 helpers, matching `inspect_f0()`
+  and the extraction paths, so trackers that code unvoiced frames as 0 Hz are
+  handled rather than having silence blended into speech.
+* **The multisyllabic warning no longer fires on `token_t01`.** On the Model,
+  GCA and GAMM tabs it is now raised only for a landmark tier's
+  `<tier>_t01`, which resets at every segment boundary, and not for the
+  whole-token proportional axis, which is a perfectly good time variable.
 * **F0 Correction tab: whole-token discard.** A new "Whole token" edit group
   adds **Discard token** / **Restore token** for tokens that are beyond
   repair: instead of fixing frames, the whole token is marked as dropped.

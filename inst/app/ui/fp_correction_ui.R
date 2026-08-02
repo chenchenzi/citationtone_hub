@@ -15,7 +15,8 @@
 ###############################################
 
 fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
-                             fp_pitch_candidates = NULL) {
+                             fp_pitch_candidates = NULL,
+                             fp_corrected_data = NULL) {
 
   # ---- Reactive state ----
   # Named list: token -> data.frame(time, f0)  (corrected contour)
@@ -3655,4 +3656,12 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                        type = "message", duration = 4)
     }
   )
+
+  # Mirror the corrected frame into the shared reactiveVal so the F0
+  # Extraction tab's analysis export measures the corrected contours rather
+  # than the raw extraction. Same frame as the all_correctedf0.csv download,
+  # so the two can never disagree.
+  if (!is.null(fp_corrected_data)) {
+    observe({ fp_corrected_data(build_corrected_df()) })
+  }
 }

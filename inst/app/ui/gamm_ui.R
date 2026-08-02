@@ -11,12 +11,40 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
   output$gamm_multisyl_note <- renderUI({
     tv <- input$gamm_time_var
     if (is.null(tv) || !grepl("_t01$", tv)) return(NULL)
+    # normalise_time_token() writes exactly "token_t01" (whole-token
+    # proportional time, a perfectly good axis); normalise_time_landmarks()
+    # writes "<set>_t01", which resets at every segment boundary. Keyed on the
+    # name the producer guarantees, not on a companion column that a trimmed
+    # re-upload may have lost.
+    if (identical(tv, "token_t01")) return(NULL)
     tags$div(
       style = paste("background-color:#fff8e1; border-left:4px solid #e0a800;",
                     "padding:10px 14px; margin:8px 0; border-radius:4px;",
                     "color:#7a5d00; font-size:0.9rem;"),
       tags$span(style = "color:#c0392b;", icon("triangle-exclamation")),
       HTML(sprintf(" <code>%s</code> rescales time to 0&ndash;1 <em>within</em> each segment, so it resets at every boundary and is <strong>not a valid model time axis</strong>. Use the sequential <code>&hellip;_tseq</code> column instead.", tv)))
+  })
+
+  # Value-based check: a time column that is already proportional ([0, 1] per
+  # token) is used as-is by fit_gamm() rather than rescaled again — say so
+  # before the user clicks Fit. Suppressed for _t01/_tseq columns: the red
+  # warning above owns _t01, and _tseq spans [0, n_segments] anyway.
+  output$gamm_timenorm_note <- renderUI({
+    tv  <- input$gamm_time_var
+    tok <- input$gamm_token_var
+    if (is.null(tv) || is.null(tok) || grepl("_tseq$", tv)) return(NULL)
+    df <- tryCatch(active_data(), error = function(e) NULL)
+    if (is.null(df) || !all(c(tv, tok) %in% names(df))) return(NULL)
+    # A landmark set's within-segment <set>_t01 gets the red warning above,
+    # not this note; only the whole-token token_t01 falls through.
+    if (grepl("_t01$", tv) && !identical(tv, "token_t01")) return(NULL)
+    if (!time_already_normalised(df[[tv]], df[[tok]])) return(NULL)
+    tags$div(
+      style = paste("background-color:#e8f5f0; border-left:4px solid #78c2ad;",
+                    "padding:10px 14px; margin:8px 0; border-radius:4px;",
+                    "color:#2a7a5a; font-size:0.9rem;"),
+      icon("circle-info"),
+      HTML(sprintf(" <code>%s</code> looks already normalised to [0, 1] (every value lies in that range and a typical token covers most of it; some tokens may cover less). The fit will use it as-is instead of rescaling per token, so tokens that cover only part of the interval keep their position. To force per-token rescaling, call <code>fit_gamm(..., time_normalised = \"no\")</code> in R.", tv)))
   })
 
   # --- Guide text ---
@@ -30,7 +58,9 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
           tags$li(tags$strong("f0:"), " An f0-related variable. Normalised f0 (e.g. semitone or z-score) is recommended for more interpretable results.",
             " Use the ", tags$strong("Normalise"), " tab first, then select ", tags$em("Normalised data"),
             " from the dataset dropdown to access ", tags$code(style = code_style, "f0_st"), " or ", tags$code(style = code_style, "f0_zscore"), "."),
-          tags$li(tags$strong("Time:"), " The time variable that orders f0 samples within each token. Will be normalised to [0, 1] per token before fitting."),
+          tags$li(tags$strong("Time:"), " The time variable that orders f0 samples within each token. Will be normalised to [0, 1] per token before fitting. A column that is already normalised (e.g. ",
+            tags$code(style = code_style, "token_t01"), " from the Normalise tab, or ",
+            tags$code(style = code_style, "time_prop"), " from equal-point extraction) is detected and used as-is, so partial-span tokens are not stretched."),
           tags$li(tags$strong("Speaker:"), " Grouping variable for by-speaker random effects."),
           tags$li(tags$strong("Item:"), " The word or syllable type (e.g. different segmental compositions). Grouping variable for by-item random effects."),
           tags$li(tags$strong("Tone category:"), " Fixed effect factor. Used to model f0 contour differences across tone categories."),
@@ -1060,12 +1090,19 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
                  paste0(input$dataset_name, ".csv")
                else "your_data.csv"
 
-    code_text <- paste0(
-      'library(dplyr)\n',
-      'library(mgcv)\n',
-      'library(ggplot2)\n\n',
-      '# Read your data (adjust path to where the file is on your machine)\n',
-      'dat <- read.csv("', ds_name, '", stringsAsFactors = FALSE)\n\n',
+    # Mirror fit_gamm()'s auto-detection so the snippet reproduces the app's
+    # fit: an already-normalised [0, 1] time column is used as-is, anything
+    # else gets the per-token min-max rescale.
+    df_now  <- tryCatch(active_data(), error = function(e) NULL)
+    prenorm <- !is.null(df_now) && all(c(time_var, token_var) %in% names(df_now)) &&
+      time_already_normalised(df_now[[time_var]], df_now[[token_var]])
+    norm_block <- if (prenorm) {
+      paste0(
+      '# ', time_var, ' is already normalised to [0, 1] — use it as-is\n',
+      '# (no per-token rescale, so partial-span tokens keep their position)\n',
+      'dat$time_norm <- pmin(pmax(dat$', time_var, ', 0), 1)\n\n')
+    } else {
+      paste0(
       '# Normalise time to [0, 1] within each token\n',
       'dat <- dat %>%\n',
       '  group_by(', token_var, ') %>%\n',
@@ -1073,7 +1110,16 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
       '    time_norm = (', time_var, ' - min(', time_var, ')) / \n',
       '                (max(', time_var, ') - min(', time_var, '))\n',
       '  ) %>%\n',
-      '  ungroup()\n\n',
+      '  ungroup()\n\n')
+    }
+
+    code_text <- paste0(
+      'library(dplyr)\n',
+      'library(mgcv)\n',
+      'library(ggplot2)\n\n',
+      '# Read your data (adjust path to where the file is on your machine)\n',
+      'dat <- read.csv("', ds_name, '", stringsAsFactors = FALSE)\n\n',
+      norm_block,
       '# Ensure factor variables\n',
       'dat$', speaker_var, ' <- as.factor(dat$', speaker_var, ')\n',
       'dat$', item_var, ' <- as.factor(dat$', item_var, ')\n'

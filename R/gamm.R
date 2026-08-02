@@ -30,7 +30,12 @@
 #' @details
 #' ## What the function does internally
 #'
-#' 1. Normalise time to `[0, 1]` per token.
+#' 1. Normalise time to `[0, 1]` per token. If the time column is
+#'    *already* normalised (e.g. `token_t01` from
+#'    [normalise_time_token()]), it is detected with
+#'    [time_already_normalised()] and used as-is, so tokens whose samples
+#'    do not span the full unit interval are not stretched a second time;
+#'    override with `time_normalised`.
 #' 2. Coerce `tone`, `speaker`, `item`, and (for difference smooths) an
 #'    ordered `tone_ord` to factors with treatment contrasts.
 #' 3. Build the formula based on `smooth_type` and `random_smooth`.
@@ -84,6 +89,10 @@
 #'   `"speaker_by_tone"`, or `"ref_diff"`. See Details.
 #' @param use_ar1 Logical. If `TRUE`, fit once, estimate `rho` from the
 #'   residuals' lag-1 autocorrelation, then refit with that `rho`.
+#' @param time_normalised One of `"auto"` (default: detect an
+#'   already-normalised `[0, 1]` time column and use it as-is), `"no"`
+#'   (always rescale to `[0, 1]` within each token), or `"yes"` (declare
+#'   the column already normalised). See [resolve_time_norm()].
 #'
 #' @return An S3 object of class `"shinytone_gamm"`, a list with:
 #' * `model`: the fitted [mgcv::bam()] object.
@@ -93,6 +102,8 @@
 #' * `smooth_type`, `random_smooth`: passed through (needed by
 #'   [predict_gamm()]).
 #' * `col_names`: original column names, for back-mapping.
+#' * `time_prenormalised`: logical; was the time column used as-is
+#'   because it was already normalised to `[0, 1]`?
 #'
 #' @seealso
 #' * [predict_gamm()] for per-tone prediction on a time grid.
@@ -152,10 +163,12 @@ fit_gamm <- function(data,
                                                   "speaker_tone",
                                                   "speaker_by_tone",
                                                   "ref_diff"),
-                     use_ar1                  = FALSE) {
+                     use_ar1                  = FALSE,
+                     time_normalised          = c("auto", "no", "yes")) {
 
-  smooth_type   <- match.arg(smooth_type)
-  random_smooth <- match.arg(random_smooth)
+  smooth_type     <- match.arg(smooth_type)
+  random_smooth   <- match.arg(random_smooth)
+  time_normalised <- match.arg(time_normalised)
 
   required <- c(f0, time, token, tone, speaker, item)
   if (!is.null(duration)) required <- c(required, duration)
@@ -170,18 +183,12 @@ fit_gamm <- function(data,
   }
 
   # --- Data prep -----------------------------------------------------------
-  dat <- data |>
-    dplyr::group_by(.data[[token]]) |>
-    dplyr::mutate(
-      .time_norm = {
-        t_raw <- .data[[time]]
-        t_min <- min(t_raw, na.rm = TRUE)
-        t_max <- max(t_raw, na.rm = TRUE)
-        if (is.na(t_min) || t_max == t_min) rep(0.5, dplyr::n())
-        else (t_raw - t_min) / (t_max - t_min)
-      }
-    ) |>
-    dplyr::ungroup()
+  # Time to [0, 1]: per-token min-max rescale, unless the column is already
+  # normalised (detected, or declared via time_normalised) — then it is used
+  # as-is (see resolve_time_norm() in time_norm.R).
+  ts  <- resolve_time_norm(data, time, token, time_normalised)
+  dat <- data
+  dat$.time_norm <- ts$time_norm
 
   dat$.f0      <- dat[[f0]]
   dat$.tone    <- as.factor(dat[[tone]])
@@ -294,6 +301,7 @@ fit_gamm <- function(data,
       col_names           = list(f0 = f0, time = time, token = token,
                                  tone = tone, speaker = speaker, item = item,
                                  duration = duration),
+      time_prenormalised  = ts$prenormalised,
       data_for_predict    = dat
     ),
     class = "shinytone_gamm"

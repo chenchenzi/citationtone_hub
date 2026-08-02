@@ -100,3 +100,106 @@ test_that("normalise_time_landmarks clamps to 0-1 and is a no-op when columns mi
   expect_identical(normalise_time_landmarks(data.frame(a = 1), "time", "syllable"),
                    data.frame(a = 1))
 })
+
+# ---------- ipa_vowel_label --------------------------------------------------
+
+test_that("ipa_vowel_label recognises vowels with length, diacritics, diphthongs", {
+  expect_true(all(ipa_vowel_label(
+    c("a", "aː", "ai", "iau", "ã", "ə̃", "aʊ", "ɤ", "ɚ", "A", "AI", "@", "a51", "u2"))))
+  expect_false(any(ipa_vowel_label(
+    c("ang", "pa", "n", "p", "s", "", " ", NA, "aŋ", "kʰ"))))
+})
+
+# ---------- filter_interval_rows ---------------------------------------------
+
+# Frames for two tokens over a segment tier p | a | n (token m1, monosyllable
+# with coda) and a token m2 with no vowel interval; token m3 has NA landmarks
+# (no TextGrid).
+filter_df <- data.frame(
+  token       = c(rep("m1", 5), rep("m2", 2), "m3"),
+  time        = c(0.05, 0.15, 0.25, 0.35, 0.45, 0.05, 0.10, 0.05),
+  f0          = c(100, 110, 120, 130, NA, 90, 95, 80),
+  segment     = c("p", "a", "a", "n", "", "s", "s", NA),
+  segment_i   = c(1L, 2L, 2L, 3L, NA, 1L, 1L, NA),
+  stringsAsFactors = FALSE
+)
+
+test_that("vowel mode keeps only vowel-labelled frames", {
+  out <- filter_interval_rows(filter_df, "segment", mode = "vowel")
+  expect_equal(out$token, c("m1", "m1"))
+  expect_equal(out$time, c(0.15, 0.25))
+})
+
+test_that("rhyme mode keeps labelled frames from the first vowel to token end", {
+  out <- filter_interval_rows(filter_df, "segment", mode = "rhyme")
+  expect_equal(out$token, c("m1", "m1", "m1"))
+  expect_equal(out$segment, c("a", "a", "n"))   # vowel + coda; onset excluded
+})
+
+test_that("labels mode keeps the requested labels only", {
+  out <- filter_interval_rows(filter_df, "segment", mode = "labels",
+                              labels = c("a", "n"))
+  expect_equal(out$segment, c("a", "a", "n"))
+  out2 <- filter_interval_rows(filter_df, "segment", mode = "labels",
+                               labels = " s ")
+  expect_equal(out2$token, c("m2", "m2"))       # labels are trimmed
+  expect_error(filter_interval_rows(filter_df, "segment", mode = "labels"),
+               "non-empty")
+})
+
+test_that("NA-landmark frames (no TextGrid) are always excluded", {
+  for (m in c("vowel", "rhyme")) {
+    out <- filter_interval_rows(filter_df, "segment", mode = m)
+    expect_false("m3" %in% out$token)
+  }
+})
+
+test_that("filter_interval_rows validates its columns", {
+  expect_error(filter_interval_rows(filter_df, "nope", mode = "vowel"),
+               "not found")
+  df2 <- filter_df[, setdiff(names(filter_df), "segment_i")]
+  expect_error(filter_interval_rows(df2, "segment", mode = "rhyme"),
+               "segment_i")
+})
+
+test_that("rhyme mode spans to the token end, so it is monosyllables-only", {
+  # A disyllabic token p-a-n-t-a: "rhyme" runs from the FIRST vowel to the end,
+  # which crosses the second syllable. Documented as a monosyllabic-only mode;
+  # this pins the behaviour so the caveat stays honest.
+  df <- data.frame(token = "w1", time = seq(0.1, 0.5, by = 0.1), f0 = 100:104,
+                   seg = c("p", "a", "n", "t", "a"), seg_i = 1:5,
+                   stringsAsFactors = FALSE)
+  expect_equal(filter_interval_rows(df, "seg", "vowel")$seg, c("a", "a"))
+  expect_equal(filter_interval_rows(df, "seg", "rhyme")$seg, c("a", "n", "t", "a"))
+})
+
+test_that("ipa_vowel_label accepts pinyin tone marks in both Unicode forms", {
+  # NFC precomposed (what most TextGrid editors write) and NFD decomposed.
+  expect_true(all(ipa_vowel_label(
+    c("ā", "ǎ", "ū", "ǔ", "ē", "ě",
+      "ī", "ǐ", "ō", "ǒ", "ǖ", "ǜ"))))
+  expect_true(all(ipa_vowel_label(c("ā", "ǎ", "ū", "ǔ"))))
+  # Whole pinyin syllables and consonant letters are still not vowels.
+  expect_false(any(ipa_vowel_label(
+    c("ang", "āng", "zhī", "shǔ", "ng", "ć", "č",
+      "ń", "ř", "ž", "ł"))))
+})
+
+test_that("syllabic nasals count as nuclei, plain nasals do not", {
+  # Tone-bearing in e.g. Cantonese (\u5514 m\u0329, \u4E94 \u014B\u0329).
+  expect_true(all(ipa_vowel_label(c("m\u0329", "n\u0329", "\u014B\u0329", "m\u030D",
+                                    "\u014B\u03295", "m\u0329\u02E8\u02E9"))))
+  expect_false(any(ipa_vowel_label(c("m", "n", "\u014B", "ma", "am"))))
+})
+
+test_that("di- and triphthongs match, including j/w offglide spellings", {
+  expect_true(all(ipa_vowel_label(
+    c("ai", "au", "ei", "ou", "iau", "uai", "ɔi", "aːi", "ai̯"))))
+  # Many traditions spell the offglide as a consonant letter: a glide counts
+  # inside a nucleus that also contains a vowel letter.
+  expect_true(all(ipa_vowel_label(
+    c("aj", "aw", "ja", "jaw", "waj", "aɥ", "ɥa"))))
+  # A bare glide is an onset, not a nucleus; other consonants never match.
+  expect_false(any(ipa_vowel_label(
+    c("j", "w", "ɥ", "jw", "ang", "an", "ai n"))))
+})

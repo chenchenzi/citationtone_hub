@@ -192,3 +192,182 @@ normalise_time_token <- function(df, time, token) {
   df[["token_t01"]] <- pmin(pmax(p, 0), 1)
   df
 }
+
+#' Does an interval label denote a vowel (IPA)?
+#'
+#' @description
+#' Vectorised heuristic for picking vowel intervals out of a segmental
+#' TextGrid tier without knowing the language. A label counts as a vowel
+#' when, after stripping length marks, stress marks, tone digits/letters,
+#' superscripts, ties, spaces, and combining diacritics, every remaining
+#' character is an IPA vowel letter — so long vowels (`aː`), nasalised
+#' vowels (`ã`), and di-/triphthongs (`ai`, `iau`) all match, while
+#' anything containing a consonant letter (`ang`, `pa`, `n`) does not.
+#'
+#' Di- and triphthongs need no special handling: the test applies to *every*
+#' character of the label, so a label matches when all of its letters are
+#' vowels -- `ai`, `au`, `iau`, `uai`, `ɔi`, `aːi` and `ai̯` all pass.
+#'
+#' Offglides written as consonant letters are accepted too, since many
+#' traditions spell diphthongs that way: `j`, `w` and `ɥ` count inside a
+#' nucleus that *also* contains a vowel letter, so `aj`, `aw`, `ja`, `jaw`
+#' and `waj` match, while a bare `j` or `w` onset does not. A vowel mixed
+#' with any other consonant (`ang`, `an`, `pa`) never matches.
+#'
+#' Syllabic nasals count as vowel-equivalent nuclei: a label whose letters are
+#' all nasals and which carries a syllabicity mark (`m\u0329`, `n\u0329`, `\u014B\u0329`) matches,
+#' since these are tone-bearing units in e.g. Cantonese (\u5514, \u4E94). The same
+#' nasals *without* the mark (`m`, `n`, `\u014B`) do not.
+#'
+#' @details
+#' Recognised base letters: the IPA vowel letters (`a e i o u y æ ɐ
+#' ɑ ɒ ə ɘ ɵ ɛ œ ɜ ɞ ɤ
+#' ɪ ɨ ɔ ø ʉ ʊ ʌ ɯ ʏ ɶ
+#' ɚ ɝ` and the near-close central `ᵻ ᵿ`), their ASCII
+#' upper-case counterparts `A E I O U Y`, `@` (schwa in SAMPA-style labels),
+#' and precomposed accented Latin vowels, including the pinyin tone-marked
+#' forms (`ã é ü ā á ǎ à ū ǔ ǖ ǘ ǚ ǜ` ...) in either Unicode normalisation.
+#' Labels in other schemes (whole pinyin finals such as `ang`, X-SAMPA
+#' consonant-bearing rhymes) should be selected with explicit labels instead
+#' — see [filter_interval_rows()].
+#'
+#' @param x Character vector of interval labels (`NA` and empty labels
+#'   return `FALSE`).
+#' @return Logical vector, same length as `x`.
+#' @seealso [filter_interval_rows()] for subsetting f0 frames by interval.
+#' @export
+ipa_vowel_label <- function(x) {
+  x   <- as.character(x)
+  out <- rep(FALSE, length(x))
+  ok  <- !is.na(x)
+  if (!any(ok)) return(out)
+  s <- x[ok]
+  # Syllabicity marks (combining vertical line below / above) must be spotted
+  # BEFORE the diacritic strip below removes them: they are what makes a nasal
+  # a nucleus rather than a consonant.
+  syllabic <- grepl("[̩̍]", s)
+  s <- gsub("\\p{Mn}", "", s, perl = TRUE)               # combining diacritics
+  s <- gsub("[ːˑˈˌ˞]", "", s)   # length, stress, rhotic hook
+  s <- gsub("[˥-˩‿⁀]", "", s)        # Chao tone letters, ties
+  s <- gsub("[0-9¹²³⁰-⁹]", "", s)  # tone digits, superscripts
+  s <- gsub("[[:space:]]+", "", s)
+  vowel_class <- paste0(
+    "aeiouyAEIOUY@",
+    "æÆøØœŒɶ",              # æ Æ ø Ø œ Œ ɶ
+    "ɐɑɒɔɘəɚ",     # ɐ ɑ ɒ ɔ ɘ ə ɚ
+    "ɛɜɝɞ",                       # ɛ ɜ ɝ ɞ
+    "ɤɨɪɯɵ",                 # ɤ ɨ ɪ ɯ ɵ
+    "ʉʊʌʏᵻᵿ",           # ʉ ʊ ʌ ʏ ᵻ ᵿ
+    "À-ÆÈ-ÏÒ-ÖØ-Ý",
+    "à-æè-ïò-öø-ýÿ",
+    # Latin Extended-A/B precomposed vowels, incl. the pinyin tone marks
+    # (ā ǎ ē ě ī ǐ ō ǒ ū ǔ ǖ ǘ ǚ ǜ) that NFC-encoded TextGrids carry. The
+    # \p{Mn} strip above only catches their NFD spellings.
+    "Ā-ąĒ-ěĨ-ı",        # Ā-ą Ē-ě Ĩ-ı
+    "Ō-őŨ-ųŶ-Ÿ",        # Ō-ő Ũ-ų Ŷ-Ÿ
+    "Ǎ-ǜǞ-ǡǪ-ǭ",        # Ǎ-ǜ Ǟ-ǡ Ǫ-ǭ
+    "Ǻ-ǿȲȳ"                       # Ǻ-ǿ Ȳ ȳ
+  )
+  # Offglides written as consonant letters (aj, aw, ja, jaw) are diphthongs in
+  # many transcription traditions, so a glide counts INSIDE a nucleus -- but
+  # only alongside a real vowel letter, so a bare "j"/"w" onset stays a
+  # consonant.
+  glide_class <- "jw\u0265JW"
+  has_vowel   <- grepl(paste0("[", vowel_class, "]"), s, perl = TRUE)
+  is_vowel <- nzchar(s) & has_vowel &
+    !grepl(paste0("[^", vowel_class, glide_class, "]"), s, perl = TRUE)
+  # A syllabic nasal is a nucleus: all-nasal letters plus a syllabicity mark.
+  nasal_class <- "mn\u014B\u0271\u0272\u0273\u0274MN"
+  is_nucleus  <- syllabic & nzchar(s) &
+    !grepl(paste0("[^", nasal_class, "]"), s, perl = TRUE)
+  out[ok] <- is_vowel | is_nucleus
+  out
+}
+
+#' Keep only f0 frames that fall inside chosen TextGrid intervals
+#'
+#' @description
+#' Subsets a long-format f0 data frame — with landmark columns already
+#' attached by [attach_landmarks()] — to the rows whose time falls inside
+#' selected intervals of one tier: automatically detected vowel intervals,
+#' the rhyme (first vowel interval to the end of the token; monosyllabic
+#' data only), or an explicit set of labels.
+#'
+#' @details
+#' The three modes:
+#'
+#' * `"vowel"`: keep rows whose interval label passes
+#'   [ipa_vowel_label()] — all vowel intervals, whatever the syllable
+#'   count.
+#' * `"rhyme"`: keep rows in labelled intervals from the *first* vowel
+#'   interval of each token to the token's end (vowel + coda). This
+#'   assumes each token is one syllable; for multisyllabic tokens it
+#'   would span from the first vowel across every following syllable.
+#'   Tokens with no vowel-labelled interval are dropped entirely.
+#' * `"labels"`: keep rows whose (whitespace-trimmed) label equals one of
+#'   `labels` — for tiers where the region of interest is marked
+#'   explicitly (e.g. a `rhyme` tier, or non-IPA label schemes).
+#'
+#' Rows with an `NA` label — tokens with no matching TextGrid, or frames
+#' outside the tier's span — are always excluded, as are frames in
+#' empty-labelled (silence) intervals. Callers should tell users how many
+#' tokens were lost that way rather than let them vanish silently.
+#'
+#' @param df Long-format data frame with `token` plus the tier's landmark
+#'   columns (`<set>`, `<set>_i`, ...) from [attach_landmarks()].
+#' @param set Landmark-set base name, i.e. the sanitised tier name used as
+#'   the label column (e.g. `"vowel"`, `"segment"`).
+#' @param mode One of `"vowel"`, `"rhyme"`, or `"labels"`. See Details.
+#' @param labels Character vector of interval labels to keep (only for
+#'   `mode = "labels"`).
+#' @param token Name of the token-ID column (used by `mode = "rhyme"`).
+#'   Default `"token"`.
+#' @return The subset of `df`, row order preserved.
+#' @seealso [attach_landmarks()] to add the landmark columns;
+#'   [ipa_vowel_label()] for the vowel test.
+#' @export
+filter_interval_rows <- function(df, set,
+                                 mode = c("vowel", "rhyme", "labels"),
+                                 labels = NULL, token = "token") {
+  mode <- match.arg(mode)
+  if (is.null(df) || !set %in% names(df)) {
+    stop("Landmark label column '", set, "' not found; attach the tier ",
+         "with attach_landmarks() first.", call. = FALSE)
+  }
+  lab <- as.character(df[[set]])
+
+  keep <- switch(mode,
+    vowel = ipa_vowel_label(lab),
+    labels = {
+      wanted <- trimws(as.character(labels))
+      wanted <- wanted[!is.na(wanted) & nzchar(wanted)]
+      if (length(wanted) == 0) {
+        stop("mode = \"labels\" needs a non-empty `labels` vector.",
+             call. = FALSE)
+      }
+      !is.na(lab) & trimws(lab) %in% wanted
+    },
+    rhyme = {
+      idx_col <- paste0(set, "_i")
+      if (!idx_col %in% names(df)) {
+        stop("Column '", idx_col, "' not found; attach the tier with ",
+             "attach_landmarks() first.", call. = FALSE)
+      }
+      if (!token %in% names(df)) {
+        stop("Token column '", token, "' not found.", call. = FALSE)
+      }
+      idx <- suppressWarnings(as.integer(df[[idx_col]]))
+      tk  <- as.character(df[[token]])
+      v_idx <- ifelse(ipa_vowel_label(lab), idx, NA_integer_)
+      # First vowel-labelled interval per token; NA when the token has none.
+      fv <- tapply(v_idx, tk, function(x) {
+        if (all(is.na(x))) NA_integer_ else min(x, na.rm = TRUE)
+      })
+      fv_v <- as.integer(fv[tk])
+      !is.na(idx) & !is.na(fv_v) & idx >= fv_v
+    })
+
+  out <- df[which(keep), , drop = FALSE]
+  rownames(out) <- NULL
+  out
+}
