@@ -2079,7 +2079,15 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       f0_hi <- max(f0_vals); f0_lo <- min(f0_vals)
       cy <- if (exists("cand_y", inherits = FALSE)) cand_y else numeric(0)
       near <- cy[is.finite(cy) & cy <= f0_hi * 2.5 & cy >= f0_lo / 3.3]
-      top <- max(c(f0_vals, near)); bot <- min(c(f0_vals, near))
+      # Ghost markers sit at the ORIGINAL values of edited frames, which for
+      # the usual fix (delete/halve a stray spike) lie outside the corrected
+      # contour. Anchoring only on current values would clip them off-screen
+      # with no way back in (fixedrange blocks y-zoom), so include them.
+      gy <- {
+        ed <- edit_diff()
+        if (is.null(ed)) numeric(0) else ed$original_f0[is.finite(ed$original_f0)]
+      }
+      top <- max(c(f0_vals, near, gy)); bot <- min(c(f0_vals, near, gy))
       yaxis_f0$range <- c(max(0, bot * 0.85), top * 1.12)
     }
 
