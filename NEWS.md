@@ -1,5 +1,31 @@
 # shinytone (development version)
 
+* **F0 Correction tab: two fixes from classroom use.** Deleting an outlying
+  frame could leave its "ghost" marker (the original value) drawn off-screen:
+  the f0 panel's y-range was framed on the corrected values only, and the
+  y-axis is fixed, so there was no way to scroll the original back into view.
+  The range now also anchors on the original values of edited frames. And the
+  Delete button sometimes appeared to do nothing: a click after a box/lasso
+  selection silently kept the stale box (plotly never clears that input on a
+  plain click), so the edit hit the old — often already deleted — frames. The
+  selection now follows whichever of click or box-select happened last, and
+  switching tokens clears it.
+* **F0 Correction tab: a `note` column in the edit log.** A *Note (optional)*
+  box in the sidebar. Whatever it holds is saved with the next edit or
+  discard as the `note` column of the edit log — table, CSV download, and
+  log re-upload alike — then cleared so it cannot leak onto later, unrelated
+  actions. For recording *why*: a reason to discard a token, or why frames
+  were removed.
+* **F0 Extraction tab: export notes restyled as a banner.** The data-quality
+  notes under the export summary (short voiced span, unvoiced gaps, ...) were
+  easy to miss as small grey text at the bottom of the sidebar; they are now
+  an amber message box in the same idiom as the Correction tab's banners.
+* **Praat script: version guard for the newer pitch methods.** The
+  *filtered ac / filtered cc / raw ac / raw cc* methods exist only since
+  Praat 6.4 (November 2023); on an older Praat the batch died mid-run with a
+  cryptic "Command not available for current selection" error. The script now
+  checks `praatVersion` up front and exits with the running version and the
+  fix (update Praat, or pick *ac* / *cc* / *shs*).
 * **F0 Extraction tab: F0 Data Export (region + sampling).** A new block
   decides what the downloaded dataset contains, without touching the data in
   the app: F0 Correction keeps working on the extraction exactly as it
