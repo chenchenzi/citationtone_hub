@@ -977,9 +977,25 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     }
     tagList(
       tags$div(style = "color: #666; font-size: 0.75rem; font-style: italic; margin-top: 6px;", cap),
+      # Data-quality notes in the same tinted-banner idiom as the Correction
+      # tab's edit/discard banners: plain small text here went unnoticed at
+      # the bottom of the sidebar.
       if (length(res$notes) > 0)
-        tags$div(style = "color: #8a6d00; font-size: 0.75rem; margin-top: 4px;",
-                 paste(res$notes, collapse = " "))
+        tags$div(
+          style = paste(
+            "background: #fff3e0;",
+            "border-left: 3px solid #e0712d;",
+            "padding: 6px 10px;",
+            "margin-top: 6px;",
+            "border-radius: 4px;",
+            "font-size: 0.78rem;",
+            "color: #5a3010;"
+          ),
+          icon("triangle-exclamation"), " ",
+          if (length(res$notes) == 1) res$notes else
+            tags$ul(style = "margin: 2px 0 0; padding-left: 16px;",
+                    lapply(res$notes, tags$li))
+        )
     )
   })
 

@@ -86,6 +86,19 @@ form Extract f0 with Praat
 endform
 
 # ============================================================
+# Version guard. The "filtered ..." methods (and the "raw ..." names for
+# the classic ones) were added in Praat 6.4 (November 2023). On an older
+# Praat those commands do not exist, and the batch would die mid-run with
+# a cryptic "Command not available for current selection" error -- so
+# check up front and explain instead.
+# ============================================================
+if method$ = "filtered ac" or method$ = "filtered cc" or method$ = "raw ac" or method$ = "raw cc"
+  if praatVersion < 6400
+    exitScript: "The \'", method$, "\' method needs Praat 6.4 or newer, but this is Praat ", praatVersion$, ". Please update Praat (praat.org), or re-run the script and choose the \'ac\', \'cc\', or \'shs\' method instead."
+  endif
+endif
+
+# ============================================================
 # 2) Second dialog: method-specific advanced parameters
 #    Defaults match Praat\'s built-in "To Pitch (...)" UI for each method.
 # ============================================================

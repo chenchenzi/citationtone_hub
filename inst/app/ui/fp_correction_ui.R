@@ -38,6 +38,9 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   #                    (useful for comparing where in the tonal contour the
   #                    edit happened across tokens of different durations)
   #   details        : free-text method / parameters (e.g., "median, window=3")
+  #   note           : the user's own free-text note (typed in the sidebar's
+  #                    "Note for the next edit" box) explaining WHY, e.g. a
+  #                    reason to discard the token or remove frames
   fp_edit_log <- reactiveVal(data.frame(
     date          = character(0),
     token         = character(0),
@@ -47,6 +50,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     frame_times_s = character(0),
     frame_pct     = character(0),
     details       = character(0),
+    note          = character(0),
     stringsAsFactors = FALSE
   ))
   log_edit <- function(token, action, n_frames, details = "",
@@ -59,6 +63,10 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       else paste(formatC(x, format = "f", digits = digits), collapse = ",")
     pct <- if (length(indices) == 0 || is.na(n_total) || n_total <= 1) numeric(0)
            else (indices - 1) / (n_total - 1) * 100
+    # The sidebar note box rides along on whatever edit is logged next,
+    # then is cleared so it cannot leak onto later, unrelated actions.
+    note <- isolate(input$fp_corr_edit_note)
+    note <- if (is.null(note)) "" else trimws(note)
     cur <- fp_edit_log()
     new_row <- data.frame(
       date          = format(Sys.Date(), "%Y-%m-%d"),
@@ -69,9 +77,11 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       frame_times_s = fmt_num(times, 3),
       frame_pct     = fmt_num(pct, 1),
       details       = as.character(details),
+      note          = note,
       stringsAsFactors = FALSE
     )
     fp_edit_log(rbind(cur, new_row))
+    if (nzchar(note)) updateTextAreaInput(session, "fp_corr_edit_note", value = "")
   }
   # Whole-token discards: token names the user marked as "drop the whole
   # token" (instead of repairing frames). Non-destructive — the contour keeps
@@ -605,42 +615,65 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   }
 
   # Selected point indices, derived from plotly events.
-  # Defensive against malformed event payloads (plotly sends "NA" as JSON
-  # for empty events, which Shiny can't parse cleanly).
-  selected_indices <- reactive({
-    # suppressWarnings() silences plotly's startup-time "event not
-    # registered" warning. The event handlers ARE registered via
-    # plotly::event_register() in the renderPlotly block, but the plot
-    # is built lazily, so this reactive may evaluate before the plot
-    # has had a chance to register. Once the user navigates to the
-    # F0 Correction tab and the plot renders, registration takes hold
-    # and the event_data calls return real selections.
-    sel <- tryCatch(
-      suppressWarnings(
-        plotly::event_data("plotly_selected", source = "fp_corr_plot")
-      ),
+  # Box/lasso (plotly_selected) and single click (plotly_click) BOTH set the
+  # selection, and whichever fired most recently wins. The previous rule
+  # ("a live box selection always beats the click") meant that after any
+  # box-select, clicking a single dot silently kept the stale box selection:
+  # Delete then hit the old frames -- often already-NA ones -- which read as
+  # "the Delete button sometimes does nothing". plotly only nulls the
+  # selection input on an explicit deselect (double-click / the q key),
+  # never on a plain click, so recency has to be tracked on our side.
+  fp_selected <- reactiveVal(integer(0))
+
+  # Frame indices carried in an event's customdata; NULL when it has none.
+  # Defensive against malformed payloads (plotly sends "NA" as JSON for
+  # empty events, which Shiny can't parse cleanly), and against clicks on
+  # "cand_..." candidate markers, which must not touch the frame selection
+  # (the pick-candidate flow reads it).
+  event_frames <- function(ev) {
+    if (is.null(ev) || !is.data.frame(ev) || nrow(ev) == 0 ||
+        !"customdata" %in% names(ev)) return(NULL)
+    cd <- suppressWarnings(as.integer(ev$customdata))
+    cd <- cd[!is.na(cd)]
+    if (length(cd) == 0) return(NULL)
+    unique(cd)
+  }
+
+  # suppressWarnings() silences plotly's startup-time "event not
+  # registered" warning. The event handlers ARE registered via
+  # plotly::event_register() in the renderPlotly block, but the plot
+  # is built lazily, so these may evaluate before the plot has had a
+  # chance to register. Once the user navigates to the F0 Correction
+  # tab and the plot renders, registration takes hold and the
+  # event_data calls return real selections.
+  corr_event <- function(event) {
+    tryCatch(
+      suppressWarnings(plotly::event_data(event, source = "fp_corr_plot")),
       error = function(e) NULL
     )
-    if (!is.null(sel) && is.data.frame(sel) && nrow(sel) > 0 &&
-        "customdata" %in% names(sel)) {
-      cd <- suppressWarnings(as.integer(sel$customdata))
-      cd <- cd[!is.na(cd)]
-      if (length(cd) > 0) return(unique(cd))
-    }
-    click <- tryCatch(
-      suppressWarnings(
-        plotly::event_data("plotly_click", source = "fp_corr_plot")
-      ),
-      error = function(e) NULL
-    )
-    if (!is.null(click) && is.data.frame(click) && nrow(click) > 0 &&
-        "customdata" %in% names(click)) {
-      cd <- suppressWarnings(as.integer(click$customdata))
-      cd <- cd[!is.na(cd)]
-      if (length(cd) > 0) return(cd)
-    }
-    integer(0)
-  })
+  }
+
+  observeEvent(corr_event("plotly_selected"), {
+    ev <- corr_event("plotly_selected")
+    if (is.null(ev)) { fp_selected(integer(0)); return() }  # deselect / q key
+    sel <- event_frames(ev)
+    if (!is.null(sel)) fp_selected(sel)
+  }, ignoreNULL = FALSE, ignoreInit = TRUE)
+
+  observeEvent(corr_event("plotly_click"), {
+    ev <- corr_event("plotly_click")
+    if (is.null(ev)) { fp_selected(integer(0)); return() }  # deselect / q key
+    sel <- event_frames(ev)
+    if (!is.null(sel)) fp_selected(sel)
+  }, ignoreNULL = FALSE, ignoreInit = TRUE)
+
+  # A fresh token starts with nothing selected: the event inputs are keyed
+  # to the plot source, not the token, so without this the previous token's
+  # selection would silently map onto the same row numbers of the new
+  # contour.
+  observeEvent(input$fp_corr_token, fp_selected(integer(0)), ignoreInit = TRUE)
+
+  selected_indices <- reactive(fp_selected())
 
   # ---- Sidebar ----
   # We render the sidebar ONCE per session, with an empty/placeholder dropdown.
@@ -858,6 +891,21 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         div(class = "fp-edit-row",
           uiOutput("fp_corr_discard_ui")
         )
+      ),
+
+      # ---- Group 7: Note for the next edit ----
+      # Free text saved (as the `note` column) with the Edit log row of the
+      # NEXT edit or discard, then cleared so it cannot leak onto later,
+      # unrelated actions. The prime use case is recording WHY: a reason to
+      # discard a token, or why frames were removed.
+      div(class = "fp-edit-group",
+        div(class = "fp-edit-group-label", "Note (optional)"),
+        textAreaInput("fp_corr_edit_note", NULL, value = "",
+                      rows = 2, resize = "vertical", width = "100%",
+                      placeholder = "Why this edit / discard? e.g. creaky tail, f0 untrackable"),
+        tags$div(style = "color:#888; font-size:0.72rem; font-style:italic; margin-top:-6px;",
+          "Saved with the next edit as the ", tags$code("note"),
+          " column of the Edit log, then cleared.")
       ),
 
       # ---- Undo (separated from edit groups) ----
@@ -2915,7 +2963,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         data.frame(date = character(0), token = character(0), action = character(0),
                    `n frames` = integer(0), `frame indices` = character(0),
                    `frame times (s)` = character(0), `frame %` = character(0),
-                   details = character(0),
+                   details = character(0), note = character(0),
                    stringsAsFactors = FALSE, check.names = FALSE),
         rownames = FALSE,
         options = list(pageLength = 10, dom = "tip",
@@ -2925,7 +2973,8 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     # Show most-recent first; readable column names
     df_show <- df[seq.int(nrow(df), 1L), , drop = FALSE]
     names(df_show) <- c("date", "token", "action", "n frames",
-                        "frame indices", "frame times (s)", "frame %", "details")
+                        "frame indices", "frame times (s)", "frame %", "details",
+                        "note")
     DT::datatable(
       df_show, rownames = FALSE,
       options = list(pageLength = 10, dom = "tip", scrollX = TRUE,
@@ -2960,6 +3009,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       frame_times_s = character(0),
       frame_pct     = character(0),
       details       = character(0),
+      note          = character(0),
       stringsAsFactors = FALSE
     ))
     showNotification("Edit log cleared.", type = "message", duration = 2)
@@ -2980,7 +3030,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       showNotification("That CSV does not look like an edit log (it needs at least a token and an action column).",
                        type = "error", duration = 9); return() }
     schema <- c("date", "token", "action", "n_frames", "frame_indices",
-                "frame_times_s", "frame_pct", "details")
+                "frame_times_s", "frame_pct", "details", "note")
     for (col in schema) if (!(col %in% names(df))) df[[col]] <- NA_character_
     df <- df[, schema, drop = FALSE]
     df$n_frames <- suppressWarnings(as.integer(df$n_frames))
@@ -3452,6 +3502,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       frame_times_s = NA_character_,
       frame_pct     = NA_character_,
       details       = "bulk: flagged by Inspect",
+      note          = "",
       stringsAsFactors = FALSE)))
     ds <- discard_share()
     showNotification(
