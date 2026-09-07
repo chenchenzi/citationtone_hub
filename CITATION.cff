@@ -4,8 +4,10 @@
 cff-version: 1.2.0
 title: "shinytone: A Citation Tone Research Hub"
 message: >
-  If you use shinytone in published work, please cite both the software
-  and the accompanying methodology paper listed under `references`.
+  If you use shinytone in published work, please cite both this software
+  (Xu & Zhang 2026, DOI 10.5281/zenodo.22632508) and the methodology paper
+  it implements (Xu & Zhang 2024, JASA), listed first under `references`.
+  A tutorial paper on the software is in preparation and will be added here.
 type: software
 authors:
   - family-names: Xu
@@ -16,6 +18,14 @@ authors:
     given-names: Cong
     orcid: "https://orcid.org/0000-0002-2561-2113"
     affiliation: "Newcastle University, United Kingdom"
+doi: 10.5281/zenodo.22632509
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.22632508
+    description: "Concept DOI (resolves to the latest version)"
+  - type: doi
+    value: 10.5281/zenodo.22632509
+    description: "Version 1.0.0"
 repository-code: "https://github.com/chenchenzi/citationtone_hub"
 url: "https://chenchenzi.github.io/citationtone_hub/"
 license: GPL-3.0-or-later
@@ -31,26 +41,24 @@ keywords:
   - R package
   - Shiny
 
-# When users click "Cite this repository", GitHub shows the entry above
-# (the software). `preferred-citation` overrides that for *publication*
-# purposes — point readers at the methodology paper.
-preferred-citation:
-  type: article
-  title: "A cross-linguistic review of citation tone production studies: Methodology and recommendations"
-  authors:
-    - family-names: Xu
-      given-names: Chenzi
-    - family-names: Zhang
-      given-names: Cong
-  journal: "The Journal of the Acoustical Society of America"
-  year: 2024
-  volume: 156
-  issue: 4
-  start: 2538
-  end: 2565
-  doi: "10.1121/10.0032356"
-
 references:
+  - type: article
+    title: "A cross-linguistic review of citation tone production studies: Methodology and recommendations"
+    authors:
+      - family-names: Xu
+        given-names: Chenzi
+      - family-names: Zhang
+        given-names: Cong
+    journal: "The Journal of the Acoustical Society of America"
+    year: 2024
+    volume: 156
+    issue: 4
+    start: 2538
+    end: 2565
+    doi: "10.1121/10.0032356"
+    notes: >
+      Methodology paper: the review whose recommendations shinytone
+      implements. Please cite alongside the software.
   - type: article
     title: "Plastic Mandarin tones: regional identity in prosody"
     authors:

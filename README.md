@@ -10,6 +10,7 @@ Developed by [Chenzi Xu](https://chenzixu.rbind.io/). Co-authored with
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![pkgdown](https://github.com/chenchenzi/citationtone_hub/actions/workflows/pkgdown.yaml/badge.svg)](https://github.com/chenchenzi/citationtone_hub/actions/workflows/pkgdown.yaml)
 [![Live app](https://img.shields.io/badge/app-shinyapps.io-78c2ad?logo=R)](https://chenzixu.shinyapps.io/shinytone/)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22632508.svg)](https://doi.org/10.5281/zenodo.22632508)
 <!-- badges: end -->
 
 ## Contents
@@ -155,6 +156,10 @@ and the methodology paper:
 ```r
 citation("shinytone")
 ```
+
+> Xu, C., & Zhang, C. (2026). shinytone: A Citation Tone Research Hub
+> (Version 1.0.0) [Computer software]. Zenodo.
+> <https://doi.org/10.5281/zenodo.22632508>
 
 > Xu, C., & Zhang, C. (2024). A cross-linguistic review of citation
 > tone production studies: Methodology and recommendations. *The

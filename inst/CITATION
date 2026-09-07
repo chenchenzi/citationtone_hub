@@ -1,8 +1,8 @@
-# When users run citation("shinytone") they will see this entry.
-# A second bibentry() for the accompanying tutorial paper will be added
-# once that paper is available.
+# citation("shinytone") prints both entries below: the software (with its
+# Zenodo DOI) and the methodology paper it implements. A third bibentry()
+# for the tutorial paper on the software will be added once it is published.
 
-citHeader("To cite shinytone in publications, please use:")
+citHeader("To cite shinytone in publications, please cite both the software and the methodology paper:")
 
 bibentry(
   bibtype  = "Manual",
@@ -14,11 +14,34 @@ bibentry(
   year     = format(Sys.Date(), "%Y"),
   note     = sprintf("R package version %s", meta$Version),
   url      = "https://github.com/chenchenzi/citationtone_hub",
+  doi      = "10.5281/zenodo.22632508",
 
   textVersion = paste0(
     "Xu, C., & Zhang, C. (", format(Sys.Date(), "%Y"),
     "). shinytone: A Citation Tone Research Hub. R package version ",
     meta$Version,
-    ". https://github.com/chenchenzi/citationtone_hub"
+    ". https://doi.org/10.5281/zenodo.22632508"
+  )
+)
+
+bibentry(
+  bibtype  = "Article",
+  title    = "A cross-linguistic review of citation tone production studies: Methodology and recommendations",
+  author   = c(
+    person("Chenzi", "Xu"),
+    person("Cong",   "Zhang")
+  ),
+  journal  = "The Journal of the Acoustical Society of America",
+  year     = "2024",
+  volume   = "156",
+  number   = "4",
+  pages    = "2538--2565",
+  doi      = "10.1121/10.0032356",
+
+  textVersion = paste0(
+    "Xu, C., & Zhang, C. (2024). A cross-linguistic review of citation tone ",
+    "production studies: Methodology and recommendations. The Journal of the ",
+    "Acoustical Society of America, 156(4), 2538-2565. ",
+    "https://doi.org/10.1121/10.0032356"
   )
 )
