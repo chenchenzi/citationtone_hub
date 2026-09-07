@@ -489,7 +489,11 @@ ui <- fluidPage(
                           tags$span(style = "margin: 0 10px; color: #ccc;", "·"),
                           icon("github"), " ",
                           tags$a(href = "https://github.com/chenchenzi/citationtone_hub", target = "_blank",
-                                 "github.com/chenchenzi/citationtone_hub")
+                                 "github.com/chenchenzi/citationtone_hub"),
+                          tags$span(style = "margin: 0 10px; color: #ccc;", "·"),
+                          icon("quote-left"), " DOI: ",
+                          tags$a(href = "https://doi.org/10.5281/zenodo.22632508", target = "_blank",
+                                 rel = "noopener noreferrer", "10.5281/zenodo.22632508")
                         ),
                         tags$p(style = "color: #777; font-size: 0.88rem; margin: 6px 0 0 0;",
                           tags$span(style = "color: #78c2ad;", icon("seedling")), " ",
@@ -1492,6 +1496,29 @@ ui <- fluidPage(
                             )
                           ),
 
+                          # How to cite: the software (Zenodo DOI) and the methodology paper
+                          tags$div(class = "rpkg-highlight",
+                            tags$span(class = "rpkg-highlight-icon", icon("quote-left")),
+                            tags$span(
+                              tags$strong("How to cite. "),
+                              "Please cite both the software and the methodology paper it implements ",
+                              "(", tags$code('citation("shinytone")'), " prints both):",
+                              tags$br(),
+                              "Xu, C., & Zhang, C. (2026). shinytone: A Citation Tone Research Hub ",
+                              "(Version 1.0.0) [Computer software]. Zenodo. ",
+                              tags$a(href = "https://doi.org/10.5281/zenodo.22632508",
+                                     target = "_blank", rel = "noopener noreferrer",
+                                     "doi:10.5281/zenodo.22632508"),
+                              tags$br(),
+                              "Xu, C., & Zhang, C. (2024). A cross-linguistic review of citation tone ",
+                              "production studies: Methodology and recommendations. ",
+                              tags$em("The Journal of the Acoustical Society of America"), ", 156(4), 2538\u20132565. ",
+                              tags$a(href = "https://doi.org/10.1121/10.0032356",
+                                     target = "_blank", rel = "noopener noreferrer",
+                                     "doi:10.1121/10.0032356")
+                            )
+                          ),
+
                           # Badge-style action links
                           tags$div(class = "rpkg-badges",
                             tags$a(
@@ -1514,6 +1541,11 @@ ui <- fluidPage(
                               href   = "https://github.com/chenchenzi/citationtone_hub/issues",
                               target = "_blank", rel = "noopener noreferrer",
                               icon("bug"), "Issues & feedback"
+                            ),
+                            tags$a(
+                              href   = "https://doi.org/10.5281/zenodo.22632508",
+                              target = "_blank", rel = "noopener noreferrer",
+                              icon("quote-left"), "Zenodo DOI"
                             )
                           )
                         )
