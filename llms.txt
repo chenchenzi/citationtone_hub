@@ -158,6 +158,10 @@ the methodology paper:
 citation("shinytone")
 ```
 
+> Xu, C., & Zhang, C. (2026). shinytone: A Citation Tone Research Hub
+> (Version 1.0.0) \[Computer software\]. Zenodo.
+> <https://doi.org/10.5281/zenodo.22632508>
+
 > Xu, C., & Zhang, C. (2024). A cross-linguistic review of citation tone
 > production studies: Methodology and recommendations. *The Journal of
 > the Acoustical Society of America*, 156(4), 2538–2565.
@@ -194,7 +198,8 @@ no upload limits, recordings stay on your machine.
 ## Normalisation
 
 By-speaker semitone or z-score f0 normalisation, plus landmark-based
-time normalisation for multisyllabic words.
+time normalisation for multisyllabic words and auto-detection of time
+columns that are already on a \[0, 1\] scale.
 
 - [`normalise_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_f0.md)
   : Normalise f0 by speaker
@@ -202,11 +207,16 @@ time normalisation for multisyllabic words.
   : Landmark-normalised time columns
 - [`normalise_time_token()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_time_token.md)
   : Whole-token 0-1 time normalisation
+- [`resolve_time_norm()`](https://chenchenzi.github.io/citationtone_hub/reference/resolve_time_norm.md)
+  : Per-token normalised time, honouring an already-normalised column
+- [`time_already_normalised()`](https://chenchenzi.github.io/citationtone_hub/reference/time_already_normalised.md)
+  : Does a time column look already normalised to \[0, 1\]?
 
 ## TextGrid landmarks
 
 Read interval tiers from Praat TextGrids and attach per-frame segment
-labels and boundaries (e.g. syllables) to long-format f0 data.
+labels and boundaries (e.g. syllables) to long-format f0 data, and keep
+only the frames inside chosen intervals (vowel, rhyme, or named labels).
 
 - [`tg_interval_tiers()`](https://chenchenzi.github.io/citationtone_hub/reference/tg_interval_tiers.md)
   : Interval-tier names across a set of TextGrids
@@ -214,6 +224,23 @@ labels and boundaries (e.g. syllables) to long-format f0 data.
   : Assign each time to its interval in a TextGrid interval tier
 - [`attach_landmarks()`](https://chenchenzi.github.io/citationtone_hub/reference/attach_landmarks.md)
   : Attach TextGrid landmark columns to a long-format f0 data frame
+- [`filter_interval_rows()`](https://chenchenzi.github.io/citationtone_hub/reference/filter_interval_rows.md)
+  : Keep only f0 frames that fall inside chosen TextGrid intervals
+- [`ipa_vowel_label()`](https://chenchenzi.github.io/citationtone_hub/reference/ipa_vowel_label.md)
+  : Does an interval label denote a vowel (IPA)?
+
+## Voiced-region trimming and resampling
+
+Trim each token to its voiced span, flag contours with gaps inside the
+measured region, and resample every contour to N equidistant points for
+export or cross-token comparison.
+
+- [`trim_to_voiced()`](https://chenchenzi.github.io/citationtone_hub/reference/trim_to_voiced.md)
+  : Trim each token to its voiced region
+- [`flag_f0_gaps()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_f0_gaps.md)
+  : Flag tokens whose f0 has gaps inside the measured region
+- [`resample_f0_equal()`](https://chenchenzi.github.io/citationtone_hub/reference/resample_f0_equal.md)
+  : Resample each token's f0 contour to N equidistant points
 
 ## Outlier and artefact inspection
 

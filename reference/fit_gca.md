@@ -30,7 +30,8 @@ fit_gca(
   random_intercept_speaker = TRUE,
   random_intercept_item = TRUE,
   random_slope_speaker = TRUE,
-  random_slope_item = FALSE
+  random_slope_item = FALSE,
+  time_normalised = c("auto", "no", "yes")
 )
 ```
 
@@ -60,6 +61,13 @@ fit_gca(
   orthogonal-polynomial terms (`ot1` ... `otK`). Default `TRUE` for
   speaker, `FALSE` for item.
 
+- time_normalised:
+
+  One of `"auto"` (default: detect an already-normalised `[0, 1]` time
+  column and use it as-is), `"no"` (always rescale to `[0, 1]` within
+  each token), or `"yes"` (declare the column already normalised). See
+  [`resolve_time_norm()`](https://chenchenzi.github.io/citationtone_hub/reference/resolve_time_norm.md).
+
 ## Value
 
 An S3 object of class `"shinytone_gca"`, a list with:
@@ -80,13 +88,23 @@ An S3 object of class `"shinytone_gca"`, a list with:
 - `col_names`: original column names (for back-mapping in summary
   tables).
 
+- `time_prenormalised`: logical; was the time column used as-is because
+  it was already normalised to `[0, 1]`?
+
 - `convergence_warning`: `NULL` or the captured warning message.
 
 ## Details
 
 ### What the function does internally
 
-1.  Within each token, normalise the time axis to `[0, 1]`.
+1.  Within each token, normalise the time axis to `[0, 1]`. If the time
+    column is *already* normalised (e.g. `token_t01` from
+    [`normalise_time_token()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_time_token.md)),
+    it is detected with
+    [`time_already_normalised()`](https://chenchenzi.github.io/citationtone_hub/reference/time_already_normalised.md)
+    and used as-is, so tokens whose samples do not span the full unit
+    interval are not stretched a second time; override with
+    `time_normalised`.
 
 2.  Build orthogonal polynomial terms `ot1`, `ot2`, ..., `otK` on the
     normalised time using

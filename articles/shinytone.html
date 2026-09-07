@@ -168,9 +168,11 @@ speaker:</p>
 <span><span class="co">#&gt; 5   dc102    3 249.7015     237.0675 0.8988754</span></span>
 <span><span class="co">#&gt; 6   dc102    3 251.6647     237.0675 1.0344568</span></span></code></pre></div>
 <p>Now <code>f0_st</code> puts every speaker on a comparable scale. To
-plot the mean contour per tone, use [compute_mean_contour()], which
-normalises time to <code>[0, 1]</code> <em>within each token</em> before
-averaging. The package function returns its result in the same
+plot the mean contour per tone, use [compute_mean_contour()], which puts
+time on a <code>[0, 1]</code> axis before averaging: it rescales within
+each token, unless the time column is already proportional, which it
+detects and leaves alone (<code>time_normalised</code> overrides either
+way). The package function returns its result in the same
 <code>time / f0_predicted / tone</code> schema used by [predict_gca()]
 and [predict_gamm()]:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">

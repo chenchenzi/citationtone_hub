@@ -2,6 +2,124 @@
 
 ## shinytone (development version)
 
+- **F0 Correction tab: two fixes from classroom use.** Deleting an
+  outlying frame could leave its “ghost” marker (the original value)
+  drawn off-screen: the f0 panel’s y-range was framed on the corrected
+  values only, and the y-axis is fixed, so there was no way to scroll
+  the original back into view. The range now also anchors on the
+  original values of edited frames. And the Delete button sometimes
+  appeared to do nothing: a click after a box/lasso selection silently
+  kept the stale box (plotly never clears that input on a plain click),
+  so the edit hit the old — often already deleted — frames. The
+  selection now follows whichever of click or box-select happened last,
+  and switching tokens clears it.
+- **F0 Correction tab: a `note` column in the edit log.** A *Note
+  (optional)* box in the sidebar. Whatever it holds is saved with the
+  next edit or discard as the `note` column of the edit log — table, CSV
+  download, and log re-upload alike — then cleared so it cannot leak
+  onto later, unrelated actions. For recording *why*: a reason to
+  discard a token, or why frames were removed.
+- **F0 Extraction tab: export notes restyled as a banner.** The
+  data-quality notes under the export summary (short voiced span,
+  unvoiced gaps, …) were easy to miss as small grey text at the bottom
+  of the sidebar; they are now an amber message box in the same idiom as
+  the Correction tab’s banners.
+- **Praat script: version guard for the newer pitch methods.** The
+  *filtered ac / filtered cc / raw ac / raw cc* methods exist only since
+  Praat 6.4 (November 2023); on an older Praat the batch died mid-run
+  with a cryptic “Command not available for current selection” error.
+  The script now checks `praatVersion` up front and exits with the
+  running version and the fix (update Praat, or pick *ac* / *cc* /
+  *shs*).
+- **F0 Extraction tab: F0 Data Export (region + sampling).** A new block
+  decides what the downloaded dataset contains, without touching the
+  data in the app: F0 Correction keeps working on the extraction exactly
+  as it arrived, so changing these settings can never disturb frame
+  edits. **Region** is what the measurement covers — *Whole token* runs
+  from a token’s first to its last voiced frame, so leading and trailing
+  silence (which carries no f0) is excluded, and an edge needs two
+  consecutive voiced frames so a lone voiced frame stranded in silence
+  cannot stretch it; or a *TextGrid interval*. **Sampling** is how
+  densely — every *native frame time*, or *N equidistant points* across
+  the region, which is time normalisation applied at the sampling stage
+  and adds `point` (1…N) and `time_prop` (0–1). An **export preview**
+  shows the first rows of the file the Download button will write,
+  metadata join included. New exported functions:
+  [`resample_f0_equal()`](https://chenchenzi.github.io/citationtone_hub/reference/resample_f0_equal.md),
+  [`trim_to_voiced()`](https://chenchenzi.github.io/citationtone_hub/reference/trim_to_voiced.md),
+  [`flag_f0_gaps()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_f0_gaps.md).
+- **Resampling follows Praat’s own rule.**
+  [`resample_f0_equal()`](https://chenchenzi.github.io/citationtone_hub/reference/resample_f0_equal.md)
+  ports `Sampled_getValueAtX()`, which is what
+  `Pitch: Get value at time...` runs, so a contour resampled here
+  matches one a Praat script gets querying the same times. Of the two
+  frames bracketing a point, the nearer is *near* and the other *far*:
+  both voiced blends them, *far* unvoiced keeps *near*’s measured value,
+  *near* unvoiced gives `NA`. The `method` argument offers Praat’s two
+  choices, `"linear"` (default) and `"nearest"`. Unvoiced stretches are
+  respected only when the input marks them as `NA` (or 0 Hz) rows;
+  sparse input such as a `.PitchTier` has no such rows, so a silent
+  stretch there is a plain gap between anchors and is interpolated
+  across, exactly as Praat does.
+- **F0 Extraction tab: subset f0 by TextGrid interval.** Export only the
+  f0 falling inside chosen intervals: vowels found automatically, the
+  rhyme (first vowel to the end of the token; monosyllables only), or
+  labels you type. New exported
+  [`ipa_vowel_label()`](https://chenchenzi.github.io/citationtone_hub/reference/ipa_vowel_label.md)
+  and
+  [`filter_interval_rows()`](https://chenchenzi.github.io/citationtone_hub/reference/filter_interval_rows.md).
+  [`ipa_vowel_label()`](https://chenchenzi.github.io/citationtone_hub/reference/ipa_vowel_label.md)
+  handles length marks, stress marks, tone digits and Chao letters,
+  combining diacritics, precomposed pinyin tone marks (`ā ǎ ū ǔ` …) in
+  either Unicode normalisation, di- and triphthongs including
+  `j`/`w`/`ɥ` offglide spellings (`aj`, `ɔw`) as well as `ai` and `au`,
+  and syllabic nasals (`m̩`, `n̩`, `ŋ̩`) as vowel-equivalent nuclei.
+- **Two checks that make silent problems visible.**
+  [`flag_f0_gaps()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_f0_gaps.md)
+  adds `n_missing` and `has_gap`, marking tokens whose voicing was
+  interrupted mid-region — measured on the native frames *before*
+  resampling, since resampling can fill a short dropout from the nearer
+  frame. And the per-token summary reports `voiced_s` with `voiced_prop`
+  (`voiced_s / duration_s`), shading and naming tokens voiced across a
+  far shorter span than the rest of the corpus: with equidistant
+  sampling their percentage positions are squeezed into whatever was
+  tracked, so they are not comparable with the other tokens.
+- **Modelling: an already-normalised time column is used as-is.**
+  [`fit_gca()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_gca.md),
+  [`fit_gamm()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_gamm.md),
+  [`fit_polynomial()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_polynomial.md)
+  and
+  [`compute_mean_contour()`](https://chenchenzi.github.io/citationtone_hub/reference/compute_mean_contour.md)
+  gained `time_normalised` (`"auto"`, `"no"`, `"yes"`). Under the
+  default `"auto"`, a column that is already proportional — `token_t01`
+  from
+  [`normalise_time_token()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_time_token.md),
+  or `time_prop` from equal-point extraction — is detected by the new
+  [`time_already_normalised()`](https://chenchenzi.github.io/citationtone_hub/reference/time_already_normalised.md)
+  and used as-is, rather than min-max rescaled a second time, which
+  stretched any token not spanning the full unit interval. The Model,
+  GCA and GAMM tabs say when this applies and their **Show R code**
+  output reflects whichever branch ran;
+  [`fit_gca()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_gca.md)
+  and
+  [`fit_gamm()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_gamm.md)
+  record `time_prenormalised` in the returned object,
+  [`fit_polynomial()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_polynomial.md)
+  as an attribute. Detection is deliberately conservative and has two
+  documented limits: a set in which *every* token is a partial span
+  cannot be distinguished from ordinary variable-duration time and is
+  rescaled as before (pass `"yes"`), and raw seconds in which every
+  token lasts just under one second is detected as proportional (pass
+  `"no"`).
+- **0 Hz counts as unvoiced** in the new f0 helpers, matching
+  [`inspect_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/inspect_f0.md)
+  and the extraction paths, so trackers that code unvoiced frames as 0
+  Hz are handled rather than having silence blended into speech.
+- **The multisyllabic warning no longer fires on `token_t01`.** On the
+  Model, GCA and GAMM tabs it is now raised only for a landmark tier’s
+  `<tier>_t01`, which resets at every segment boundary, and not for the
+  whole-token proportional axis, which is a perfectly good time
+  variable.
 - **F0 Correction tab: whole-token discard.** A new “Whole token” edit
   group adds **Discard token** / **Restore token** for tokens that are
   beyond repair: instead of fixing frames, the whole token is marked as
@@ -53,10 +171,13 @@
   scatter.** The tab’s generated script used to stop at the coefficient
   table, leaving the coefficient-space scatter as the one part of the
   tab with no reproducible counterpart outside the app. The snippet now
-  ends with a `ggplot2` section that rebuilds the scatter — one point
-  per token, coloured by tone — using the X / Y axes currently selected
-  in the tab (falling back to the plot’s own defaults) and axis labels
-  carrying the phonetic gloss (`c1` slope, `c2` curvature, …).
+  ends with a plotting section that rebuilds the scatter — one point per
+  token, coloured by tone — using the axes currently selected in the tab
+  (falling back to the plot’s own defaults) and axis labels carrying the
+  phonetic gloss (`c1` slope, `c2` curvature, …). With no Z axis it
+  emits a static `ggplot2` scatter; with a Z axis selected it emits the
+  matching 3-D `plotly::plot_ly(type = "scatter3d")` call instead,
+  mirroring what the tab shows.
 - **F0 Correction tab: filter by flag type.** When the uploaded Inspect
   CSV carries `flag_notes`, a **Keep flag types** checkbox group lists
   the artefact classes present (extreme value, level, octave jump, jump

@@ -158,6 +158,10 @@ the methodology paper:
 citation("shinytone")
 ```
 
+> Xu, C., & Zhang, C. (2026). shinytone: A Citation Tone Research Hub
+> (Version 1.0.0) \[Computer software\]. Zenodo.
+> <https://doi.org/10.5281/zenodo.22632508>
+
 > Xu, C., & Zhang, C. (2024). A cross-linguistic review of citation tone
 > production studies: Methodology and recommendations. *The Journal of
 > the Acoustical Society of America*, 156(4), 2538–2565.

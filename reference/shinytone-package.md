@@ -39,9 +39,11 @@ Useful links:
 ## Author
 
 **Maintainer**: Chenzi Xu <chenzi.xu@ntu.edu.sg>
+([ORCID](https://orcid.org/0000-0001-6506-4513))
 
 Authors:
 
 - Chenzi Xu <chenzi.xu@ntu.edu.sg>
+  ([ORCID](https://orcid.org/0000-0001-6506-4513))
 
-- Cong Zhang
+- Cong Zhang ([ORCID](https://orcid.org/0000-0002-2561-2113))

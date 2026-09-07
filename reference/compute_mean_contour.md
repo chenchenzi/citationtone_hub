@@ -15,7 +15,8 @@ compute_mean_contour(
   f0 = "f0",
   time = "time",
   tone = "tone",
-  n_bins = 50
+  n_bins = 50,
+  time_normalised = c("auto", "no", "yes")
 )
 ```
 
@@ -35,6 +36,13 @@ compute_mean_contour(
   Larger values give a smoother contour at the cost of noisier per-bin
   estimates if some bins are sparsely populated.
 
+- time_normalised:
+
+  One of `"auto"` (default: detect an already-normalised `[0, 1]` time
+  column and use it as-is), `"no"` (always rescale to `[0, 1]` within
+  each token), or `"yes"` (declare the column already normalised). See
+  [`resolve_time_norm()`](https://chenchenzi.github.io/citationtone_hub/reference/resolve_time_norm.md).
+
 ## Value
 
 A data frame with columns `tone`, `time`, `f0_predicted`, one row per
@@ -45,7 +53,14 @@ A data frame with columns `tone`, `time`, `f0_predicted`, one row per
 Internally:
 
 1.  Within each token, normalise the time axis to `[0, 1]` so tokens of
-    different durations can be averaged across the same grid.
+    different durations can be averaged across the same grid. A time
+    column that is *already* normalised is detected with
+    [`time_already_normalised()`](https://chenchenzi.github.io/citationtone_hub/reference/time_already_normalised.md)
+    and used as-is (override with `time_normalised`), matching what
+    [`fit_gca()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_gca.md)
+    and
+    [`fit_gamm()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_gamm.md)
+    do.
 
 2.  Round each sample's normalised time onto one of `n_bins`
     equally-spaced bins.

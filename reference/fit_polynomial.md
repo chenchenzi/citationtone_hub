@@ -17,7 +17,8 @@ fit_polynomial(
   time = "time",
   speaker = "speaker",
   tone = "tone",
-  degree = 2
+  degree = 2,
+  time_normalised = c("auto", "no", "yes")
 )
 ```
 
@@ -56,10 +57,20 @@ fit_polynomial(
 
   Polynomial degree. One of `1`, `2`, or `3`. Default `2`.
 
+- time_normalised:
+
+  One of `"auto"` (default: detect an already-normalised `[0, 1]` time
+  column and map it to `[-1, 1]` with the fixed transform `2 * t - 1`),
+  `"no"` (always rescale to `[-1, 1]` within each token), or `"yes"`
+  (declare the column already normalised to `[0, 1]`). See
+  [`resolve_time_norm()`](https://chenchenzi.github.io/citationtone_hub/reference/resolve_time_norm.md).
+
 ## Value
 
 A token-level data frame with one row per token, containing the `token`,
 `speaker`, `tone`, and coefficient columns `c0`, `c1`, ..., `c{degree}`.
+The attribute `time_prenormalised` records whether the time column was
+treated as already normalised.
 
 ## Details
 
@@ -69,7 +80,12 @@ For each token:
 
 1.  Compute the per-token range of `time` and rescale it linearly to the
     interval `[-1, 1]`, which is where Legendre polynomials are
-    orthogonal.
+    orthogonal. If the time column is *already* normalised to `[0, 1]`
+    (detected with
+    [`time_already_normalised()`](https://chenchenzi.github.io/citationtone_hub/reference/time_already_normalised.md),
+    or declared via `time_normalised`), the fixed map `2 * t - 1` is
+    used instead, so tokens whose samples do not span the full unit
+    interval are not stretched a second time.
 
 2.  Build the Legendre basis up to the requested `degree`.
 
