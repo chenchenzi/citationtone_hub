@@ -1,0 +1,52 @@
+{
+  "title": "shinytone: A Citation Tone Research Hub",
+  "upload_type": "software",
+  "version": "1.0.0",
+  "language": "eng",
+  "access_right": "open",
+  "license": "gpl-3.0-or-later",
+  "description": "<p>An interactive Shiny application and R package for citation tone research across tone languages. shinytone integrates the full workflow in one place: pitch (f0) extraction from .wav files (wrassp or Praat), artefact and outlier inspection, f0 correction by ear with a logged edit trail, by-speaker semitone or z-score normalisation, contour visualisation and clustering, growth-curve and generalised additive mixed modelling, and Chao tone numeral summarisation. Every plot and model panel prints the R code that produced it, so analyses can be re-run outside the app.</p><p>Live app: <a href=\"https://chenzixu.shinyapps.io/shinytone/\">chenzixu.shinyapps.io/shinytone</a>. Documentation: <a href=\"https://chenchenzi.github.io/citationtone_hub/\">chenchenzi.github.io/citationtone_hub</a>.</p>",
+  "creators": [
+    {
+      "name": "Xu, Chenzi",
+      "affiliation": "Nanyang Technological University, Singapore",
+      "orcid": "0000-0001-6506-4513"
+    },
+    {
+      "name": "Zhang, Cong",
+      "affiliation": "Newcastle University, United Kingdom",
+      "orcid": "0000-0002-2561-2113"
+    }
+  ],
+  "keywords": [
+    "citation tone",
+    "tonal phonetics",
+    "tone languages",
+    "f0 normalisation",
+    "pitch extraction",
+    "growth curve analysis",
+    "generalised additive mixed models",
+    "Chao tone numerals",
+    "R package",
+    "Shiny"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "10.1121/10.0032356",
+      "relation": "references",
+      "resource_type": "publication-article",
+      "scheme": "doi"
+    },
+    {
+      "identifier": "10.1515/phon-2025-0001",
+      "relation": "references",
+      "resource_type": "publication-article",
+      "scheme": "doi"
+    },
+    {
+      "identifier": "https://chenchenzi.github.io/citationtone_hub/",
+      "relation": "isDocumentedBy",
+      "scheme": "url"
+    }
+  ]
+}

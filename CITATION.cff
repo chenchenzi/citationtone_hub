@@ -10,17 +10,17 @@ type: software
 authors:
   - family-names: Xu
     given-names: Chenzi
-    orcid: ""
-    affiliation: ""
+    orcid: "https://orcid.org/0000-0001-6506-4513"
+    affiliation: "Nanyang Technological University, Singapore"
   - family-names: Zhang
     given-names: Cong
-    orcid: ""
-    affiliation: ""
+    orcid: "https://orcid.org/0000-0002-2561-2113"
+    affiliation: "Newcastle University, United Kingdom"
 repository-code: "https://github.com/chenchenzi/citationtone_hub"
 url: "https://chenchenzi.github.io/citationtone_hub/"
 license: GPL-3.0-or-later
-version: 0.1.0
-date-released: 2026-05-28
+version: 1.0.0
+date-released: 2026-09-07
 keywords:
   - citation tone
   - tonal phonetics

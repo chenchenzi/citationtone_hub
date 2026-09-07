@@ -5,9 +5,10 @@ Authors@R: c(
     person("Chenzi", "Xu",
            email = "chenzi.xu@ntu.edu.sg",
            role = c("aut", "cre"),
-           comment = c(ORCID = "")),
+           comment = c(ORCID = "0000-0001-6506-4513")),
     person("Cong", "Zhang",
-           role = "aut"))
+           role = "aut",
+           comment = c(ORCID = "0000-0002-2561-2113")))
 Description: An interactive Shiny application and accompanying R functions for
     citation tone research across tone languages. Integrates the full workflow
     of pitch extraction, by-speaker f0 normalisation, growth-curve and
