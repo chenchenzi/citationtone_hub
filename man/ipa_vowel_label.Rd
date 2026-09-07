@@ -33,9 +33,9 @@ and \code{waj} match, while a bare \code{j} or \code{w} onset does not. A vowel 
 with any other consonant (\code{ang}, \code{an}, \code{pa}) never matches.
 
 Syllabic nasals count as vowel-equivalent nuclei: a label whose letters are
-all nasals and which carries a syllabicity mark (\verb{m\\u0329}, \verb{n\\u0329}, \verb{\\u014B\\u0329}) matches,
-since these are tone-bearing units in e.g. Cantonese (\u5514, \u4E94). The same
-nasals \emph{without} the mark (\code{m}, \code{n}, \verb{\\u014B}) do not.
+all nasals and which carries a syllabicity mark (\verb{m̩}, \verb{n̩}, \verb{ŋ̩}) matches,
+since these are tone-bearing units in e.g. Cantonese (唔, 五). The same
+nasals \emph{without} the mark (\code{m}, \code{n}, \code{ŋ}) do not.
 }
 \details{
 Recognised base letters: the IPA vowel letters (\verb{a e i o u y æ ɐ ɑ ɒ ə ɘ ɵ ɛ œ ɜ ɞ ɤ ɪ ɨ ɔ ø ʉ ʊ ʌ ɯ ʏ ɶ ɚ ɝ} and the near-close central \verb{ᵻ ᵿ}), their ASCII

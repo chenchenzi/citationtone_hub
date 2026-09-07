@@ -38,12 +38,12 @@ Useful links:
 
 }
 \author{
-\strong{Maintainer}: Chenzi Xu \email{chenzi.xu@ntu.edu.sg}
+\strong{Maintainer}: Chenzi Xu \email{chenzi.xu@ntu.edu.sg} (\href{https://orcid.org/0000-0001-6506-4513}{ORCID})
 
 Authors:
 \itemize{
-  \item Chenzi Xu \email{chenzi.xu@ntu.edu.sg}
-  \item Cong Zhang
+  \item Chenzi Xu \email{chenzi.xu@ntu.edu.sg} (\href{https://orcid.org/0000-0001-6506-4513}{ORCID})
+  \item Cong Zhang (\href{https://orcid.org/0000-0002-2561-2113}{ORCID})
 }
 
 }

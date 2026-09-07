@@ -215,9 +215,9 @@ normalise_time_token <- function(df, time, token) {
 #' with any other consonant (`ang`, `an`, `pa`) never matches.
 #'
 #' Syllabic nasals count as vowel-equivalent nuclei: a label whose letters are
-#' all nasals and which carries a syllabicity mark (`m\u0329`, `n\u0329`, `\u014B\u0329`) matches,
-#' since these are tone-bearing units in e.g. Cantonese (\u5514, \u4E94). The same
-#' nasals *without* the mark (`m`, `n`, `\u014B`) do not.
+#' all nasals and which carries a syllabicity mark (`m̩`, `n̩`, `ŋ̩`) matches,
+#' since these are tone-bearing units in e.g. Cantonese (唔, 五). The same
+#' nasals *without* the mark (`m`, `n`, `ŋ`) do not.
 #'
 #' @details
 #' Recognised base letters: the IPA vowel letters (`a e i o u y æ ɐ
