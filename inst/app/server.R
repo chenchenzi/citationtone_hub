@@ -232,8 +232,10 @@ server <- function(input, output, session) {
 
   # f0 processing tab modules
   fp_start_ui(input, output, session, fp_audio_data)
-  fp_extraction_ui(input, output, session, fp_audio_data, fp_f0_data, fp_pitch_candidates, fp_metadata, fp_corrected_data)
-  fp_correction_ui(input, output, session, fp_audio_data, fp_f0_data, fp_pitch_candidates, fp_corrected_data)
+  # F0 Extraction returns the function its downloads use to add landmark and
+  # metadata columns, so F0 Correction's downloads carry the same columns.
+  fp_decorate_download <- fp_extraction_ui(input, output, session, fp_audio_data, fp_f0_data, fp_pitch_candidates, fp_metadata, fp_corrected_data)
+  fp_correction_ui(input, output, session, fp_audio_data, fp_f0_data, fp_pitch_candidates, fp_corrected_data, fp_decorate_download)
   fp_praat_script_ui(input, output, session)
 
   # Feature-card navigation from the About tab.

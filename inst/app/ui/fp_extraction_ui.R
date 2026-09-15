@@ -759,6 +759,31 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   #   region   : which rows count  (whole file / voiced span / TextGrid interval)
   #   sampling : how they are measured (native frame times / N equidistant points)
 
+  # Landmark columns for ticked tiers that fp_f0_data still lacks, aligned row
+  # for row with it (NULL when there are none). Landmarks are otherwise only
+  # attached when extraction runs, so a tier ticked afterwards (the picker sits
+  # below the Run button), or any tier in "Upload existing f0 CSV" mode, never
+  # reached the download, and the Normalise tab then had no tier to offer.
+  # Tiers already on the grid are skipped, so nothing is read twice, and this
+  # is a reactive of its own so a region or sampling change does not re-read
+  # the TextGrids.
+  fp_export_landmarks <- reactive({
+    d     <- fp_f0_data()
+    tiers <- input$fp_landmark_tiers
+    if (is.null(d) || nrow(d) == 0 || length(tiers) == 0) return(NULL)
+    # Same column prefix attach_landmarks() writes for a tier name.
+    prefix <- gsub("^_+|_+$", "", tolower(gsub("[^A-Za-z0-9]+", "_", tiers)))
+    tiers  <- tiers[!paste0(prefix, "_start") %in% names(d)]
+    if (length(tiers) == 0) return(NULL)
+    key <- d[, c("token", "time"), drop = FALSE]
+    res <- tryCatch(attach_landmarks(key, fp_audio_data(), tiers),
+                    error = function(e) NULL)
+    if (is.null(res)) return(NULL)
+    new_cols <- setdiff(names(res), names(d))
+    if (length(new_cols) == 0) return(NULL)
+    res[, new_cols, drop = FALSE]
+  })
+
   # Interval-region controls, shown only when that region is chosen.
   output$fp_region_interval_ui <- renderUI({
     tiers <- fp_tg_tiers()
@@ -848,6 +873,8 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   fp_export_data <- reactive({
     d <- fp_f0_data()
     if (is.null(d) || nrow(d) == 0) return(NULL)
+    lm <- fp_export_landmarks()
+    if (!is.null(lm) && nrow(lm) == nrow(d)) d <- cbind(d, lm)
 
     # Measure the CORRECTED contours when F0 Correction has produced any:
     # f0_corrected replaces f0, and whole-token discards drop out. Falls back
@@ -917,9 +944,23 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         if (is.null(rs)) {
           notes <- c(notes, "Could not resample, so the export keeps the native frame times.")
         } else {
+          sets <- landmark_sets(names(out))
           out <- rs
           dropped <- attr(out, "dropped_columns")
           if (is.null(dropped)) dropped <- character(0)
+          # Landmark boundaries change within a multisyllabic token, so the
+          # new grid cannot carry them; say so where it will be seen, since
+          # without them Normalise has no <tier>_tseq to build.
+          lost <- names(sets)[paste0(names(sets), "_start") %in% dropped]
+          if (length(lost) > 0) {
+            notes <- c(notes, sprintf(paste(
+              "Equidistant points cannot keep the %s landmark columns, so the",
+              "Normalise tab will not offer %s. For multisyllabic words,",
+              "export at native frame times and build %s in Normalise."),
+              paste(lost, collapse = ", "),
+              if (length(lost) > 1) "these tiers" else "that tier",
+              paste0(lost[1], "_tseq")))
+          }
         }
       }
     }
@@ -1109,6 +1150,16 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     }
     if ("token_dropped" %in% names(df)) {
       out$token_dropped <- suppressWarnings(as.logical(df$token_dropped))
+    }
+    # A resumed all_correctedf0.csv also holds the landmark and metadata
+    # columns its download added. Keep them, so the next session's downloads
+    # write them out again without re-attaching (the landmark step skips tiers
+    # already present, and the metadata join skips identical columns). Only
+    # for the resume schema: another CSV's extra columns may be derived from
+    # the uncorrected f0.
+    if (all(c("f0_corrected", "edited") %in% names(df))) {
+      carry <- setdiff(names(df), c(names(out), tcol, scol, fcol, icol))
+      for (cl in carry) out[[cl]] <- df[[cl]]
     }
     have_wav <- audio$basename[!is.na(audio$wav_path)]
     keep <- out$token %in% have_wav
@@ -1357,11 +1408,32 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     md2$.token_key <- md_keys
     df2 <- df
     df2$.token_key <- make_token_key(df2$token, strip_ext)
-    # Avoid collisions: rename any metadata columns that clash with f0 columns
+    # A metadata column the frame already holds with the same values, under
+    # its own name or as the `.meta` rename of an earlier join (the derived
+    # `token` key, or columns carried in from a re-uploaded
+    # all_correctedf0.csv), is left out, so joining twice changes nothing.
+    # Values are compared on matched rows, numerically when both sides parse
+    # as numbers, since read.csv() turns a derived "01" into 1. Any other
+    # clash is renamed, so metadata never overwrites f0 columns.
     clash <- intersect(setdiff(names(md2), ".token_key"),
                        setdiff(names(df2), ".token_key"))
     if (length(clash)) {
-      names(md2)[match(clash, names(md2))] <- paste0(clash, ".meta")
+      at  <- match(df2$.token_key, md_keys)
+      hit <- !is.na(at)
+      same_values <- function(a, b) {
+        if (identical(as.character(a), as.character(b))) return(TRUE)
+        na <- suppressWarnings(as.numeric(as.character(a)))
+        nb <- suppressWarnings(as.numeric(as.character(b)))
+        identical(is.na(na), is.na(a)) && identical(is.na(nb), is.na(b)) &&
+          isTRUE(all.equal(na, nb))
+      }
+      held <- function(cl, as) as %in% names(df2) &&
+        same_values(df2[[as]][hit], md2[[cl]][at[hit]])
+      same <- vapply(clash, function(cl)
+        held(cl, cl) || held(cl, paste0(cl, ".meta")), logical(1))
+      md2 <- md2[, setdiff(names(md2), clash[same]), drop = FALSE]
+      renamed <- clash[!same]
+      names(md2)[match(renamed, names(md2))] <- paste0(renamed, ".meta")
     }
     joined <- merge(df2, md2, by = ".token_key", all.x = TRUE, sort = FALSE)
     joined$.token_key <- NULL
@@ -1373,6 +1445,28 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
          matched = length(matched_tokens),
          unmatched_tokens = unmatched_tokens,
          unmatched_meta   = unmatched_meta)
+  }
+
+  # The columns a download adds to a full native-grid frame (row-aligned with
+  # fp_f0_data): the ticked landmark tiers it lacks, then the active metadata.
+  # F0 Correction's downloads call this too (server.R hands it over), so
+  # all_correctedf0.csv carries the same landmark and metadata columns as the
+  # F0 Data Export.
+  fp_decorate_download <- function(d) {
+    if (is.null(d) || nrow(d) == 0) return(d)
+    lm <- fp_export_landmarks()
+    if (!is.null(lm) && nrow(lm) == nrow(d)) {
+      lm <- lm[, setdiff(names(lm), names(d)), drop = FALSE]
+      if (ncol(lm) > 0) d <- cbind(d, lm)
+    }
+    md <- if (!is.null(fp_metadata)) fp_metadata() else NULL
+    keycol <- active_keycol()
+    if (!is.null(md) && nrow(md) > 0 && !is.null(keycol)) {
+      d <- tryCatch(metadata_join(d, md, keycol,
+                                  strip_ext = isTRUE(input$fp_meta_strip_ext))$joined,
+                    error = function(e) d)
+    }
+    d
   }
 
   # ---- Results area ----
@@ -1629,4 +1723,7 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       showNotification(sprintf(msg, fname), type = "message", duration = 5)
     }
   )
+
+  # Returned for F0 Correction's downloads (see fp_decorate_download above).
+  invisible(fp_decorate_download)
 }

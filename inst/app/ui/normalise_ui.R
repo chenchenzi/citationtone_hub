@@ -144,7 +144,16 @@ normalised_ui <- function(input, output, session, dataset, normalised_data) {
         "input.norm_time_set == '__token__'",
         selectInput("norm_time_token_var", "Token ID variable:",
                     choices = stats::setNames(vars, var_types),
-                    selected = if (!is.null(tok)) tok else vars[1]))
+                    selected = if (!is.null(tok)) tok else vars[1])),
+      # Tiers are listed only when the data carries their landmark columns;
+      # say why none are, rather than leave a tier-less menu unexplained.
+      if (length(sets) == 0)
+        tags$div(style = "color: #999; font-size: 0.75rem; font-style: italic; margin-top: -6px;",
+          HTML(paste(
+            "No landmark columns (<code>&lt;tier&gt;_start</code>, <code>&lt;tier&gt;_end</code>)",
+            "in this dataset, so no tier is listed. For multisyllabic words, tick the",
+            "<code>syllable</code> tier under <strong>Landmarks from TextGrid</strong> in",
+            "F0 Extraction and export at native frame times.")))
     )
   })
 

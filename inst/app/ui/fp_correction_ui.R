@@ -16,7 +16,8 @@
 
 fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                              fp_pitch_candidates = NULL,
-                             fp_corrected_data = NULL) {
+                             fp_corrected_data = NULL,
+                             fp_decorate_download = NULL) {
 
   # ---- Reactive state ----
   # Named list: token -> data.frame(time, f0)  (corrected contour)
@@ -933,6 +934,8 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         HTML(paste0(
           "<strong>Current token</strong> &rarr; <code>&lt;token&gt;_f0.csv</code><br>",
           "<strong>All tokens</strong> &rarr; <code>all_correctedf0.csv</code><br>",
+          "Both include the landmark and metadata columns set up in ",
+          "<strong>F0 Extraction</strong>. ",
           "Discarded tokens stay in both files, marked ",
           "<code>token_dropped = TRUE</code>. Drop those rows in your ",
           "analysis, e.g. <code>subset(d, !token_dropped)</code>.")))
@@ -2834,7 +2837,8 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                      icon("file-csv"), " all_correctedf0.csv"),
             tags$div(class = "resume-file-note",
               "carries ", tags$code("f0_corrected"), " + ", tags$code("edited"),
-              " + ", tags$code("token_dropped")),
+              " + ", tags$code("token_dropped"),
+              ", plus any landmark and metadata columns, kept on re-upload"),
             tags$div(class = "resume-file", style = "margin-top: 12px;",
                      icon("file-csv"), " edit_log_....csv"),
             tags$div(class = "resume-file-note",
@@ -3688,6 +3692,14 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     out
   }
 
+  # Both downloads add the landmark and metadata columns set up in F0
+  # Extraction, like its F0 Data Export. Applied here on the way out, never
+  # in build_corrected_df(): the fp_corrected_data mirror must stay row-aligned
+  # with fp_f0_data, and the metadata join reorders rows.
+  decorate_download <- function(d) {
+    if (is.function(fp_decorate_download)) fp_decorate_download(d) else d
+  }
+
   # ---- Download: current token only (named after the token) ----
   output$fp_corr_download_current <- downloadHandler(
     filename = function() {
@@ -3700,6 +3712,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       req(out)
       tok <- input$fp_corr_token
       req(tok)
+      out <- decorate_download(out)
       sub <- out[out$token == tok, , drop = FALSE]
       fname <- paste0(tok, "_f0.csv")
       write.csv(sub, file, row.names = FALSE)
@@ -3714,6 +3727,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     content = function(file) {
       out <- build_corrected_df()
       req(out)
+      out <- decorate_download(out)
       write.csv(out, file, row.names = FALSE)
       showNotification("Saved all_correctedf0.csv",
                        type = "message", duration = 4)
