@@ -2,6 +2,28 @@
 
 ## shinytone (development version)
 
+- **F0 Correction tab: downloads carry landmark and metadata columns.**
+  `all_correctedf0.csv` and `<token>_f0.csv` held only the f0 frames
+  plus `f0_corrected` / `edited` / `token_dropped`, so the metadata
+  (uploaded, or derived from filenames) and TextGrid landmark columns
+  set up in F0 Extraction were missing after correction. Both downloads
+  now add them the same way the F0 Data Export does. Re-uploading
+  `all_correctedf0.csv` to resume keeps these columns, and attaching the
+  same metadata again does not duplicate them: a metadata column the
+  data already holds with the same values is skipped. This also drops
+  the redundant `token.meta` column that filename-derived metadata used
+  to add.
+- **F0 Extraction tab: landmark tiers ticked after extraction reach the
+  export.** Landmark columns were attached only when *Run extraction*
+  was clicked, and the *Landmarks from TextGrid* picker sits below that
+  button, so ticking `syllable` afterwards (or in *Upload existing f0
+  CSV* mode) left the download without `syllable_start` / `syllable_end`
+  / `syllable_i`. The Normalise tab lists a tier only when those columns
+  exist, so multisyllabic data had no tier to build `<tier>_tseq` from.
+  The export now attaches any ticked tier the data lacks. An amber note
+  also warns when *Equidistant points* drops the landmark columns (their
+  boundaries change within a multisyllabic token), and the Normalise tab
+  explains why no tier is listed.
 - **F0 Correction tab: two fixes from classroom use.** Deleting an
   outlying frame could leave its “ghost” marker (the original value)
   drawn off-screen: the f0 panel’s y-range was framed on the corrected
