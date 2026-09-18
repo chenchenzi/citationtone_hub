@@ -2,7 +2,8 @@
 # Simplified UI for loading a CSV file
 #######################################
 
-start_ui <- function(input, output, session, dataset, raw_dataset, attached_metadata) {
+start_ui <- function(input, output, session, dataset, raw_dataset, attached_metadata,
+                     duration_specs = NULL) {
 # Render UI for uploading a CSV file
 output$ui_fileUpload <- renderUI({
   tagList(
@@ -60,6 +61,21 @@ output$ui_fileUpload <- renderUI({
           tags$div(style = "margin-top: 6px;",
             actionButton("meta_apply", "Apply metadata", class = "btn btn-primary"))),
         uiOutput("meta_applied")
+      )
+    ),
+    tags$details(style = "margin-top: 8px;",
+      tags$summary(style = "cursor: pointer; font-weight: 600; color: #2c5f4f; font-size: 0.9rem;",
+                   icon("stopwatch"), " Add contour duration (optional)"),
+      tags$div(style = "padding-top: 8px;",
+        tags$p(style = "font-size: 0.8rem; color: #777; margin: 0 0 8px 0;",
+          "Adds how long each f0 contour lasts: the time from the first to the last frame ",
+          "with f0 in each unit, on every row of that unit. Unvoiced frames inside the ",
+          "contour do not shorten it, and a lone voiced frame cut off from it by unvoiced ",
+          "frames (e.g. a tracking artefact in the silence) does not stretch it."),
+        uiOutput("dur_ui"),
+        tags$div(style = "margin-top: 6px;",
+          actionButton("dur_apply", "Add duration column", class = "btn btn-primary")),
+        uiOutput("dur_applied")
       )
     )
   )
@@ -462,6 +478,105 @@ output$meta_applied <- renderUI({
     if (length(new_cols)) paste(new_cols, collapse = ", ") else "(no new columns)",
     tags$div(style = "margin-top: 4px;",
       actionButton("meta_clear", "Detach metadata", class = "btn btn-sm")))
+})
+
+# ---- Optional contour duration ---------------------------------------------
+# Adds a <unit>_f0_dur column with contour_duration() (R/duration.R). The specs
+# live in duration_specs() and server.R applies them to dataset() after the
+# metadata join, so the column reaches every F0 Analysis tab. These outputs
+# sit in a <details> that starts closed, hence suspendWhenHidden = FALSE.
+
+output$dur_ui <- renderUI({
+  raw <- raw_dataset()
+  if (is.null(raw)) {
+    return(tags$div(style = "font-size: 0.78rem; color: #999; font-style: italic;",
+                    "Upload a CSV first."))
+  }
+  vars  <- names(raw)
+  sets  <- landmark_sets(vars)
+  units <- c("Whole token" = "__token__")
+  if (length(sets)) {
+    units <- c(units, stats::setNames(names(sets), paste(names(sets), "segments")))
+  }
+  pick <- function(id, choices, fallback) {
+    cur <- isolate(input[[id]])
+    if (!is.null(cur) && cur %in% choices) cur else fallback
+  }
+  tok <- vis_token_col(vars)
+  tagList(
+    selectInput("dur_unit", "Measure within:", choices = units,
+                selected = pick("dur_unit", units, "__token__")),
+    selectInput("dur_token", "Token column:", choices = vars,
+                selected = pick("dur_token", vars, if (!is.null(tok)) tok else vars[1])),
+    selectInput("dur_time", "Time column:", choices = vars,
+                selected = pick("dur_time", vars, guess_var(vars, var_patterns$time, 1))),
+    selectInput("dur_f0", "f0 column:", choices = vars,
+                selected = pick("dur_f0", vars,
+                                guess_var(vars, c("^f0_hz$", "^f0$", var_patterns$f0), 1))),
+    tags$div(style = "font-size: 0.78rem; color: #888; margin: -6px 0 0 0;",
+      HTML(paste(
+        "Adds <code>token_f0_dur</code>, or <code>&lt;tier&gt;_f0_dur</code> per landmark",
+        "segment, in the units of the time column. Segment units are listed when the data",
+        "has <code>&lt;tier&gt;_start</code> / <code>&lt;tier&gt;_end</code> columns.")))
+  )
+})
+outputOptions(output, "dur_ui", suspendWhenHidden = FALSE)
+
+observeEvent(input$dur_apply, {
+  raw <- raw_dataset()
+  if (is.null(raw) || is.null(duration_specs)) {
+    showNotification("Upload a CSV first.", type = "warning"); return()
+  }
+  set  <- if (is.null(input$dur_unit) || identical(input$dur_unit, "__token__")) NULL
+          else input$dur_unit
+  spec <- list(token = input$dur_token, time = input$dur_time, f0 = input$dur_f0,
+               set = set, name = if (is.null(set)) "token_f0_dur" else paste0(set, "_f0_dur"))
+  res <- tryCatch(contour_duration(raw, token = spec$token, time = spec$time,
+                                   f0 = spec$f0, set = spec$set, name = spec$name),
+                  error = function(e) e)
+  if (inherits(res, "error")) {
+    showNotification(paste("Could not add the duration:", conditionMessage(res)),
+                     type = "error", duration = 6)
+    return()
+  }
+  specs <- duration_specs(); specs[[spec$name]] <- spec; duration_specs(specs)
+
+  # One value per unit (constant within a unit) for the confirmation.
+  key <- as.character(res[[spec$token]])
+  if (!is.null(set)) {
+    key <- paste(key, res[[paste0(set, "_start")]], res[[paste0(set, "_end")]])
+  }
+  per  <- res[[spec$name]][!duplicated(key)]
+  got  <- per[!is.na(per)]
+  what <- if (is.null(set)) "token" else paste(set, "segment")
+  if (length(got) == 0) {
+    showNotification(sprintf("Added %s, but no %s has an f0 value in '%s', so it is all NA. Check the f0 column.",
+                             spec$name, what, spec$f0), type = "warning", duration = 8)
+    return()
+  }
+  fmt <- function(x) format(signif(x, 3))
+  n_na <- if (is.null(set)) sum(is.na(per)) else 0L
+  showNotification(
+    sprintf("Added %s for %d %s(s): median %s, range %s to %s (units of '%s').%s",
+            spec$name, length(got), what, fmt(stats::median(got)), fmt(min(got)),
+            fmt(max(got)), spec$time,
+            if (n_na > 0) sprintf(" %d token(s) have no f0 and get NA.", n_na) else ""),
+    type = "message", duration = 8)
+})
+
+output$dur_applied <- renderUI({
+  specs <- if (is.null(duration_specs)) list() else duration_specs()
+  if (length(specs) == 0) return(NULL)
+  tags$div(style = "margin-top: 8px; padding: 6px 8px; background: #eef8f3; border: 1px solid #bfe3d4; border-radius: 4px; font-size: 0.8rem; color: #1f6f4d;",
+    tags$strong("Added: "), paste(names(specs), collapse = ", "),
+    tags$div(style = "margin-top: 4px;",
+      actionButton("dur_clear", "Remove duration columns", class = "btn btn-sm")))
+})
+outputOptions(output, "dur_applied", suspendWhenHidden = FALSE)
+
+observeEvent(input$dur_clear, {
+  duration_specs(list())
+  showNotification("Duration columns removed.", type = "message")
 })
 
 }

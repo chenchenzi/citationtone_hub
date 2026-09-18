@@ -120,10 +120,18 @@ server <- function(input, output, session) {
   #   list(key = <join column>, data = <df with key + new columns>).
   # Reset whenever a new file is uploaded.
   attached_metadata <- reactiveVal(NULL)
-  observeEvent(input$uploadfile, { attached_metadata(NULL) }, priority = 100)
+  # Contour-duration columns added in the Start tab, as a list of
+  # list(token, time, f0, set, name) specs keyed by column name; each adds one
+  # column via contour_duration(). Reset along with the metadata.
+  duration_specs <- reactiveVal(list())
+  observeEvent(input$uploadfile, {
+    attached_metadata(NULL)
+    duration_specs(list())
+  }, priority = 100)
 
   # The dataset every F0 Analysis tab reads: the raw upload left-joined with
-  # any attached metadata (adding only columns the raw data lacks).
+  # any attached metadata (adding only columns the raw data lacks), plus any
+  # contour-duration columns.
   dataset <- reactive({
     raw <- raw_dataset()
     if (is.null(raw)) return(NULL)
@@ -145,6 +153,11 @@ server <- function(input, output, session) {
       meta     <- m$data[, c(m$key, new_cols), drop = FALSE]
       raw      <- tryCatch(dplyr::left_join(raw, meta, by = m$key),
                            error = function(e) raw)
+    }
+    for (s in duration_specs()) {
+      raw <- tryCatch(contour_duration(raw, token = s$token, time = s$time,
+                                       f0 = s$f0, set = s$set, name = s$name),
+                      error = function(e) raw)
     }
     if (isTRUE(input$convert_to_factor)) {
       raw <- raw %>% dplyr::mutate(across(where(is.character), as.factor))
@@ -215,7 +228,7 @@ server <- function(input, output, session) {
   fp_metadata         <- reactiveVal(NULL)   # optional user-uploaded metadata CSV (data.frame). Joined to fp_f0_data at download time on a filename column the user selects.
 
   # Call the Start tab UI and server logic (start_ui function)
-  start_ui(input, output, session, dataset, raw_dataset, attached_metadata)
+  start_ui(input, output, session, dataset, raw_dataset, attached_metadata, duration_specs)
   view_ui(input, output, session, dataset)
   normalised_ui(input, output, session, dataset, normalised_data)
   visualise_ui(input, output, session, dataset, normalised_data)

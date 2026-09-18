@@ -140,6 +140,12 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                      choices = c("Linear interpolation" = "linear",
                                  "Nearest measured frame" = "nearest"),
                      selected = "linear")),
+      checkboxInput("fp_drop_unvoiced", "Drop rows without f0", value = FALSE),
+      tags$div(style = "color: #888; font-size: 0.75rem; font-style: italic; margin-top: -8px; margin-bottom: 8px;",
+        "Leading and trailing silence is already outside a Whole token region; this also ",
+        "removes the unvoiced gaps inside it. ", tags$code("has_gap"), " and ",
+        tags$code("n_missing"), " still flag those tokens. With equidistant points, a token ",
+        "with a gap then keeps fewer than N points."),
       tags$hr(),
 
       h5("Download"),
@@ -499,6 +505,11 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
             "as wrassp and <code>.Pitch</code> do. A <code>.PitchTier</code> or a CSV of only voiced ",
             "samples has no such frames, so a silent stretch there reads as a plain gap and is ",
             "interpolated across, exactly as Praat would."))),
+          tags$li(HTML(paste0(
+            "<strong>Drop rows without f0</strong> removes the frames (or points) left empty inside ",
+            "the region, for tools that expect measured values only. Off by default: kept, an ",
+            "empty row shows where voicing broke, and a plot draws a gap instead of a straight line ",
+            "across it. It is applied last, so resampling still sees the gap."))),
           tags$li(HTML("<strong>Two checks run on every export.</strong>"),
             tags$ul(class = "gsub",
               tags$li(HTML(paste0(
@@ -583,8 +594,10 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
             HTML(paste0(
               " These settings shape the download only, so nothing is lost by trying one: ",
               "F0 Correction keeps working on the extracted data as it arrived. Corrections you ",
-              "make in this session are picked up by the export with no upload needed; only if you ",
-              "close the app and come back do you need to re-upload the corrected CSV.")))
+              "make in this session are picked up by the export with no upload needed. When there ",
+              "are any, the export also keeps the tracker&#39;s values in <code>f0_original</code> and ",
+              "marks the corrected frames in <code>edited</code>, so re-uploading it (or ",
+              "<code>all_correctedf0.csv</code>) in a later session brings the edits back.")))
         )
     )
   })
@@ -876,14 +889,29 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     lm <- fp_export_landmarks()
     if (!is.null(lm) && nrow(lm) == nrow(d)) d <- cbind(d, lm)
 
+    # Correction columns loaded with a re-uploaded file describe that earlier
+    # session; the live state is in fp_corrected_data. Drop the old copies,
+    # or a token restored in this session would still carry
+    # token_dropped = TRUE (F0 Analysis then silently excludes it) and the
+    # edit flags would miss this session's edits.
+    d <- d[, setdiff(names(d), c("f0_corrected", "edited", "token_dropped",
+                                 "f0_original")), drop = FALSE]
+
     # Measure the CORRECTED contours when F0 Correction has produced any:
     # f0_corrected replaces f0, and whole-token discards drop out. Falls back
     # to the raw extraction when nothing has been corrected yet.
     n_edited <- 0L; n_discarded <- 0L
     cd <- if (is.null(fp_corrected_data)) NULL else fp_corrected_data()
     if (!is.null(cd) && nrow(cd) == nrow(d) && "f0_corrected" %in% names(cd)) {
-      if ("edited" %in% names(cd)) {
-        n_edited <- length(unique(cd$token[cd$edited %in% TRUE]))
+      edited <- if ("edited" %in% names(cd)) cd$edited %in% TRUE else rep(FALSE, nrow(d))
+      n_edited <- length(unique(cd$token[edited]))
+      # Keep the edit history next to the corrected contour: f0_original is
+      # what the tracker measured and `edited` marks the frames that differ.
+      # Without them the corrections are baked into f0 unrecorded, and a
+      # re-upload of this file reads them back as the original values.
+      if (n_edited > 0) {
+        d$f0_original <- d$f0
+        d$edited      <- edited
       }
       d$f0 <- cd$f0_corrected
       if ("token_dropped" %in% names(cd)) {
@@ -981,10 +1009,22 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       notes <- c(notes, sprintf("%d token(s) discarded in F0 Correction are excluded.",
                                 n_discarded))
     }
+    # Optional: drop the rows without a measured f0 (NA or 0 Hz). Last, so the
+    # resampler above still saw the unvoiced frames (it never averages across
+    # them) and has_gap / n_missing were measured on the full region.
+    n_unvoiced <- 0L
+    if (isTRUE(input$fp_drop_unvoiced) && nrow(out) > 0) {
+      fv <- suppressWarnings(as.numeric(out$f0))
+      measured   <- !is.na(fv) & fv > 0
+      n_unvoiced <- sum(!measured)
+      out <- out[measured, , drop = FALSE]
+      rownames(out) <- NULL
+      if (nrow(out) == 0) return(NULL)
+    }
     list(data = out,
          region = if (is.null(input$fp_region)) "voiced" else input$fp_region,
          sampling = input$fp_sampling_mode,
-         notes = notes, dropped = dropped)
+         notes = notes, dropped = dropped, n_unvoiced = n_unvoiced)
   })
 
   # One-line description of what the Download button will write.
@@ -1015,6 +1055,10 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     if (length(res$dropped) > 0) {
       cap <- paste0(cap, sprintf(" Resampling dropped frame-level column(s): %s.",
                                  paste(res$dropped, collapse = ", ")))
+    }
+    if (isTRUE(res$n_unvoiced > 0)) {
+      cap <- paste0(cap, sprintf(" Dropped %s row(s) without f0.",
+                                 format(res$n_unvoiced, big.mark = ",")))
     }
     tagList(
       tags$div(style = "color: #666; font-size: 0.75rem; font-style: italic; margin-top: 6px;", cap),
@@ -1136,29 +1180,53 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     if (length(icol) > 0) {
       out$intensity <- suppressWarnings(as.numeric(df[[icol[1]]]))
     }
-    # Resume-from-previous-session metadata. If the uploaded CSV is a
-    # shinytone all_correctedf0.csv from an earlier session, it carries
-    # `f0_corrected` and `edited` columns (and, since whole-token discards
-    # were added, `token_dropped`). Keep them so the Correction tab can
-    # restore previous edits and discards, show ghost markers, and mark the
-    # tokens with ✎ / ✗.
-    if ("f0_corrected" %in% names(df)) {
-      out$f0_corrected <- suppressWarnings(as.numeric(df$f0_corrected))
+    # Resume-from-previous-session metadata. Keep the edit history so the
+    # Correction tab can restore previous edits and discards, show ghost
+    # markers, and mark the tokens with ✎ / ✗. It comes in two shapes:
+    #   all_correctedf0.csv : f0 = tracker value, f0_corrected = correction
+    #   F0 Data Export      : f0 = correction,    f0_original  = tracker value
+    # Pair the two up again whichever of them the f0 picker points at.
+    # Loading the corrected values as f0 would make them the new "original",
+    # and every frame would read back as edited = FALSE.
+    pair <- if (all(c("f0", "f0_original") %in% names(df))) c("f0_original", "f0")
+            else if (all(c("f0", "f0_corrected") %in% names(df))) c("f0", "f0_corrected")
+    resumed <- !is.null(pair) && fcol %in% pair
+    if (resumed) {
+      orig <- suppressWarnings(as.numeric(df[[pair[1]]]))
+      corr <- suppressWarnings(as.numeric(df[[pair[2]]]))
+      out$f0           <- orig
+      out$f0_corrected <- corr
+      out$edited <- if ("edited" %in% names(df)) {
+        suppressWarnings(as.logical(df$edited))
+      } else {
+        xor(is.na(orig), is.na(corr)) |
+          (!is.na(orig) & !is.na(corr) & abs(orig - corr) > 1e-6)
+      }
+    } else {
+      if ("f0_corrected" %in% names(df)) {
+        out$f0_corrected <- suppressWarnings(as.numeric(df$f0_corrected))
+      }
+      if ("edited" %in% names(df)) {
+        out$edited <- suppressWarnings(as.logical(df$edited))
+      }
     }
-    if ("edited" %in% names(df)) {
-      out$edited <- suppressWarnings(as.logical(df$edited))
+    # Many trackers write 0 Hz for an unvoiced frame. Read it as NA, as the
+    # wrassp and .Pitch paths do, so it can never pass downstream as a value.
+    for (cl in intersect(c("f0", "f0_corrected"), names(out))) {
+      out[[cl]][!is.na(out[[cl]]) & out[[cl]] <= 0] <- NA_real_
     }
     if ("token_dropped" %in% names(df)) {
       out$token_dropped <- suppressWarnings(as.logical(df$token_dropped))
     }
-    # A resumed all_correctedf0.csv also holds the landmark and metadata
-    # columns its download added. Keep them, so the next session's downloads
-    # write them out again without re-attaching (the landmark step skips tiers
-    # already present, and the metadata join skips identical columns). Only
-    # for the resume schema: another CSV's extra columns may be derived from
-    # the uncorrected f0.
-    if (all(c("f0_corrected", "edited") %in% names(df))) {
-      carry <- setdiff(names(df), c(names(out), tcol, scol, fcol, icol))
+    # A resumed file also holds the landmark and metadata columns its download
+    # added. Keep them, so the next downloads write them out again without
+    # re-attaching (the landmark step skips tiers already present, and the
+    # metadata join skips identical columns). The export's f0-derived columns
+    # are left out; they are recomputed on the way out. Only for resumed files:
+    # another CSV's extra columns may be derived from the uncorrected f0.
+    if (resumed) {
+      carry <- setdiff(names(df), c(names(out), tcol, scol, fcol, icol, pair,
+                                    "n_missing", "has_gap", "point", "time_prop"))
       for (cl in carry) out[[cl]] <- df[[cl]]
     }
     have_wav <- audio$basename[!is.na(audio$wav_path)]
@@ -1189,6 +1257,19 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
             "For frame-level correction, load the original audio instead: correct ",
             "first, then export. The export always follows your corrections.")),
         type = "warning", duration = 14, id = "fp_csv_is_export")
+    } else if (all(c("n_missing", "has_gap") %in% names(df)) && !resumed) {
+      # A native-frame export whose f0 carries no record of earlier edits
+      # (none were made, or it predates f0_original / edited in the export).
+      showNotification(
+        tags$div(
+          tags$strong("This looks like an F0 Data Export without edit history."),
+          tags$div(style = "margin-top:4px;",
+            "Any corrections made before that export are part of its f0 values, ",
+            "so they load here as the original values and show as unedited."),
+          tags$div(style = "margin-top:4px;",
+            "To keep working with earlier edits, load ", tags$code("all_correctedf0.csv"),
+            " from the F0 Correction tab instead.")),
+        type = "message", duration = 12, id = "fp_csv_is_export")
     }
 
     # Only fire the success toast when fp_f0_data is actually changing.
