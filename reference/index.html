@@ -145,7 +145,7 @@
       </dl></div><div class="section level2">
       <h2 id="voiced-region-trimming-and-resampling">Voiced-region trimming and resampling<a class="anchor" aria-label="anchor" href="#voiced-region-trimming-and-resampling"></a></h2>
 
-      <div class="section-desc"><p>Trim each token to its voiced span, flag contours with gaps inside the measured region, and resample every contour to N equidistant points for export or cross-token comparison.</p></div>
+      <div class="section-desc"><p>Trim each token to its voiced span, flag contours with gaps inside the measured region, measure how long each contour lasts (per token or per landmark segment), and resample every contour to N equidistant points for export or cross-token comparison.</p></div>
 
       <dl></dl></div><div class="section level2">
 
@@ -165,6 +165,13 @@
 
         </dt>
         <dd>Flag tokens whose f0 has gaps inside the measured region</dd>
+
+        <dt>
+
+          <code><a href="contour_duration.html">contour_duration()</a></code>
+
+        </dt>
+        <dd>Duration of each f0 contour</dd>
 
         <dt>
 

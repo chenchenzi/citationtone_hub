@@ -2,6 +2,47 @@
 
 ## shinytone (development version)
 
+- **F0 Analysis Start tab: add a contour duration column.** A new *Add
+  contour duration* block under *Attach metadata* adds how long each f0
+  contour lasts: the time from the first to the last frame with f0, per
+  token (`token_f0_dur`) or per landmark segment such as each syllable
+  (`syllable_f0_dur`), repeated on every row of the unit. Unvoiced
+  frames at the edges do not count, and unvoiced frames inside the
+  contour do not shorten it. The ends are anchored on two voiced frames
+  in a row, the rule the *Whole token* export region uses, so a lone
+  stray frame in the silence cannot stretch the duration; a whole
+  token’s value then equals the `voiced_s` that F0 Extraction reports.
+  The column reaches every F0 Analysis tab. Also scriptable as
+  [`contour_duration()`](https://chenchenzi.github.io/citationtone_hub/reference/contour_duration.md)
+  (`min_run = 1` for the literal first-to-last frame), which counts
+  negative values as measured, so it works on semitone or z-score
+  columns too.
+- **F0 Extraction tab: *Drop rows without f0* export option.** The
+  *Whole token* region already leaves out leading and trailing silence
+  but keeps unvoiced gaps inside the contour as `f0 = NA` rows. A new
+  checkbox (off by default) drops those rows too, for tools that expect
+  measured values only. It runs last, so resampling still sees the gaps
+  and `has_gap` / `n_missing` still flag the tokens. With equidistant
+  points, a token with a gap then keeps fewer than N points, each still
+  labelled by `point` and `time_prop`.
+- **F0 Extraction tab: 0 Hz in an uploaded f0 CSV reads as unvoiced.**
+  The wrassp and `.Pitch` paths already turned 0 Hz into `NA`, but a
+  CSV’s zeros passed through as values and could reach the export inside
+  the region.
+- **F0 Processing: edit history survives the F0 Data Export round
+  trip.** The export writes corrected values into `f0` but recorded
+  nothing about which frames were corrected. Re-uploading it therefore
+  loaded the corrected values as the tracker’s originals, and the next
+  `all_correctedf0.csv` read `edited = FALSE` everywhere. When
+  corrections exist, the export now also writes `f0_original` (the
+  tracker’s value) and `edited`, and re-uploading either file restores
+  the edits. This works whichever f0 column the picker is set to:
+  choosing `f0_corrected` from `all_correctedf0.csv` used to lose the
+  history the same way. Re-uploading an older export without these
+  columns now shows a note explaining that its corrections cannot be
+  told apart. The export also stops copying correction columns from a
+  re-uploaded file: a token restored in a later session kept a stale
+  `token_dropped = TRUE`, so F0 Analysis silently excluded it.
 - **F0 Correction tab: downloads carry landmark and metadata columns.**
   `all_correctedf0.csv` and `<token>_f0.csv` held only the f0 frames
   plus `f0_corrected` / `edited` / `token_dropped`, so the metadata
