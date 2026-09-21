@@ -68,18 +68,23 @@ downstream Chao numeral summarisation via <code><a href="contour_to_chao.html">c
 
 
 <dt id="arg-n">n<a class="anchor" aria-label="anchor" href="#arg-n"></a></dt>
-<dd><p>Number of time points across <code>[0, 1]</code>. Default <code>200</code>.</p></dd>
+<dd><p>Number of time points across the time axis. Default <code>200</code>.</p></dd>
 
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A data frame with columns <code>time</code>, <code>f0_predicted</code>, <code>se</code>,
-<code>tone</code>.</p>
+<code>tone</code>, carrying the fit's <code>time_axis</code> (<code>"unit"</code> or <code>"sequential"</code>)
+and <code>n_segments</code> as attributes of the same names.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>Internally:</p><ol><li><p>Build a per-tone time grid with <code>n</code> evenly-spaced points across
-<code>[0, 1]</code>.</p></li>
+<code>[0, 1]</code>, or, for a fit on a sequential landmark axis
+(<code>&lt;tier&gt;_tseq</code>), across the observed range of that axis, so the
+curves keep the segment boundaries at whole numbers and are not
+extrapolated into stretches no token was measured in (a voiceless
+onset, say).</p></li>
 <li><p>Set random-effect columns (speaker, item, and any random-smooth
 grouping factors) to the first level of their respective factors;
 these reference values are placeholders that don't affect the

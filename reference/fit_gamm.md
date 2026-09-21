@@ -33,7 +33,7 @@ fit_gamm(
   random_intercept_item = TRUE,
   random_smooth = c("none", "speaker", "speaker_tone", "speaker_by_tone", "ref_diff"),
   use_ar1 = FALSE,
-  time_normalised = c("auto", "no", "yes")
+  time_normalised = c("auto", "no", "yes", "sequential")
 )
 ```
 
@@ -86,8 +86,11 @@ fit_gamm(
 - time_normalised:
 
   One of `"auto"` (default: detect an already-normalised `[0, 1]` time
-  column and use it as-is), `"no"` (always rescale to `[0, 1]` within
-  each token), or `"yes"` (declare the column already normalised). See
+  column, or a `<tier>_tseq` column, and use it as-is), `"no"` (always
+  rescale to `[0, 1]` within each token), `"yes"` (declare the column
+  already normalised to `[0, 1]`), or `"sequential"` (declare a
+  sequential landmark axis running from 0 to the number of segments,
+  whatever its name). See
   [`resolve_time_norm()`](https://chenchenzi.github.io/citationtone_hub/reference/resolve_time_norm.md).
 
 ## Value
@@ -109,7 +112,17 @@ An S3 object of class `"shinytone_gamm"`, a list with:
 - `col_names`: original column names, for back-mapping.
 
 - `time_prenormalised`: logical; was the time column used as-is because
-  it was already normalised to `[0, 1]`?
+  it was already normalised (to `[0, 1]`, or as a sequential landmark
+  axis)?
+
+- `time_axis`: `"unit"` for a `[0, 1]` axis, or `"sequential"` for a
+  landmark axis kept on its `0`-to-`n` scale.
+
+- `time_range`: the observed range of the fitted time axis, which
+  [`predict_gamm()`](https://chenchenzi.github.io/citationtone_hub/reference/predict_gamm.md)
+  predicts across; `c(0, 1)` on a unit axis.
+
+- `n_segments`: segments on a sequential axis (`1` on a unit axis).
 
 ## Details
 
@@ -122,7 +135,12 @@ An S3 object of class `"shinytone_gamm"`, a list with:
     [`time_already_normalised()`](https://chenchenzi.github.io/citationtone_hub/reference/time_already_normalised.md)
     and used as-is, so tokens whose samples do not span the full unit
     interval are not stretched a second time; override with
-    `time_normalised`.
+    `time_normalised`. A sequential landmark axis (`<tier>_tseq` from
+    [`normalise_time_landmarks()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_time_landmarks.md),
+    where segment `i` spans `[i - 1, i]`) is recognised by name and also
+    used as-is, on its own `0`-to-`n` scale: a per-token rescale would
+    squeeze each token's first-to-last frame onto `[0, 1]`, so the
+    segment boundaries would no longer line up across tokens.
 
 2.  Coerce `tone`, `speaker`, `item`, and (for difference smooths) an
     ordered `tone_ord` to factors with treatment contrasts.

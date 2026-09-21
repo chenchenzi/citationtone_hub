@@ -92,7 +92,7 @@ with an AR1 correlation. For non-standard model structures, call
 <span>  random_intercept_item <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  random_smooth <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"none"</span>, <span class="st">"speaker"</span>, <span class="st">"speaker_tone"</span>, <span class="st">"speaker_by_tone"</span>, <span class="st">"ref_diff"</span><span class="op">)</span>,</span>
 <span>  use_ar1 <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  time_normalised <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"auto"</span>, <span class="st">"no"</span>, <span class="st">"yes"</span><span class="op">)</span></span>
+<span>  time_normalised <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"auto"</span>, <span class="st">"no"</span>, <span class="st">"yes"</span>, <span class="st">"sequential"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -145,9 +145,12 @@ residuals' lag-1 autocorrelation, then refit with that <code>rho</code>.</p></dd
 
 <dt id="arg-time-normalised">time_normalised<a class="anchor" aria-label="anchor" href="#arg-time-normalised"></a></dt>
 <dd><p>One of <code>"auto"</code> (default: detect an
-already-normalised <code>[0, 1]</code> time column and use it as-is), <code>"no"</code>
-(always rescale to <code>[0, 1]</code> within each token), or <code>"yes"</code> (declare
-the column already normalised). See <code><a href="resolve_time_norm.html">resolve_time_norm()</a></code>.</p></dd>
+already-normalised <code>[0, 1]</code> time column, or a <code>&lt;tier&gt;_tseq</code> column,
+and use it as-is), <code>"no"</code> (always rescale to <code>[0, 1]</code> within each
+token), <code>"yes"</code> (declare the column already normalised to <code>[0, 1]</code>),
+or <code>"sequential"</code> (declare a sequential landmark axis running from 0
+to the number of segments, whatever its name). See
+<code><a href="resolve_time_norm.html">resolve_time_norm()</a></code>.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -160,7 +163,13 @@ the column already normalised). See <code><a href="resolve_time_norm.html">resol
 <code><a href="predict_gamm.html">predict_gamm()</a></code>).</p></li>
 <li><p><code>col_names</code>: original column names, for back-mapping.</p></li>
 <li><p><code>time_prenormalised</code>: logical; was the time column used as-is
-because it was already normalised to <code>[0, 1]</code>?</p></li>
+because it was already normalised (to <code>[0, 1]</code>, or as a sequential
+landmark axis)?</p></li>
+<li><p><code>time_axis</code>: <code>"unit"</code> for a <code>[0, 1]</code> axis, or <code>"sequential"</code> for a
+landmark axis kept on its <code>0</code>-to-<code>n</code> scale.</p></li>
+<li><p><code>time_range</code>: the observed range of the fitted time axis, which
+<code><a href="predict_gamm.html">predict_gamm()</a></code> predicts across; <code>c(0, 1)</code> on a unit axis.</p></li>
+<li><p><code>n_segments</code>: segments on a sequential axis (<code>1</code> on a unit axis).</p></li>
 </ul></div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -173,7 +182,12 @@ because it was already normalised to <code>[0, 1]</code>?</p></li>
 <code><a href="normalise_time_token.html">normalise_time_token()</a></code>), it is detected with
 <code><a href="time_already_normalised.html">time_already_normalised()</a></code> and used as-is, so tokens whose samples
 do not span the full unit interval are not stretched a second time;
-override with <code>time_normalised</code>.</p></li>
+override with <code>time_normalised</code>. A sequential landmark axis
+(<code>&lt;tier&gt;_tseq</code> from <code><a href="normalise_time_landmarks.html">normalise_time_landmarks()</a></code>, where segment <code>i</code>
+spans <code>[i - 1, i]</code>) is recognised by name and also used as-is, on its
+own <code>0</code>-to-<code>n</code> scale: a per-token rescale would squeeze each token's
+first-to-last frame onto <code>[0, 1]</code>, so the segment boundaries would no
+longer line up across tokens.</p></li>
 <li><p>Coerce <code>tone</code>, <code>speaker</code>, <code>item</code>, and (for difference smooths) an
 ordered <code>tone_ord</code> to factors with treatment contrasts.</p></li>
 <li><p>Build the formula based on <code>smooth_type</code> and <code>random_smooth</code>.</p></li>

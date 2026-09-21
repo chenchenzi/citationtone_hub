@@ -22,18 +22,24 @@ predict_gamm(gamm_obj, n = 200)
 
 - n:
 
-  Number of time points across `[0, 1]`. Default `200`.
+  Number of time points across the time axis. Default `200`.
 
 ## Value
 
-A data frame with columns `time`, `f0_predicted`, `se`, `tone`.
+A data frame with columns `time`, `f0_predicted`, `se`, `tone`, carrying
+the fit's `time_axis` (`"unit"` or `"sequential"`) and `n_segments` as
+attributes of the same names.
 
 ## Details
 
 Internally:
 
 1.  Build a per-tone time grid with `n` evenly-spaced points across
-    `[0, 1]`.
+    `[0, 1]`, or, for a fit on a sequential landmark axis
+    (`<tier>_tseq`), across the observed range of that axis, so the
+    curves keep the segment boundaries at whole numbers and are not
+    extrapolated into stretches no token was measured in (a voiceless
+    onset, say).
 
 2.  Set random-effect columns (speaker, item, and any random-smooth
     grouping factors) to the first level of their respective factors;
