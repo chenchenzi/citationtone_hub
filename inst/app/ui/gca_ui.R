@@ -522,7 +522,7 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
   gca_build_plot <- function(pdat, obs, tone_var, f0_var, overlay) {
     show_overlay <- isTRUE(overlay) && !is.null(obs) && nrow(obs) > 0
     # Format the f0 axis title the same way the Visualise tab does
-    # (f0_axis_label(): "f₀ (Hz)" / "f₀ (semitone)" / "normalised f₀"). With the
+    # (f0_axis_label(): "f₀ (Hz)" / "f₀ (st)" / "normalised f₀"). With the
     # overlay the axis carries both observed points and the fitted line, so it
     # reads the plain quantity; without it, only the fitted curve is shown, so
     # "Predicted …" is accurate.

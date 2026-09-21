@@ -10,11 +10,12 @@ predict_gamm(gamm_obj, n = 200)
 \item{gamm_obj}{An object of class \code{"shinytone_gamm"} from
 \code{\link[=fit_gamm]{fit_gamm()}}.}
 
-\item{n}{Number of time points across \verb{[0, 1]}. Default \code{200}.}
+\item{n}{Number of time points across the time axis. Default \code{200}.}
 }
 \value{
 A data frame with columns \code{time}, \code{f0_predicted}, \code{se},
-\code{tone}.
+\code{tone}, carrying the fit's \code{time_axis} (\code{"unit"} or \code{"sequential"})
+and \code{n_segments} as attributes of the same names.
 }
 \description{
 Generates per-tone population-average smooth curves from a fitted
@@ -26,7 +27,11 @@ downstream Chao numeral summarisation via \code{\link[=contour_to_chao]{contour_
 Internally:
 \enumerate{
 \item Build a per-tone time grid with \code{n} evenly-spaced points across
-\verb{[0, 1]}.
+\verb{[0, 1]}, or, for a fit on a sequential landmark axis
+(\verb{<tier>_tseq}), across the observed range of that axis, so the
+curves keep the segment boundaries at whole numbers and are not
+extrapolated into stretches no token was measured in (a voiceless
+onset, say).
 \item Set random-effect columns (speaker, item, and any random-smooth
 grouping factors) to the first level of their respective factors;
 these reference values are placeholders that don't affect the

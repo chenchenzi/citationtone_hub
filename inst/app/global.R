@@ -148,7 +148,7 @@ f0_axis_label <- function(col) {
   if (is.null(col) || !nzchar(col)) return("f₀")
   c0 <- tolower(col)
   if (grepl("zscore|z[._-]?score", c0))    return("normalised f₀")
-  if (grepl("semitone|_st$|_st[._]", c0))  return("f₀ (semitone)")
+  if (grepl("semitone|_st$|_st[._]", c0))  return("f₀ (st)")
   if (grepl("hz", c0))                     return("f₀ (Hz)")
   if (grepl("norm", c0))                   return("normalised f₀")
   if (grepl("^f_?0$|^pitch", c0))          return("f₀ (Hz)")

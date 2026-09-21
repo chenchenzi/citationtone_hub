@@ -31,7 +31,7 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
   # Y-axis label reflecting the chosen f0 variable's scale (f with subscript 0).
   f0_axis_label <- function(v) {
     v <- tolower(v %||% "")
-    if (grepl("semitone|_st$|_st[^a-z]", v))        "mean f₀ (semitone)"
+    if (grepl("semitone|_st$|_st[^a-z]", v))        "mean f₀ (st)"
     else if (grepl("zscore|z[._-]?score|norm", v))  "mean f₀ (normalised)"
     else if (grepl("(^|[^a-z])hz", v))              "mean f₀ (Hz)"
     else                                            "mean f₀"

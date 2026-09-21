@@ -228,6 +228,88 @@ test_that("fit_gamm records time_prenormalised", {
   expect_false(fit_no$time_prenormalised)
 })
 
+# ---------- sequential landmark axis (<tier>_tseq) in fit_gamm ---------------
+
+# Disyllabic tokens on a syllable_tseq axis: syllable 1 spans [0, 1],
+# syllable 2 spans [1, 2]. Tokens start and end at slightly different
+# points, as voiced spans do, so a per-token rescale would move the boundary.
+make_tseq_data <- function() {
+  set.seed(7)
+  grid <- expand.grid(speaker = c("s1", "s2"), tone = c("HL", "LH"),
+                      item = c("w1", "w2"), rep = 1:2,
+                      stringsAsFactors = FALSE)
+  do.call(rbind, lapply(seq_len(nrow(grid)), function(i) {
+    g  <- grid[i, ]
+    ts <- seq(runif(1, 0.02, 0.2), runif(1, 1.8, 1.98), length.out = 16)
+    shape <- if (g$tone == "HL") ifelse(ts < 1, 10, 10 - 20 * (ts - 1))
+             else ifelse(ts < 1, -10, -10 + 20 * (ts - 1))
+    data.frame(token = paste(g$speaker, g$tone, g$item, g$rep, sep = "_"),
+               syllable_tseq = ts, f0 = 100 + shape + rnorm(16, sd = 1),
+               speaker = g$speaker, tone = g$tone, item = g$item,
+               stringsAsFactors = FALSE)
+  }))
+}
+fit_tseq <- function(df, time = "syllable_tseq", ...) {
+  suppressWarnings(fit_gamm(df, time = time, k = 6, random_smooth = "none",
+                            random_intercept_speaker = FALSE,
+                            random_intercept_item = FALSE, ...))
+}
+
+test_that("fit_gamm keeps a <tier>_tseq axis on its own 0-to-n scale", {
+  skip_if_not_installed("mgcv")
+  df <- make_tseq_data()
+  expect_message(fit <- fit_tseq(df), "sequential landmark axis")
+  expect_equal(fit$time_axis, "sequential")
+  expect_equal(fit$n_segments, 2L)
+  expect_true(fit$time_prenormalised)
+  expect_equal(fit$time_range, range(df$syllable_tseq))
+  # Used as-is: no per-token rescale, so the boundary stays at 1 for all.
+  dp <- fit$data_for_predict
+  expect_equal(dp$.time_norm, dp$syllable_tseq)
+})
+
+test_that("predict_gamm predicts across the observed sequential range", {
+  skip_if_not_installed("mgcv")
+  df <- make_tseq_data()
+  preds <- predict_gamm(suppressMessages(fit_tseq(df)), n = 50)
+  per_tone <- split(preds$time, preds$tone)
+  for (tt in per_tone) expect_equal(range(tt), range(df$syllable_tseq))
+  expect_equal(attr(preds, "time_axis"), "sequential")
+  expect_equal(attr(preds, "n_segments"), 2L)
+  # The HL tone is level in syllable 1 and falls in syllable 2.
+  hl <- preds[preds$tone == "HL", ]
+  expect_gt(hl$f0_predicted[which.min(abs(hl$time - 0.5))],
+            hl$f0_predicted[which.min(abs(hl$time - 1.8))] + 10)
+})
+
+test_that("time_normalised overrides the sequential detection both ways", {
+  skip_if_not_installed("mgcv")
+  df <- make_tseq_data()
+  fit_no <- fit_tseq(df, time_normalised = "no")
+  expect_equal(fit_no$time_axis, "unit")
+  expect_equal(range(fit_no$data_for_predict$.time_norm), c(0, 1))
+  df$word_axis <- df$syllable_tseq                 # not named *_tseq
+  fit_seq <- fit_tseq(df, time = "word_axis", time_normalised = "sequential")
+  expect_equal(fit_seq$time_axis, "sequential")
+  expect_equal(fit_seq$n_segments, 2L)
+})
+
+test_that("a sequential axis with negative values is refused", {
+  skip_if_not_installed("mgcv")
+  df <- make_tseq_data(); df$syllable_tseq[1] <- -0.5
+  expect_error(fit_tseq(df), "negative")
+})
+
+test_that("predict_gamm on a fit without time_range (older object) uses [0, 1]", {
+  skip_if_not_installed("mgcv")
+  df <- make_tseq_data()
+  fit <- fit_tseq(df, time_normalised = "no")
+  fit$time_range <- NULL; fit$time_axis <- NULL; fit$n_segments <- NULL
+  preds <- predict_gamm(fit, n = 20)
+  expect_equal(range(preds$time), c(0, 1))
+  expect_equal(attr(preds, "time_axis"), "unit")
+})
+
 # ---------- input validation and grouping edge cases -------------------------
 
 test_that("a factor time column is read by value, not by level code", {

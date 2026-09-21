@@ -20,7 +20,7 @@ fit_gamm(
   random_intercept_item = TRUE,
   random_smooth = c("none", "speaker", "speaker_tone", "speaker_by_tone", "ref_diff"),
   use_ar1 = FALSE,
-  time_normalised = c("auto", "no", "yes")
+  time_normalised = c("auto", "no", "yes", "sequential")
 )
 }
 \arguments{
@@ -50,9 +50,12 @@ include the corresponding \code{s(..., bs = "re")} random intercept.}
 residuals' lag-1 autocorrelation, then refit with that \code{rho}.}
 
 \item{time_normalised}{One of \code{"auto"} (default: detect an
-already-normalised \verb{[0, 1]} time column and use it as-is), \code{"no"}
-(always rescale to \verb{[0, 1]} within each token), or \code{"yes"} (declare
-the column already normalised). See \code{\link[=resolve_time_norm]{resolve_time_norm()}}.}
+already-normalised \verb{[0, 1]} time column, or a \verb{<tier>_tseq} column,
+and use it as-is), \code{"no"} (always rescale to \verb{[0, 1]} within each
+token), \code{"yes"} (declare the column already normalised to \verb{[0, 1]}),
+or \code{"sequential"} (declare a sequential landmark axis running from 0
+to the number of segments, whatever its name). See
+\code{\link[=resolve_time_norm]{resolve_time_norm()}}.}
 }
 \value{
 An S3 object of class \code{"shinytone_gamm"}, a list with:
@@ -65,7 +68,13 @@ An S3 object of class \code{"shinytone_gamm"}, a list with:
 \code{\link[=predict_gamm]{predict_gamm()}}).
 \item \code{col_names}: original column names, for back-mapping.
 \item \code{time_prenormalised}: logical; was the time column used as-is
-because it was already normalised to \verb{[0, 1]}?
+because it was already normalised (to \verb{[0, 1]}, or as a sequential
+landmark axis)?
+\item \code{time_axis}: \code{"unit"} for a \verb{[0, 1]} axis, or \code{"sequential"} for a
+landmark axis kept on its \code{0}-to-\code{n} scale.
+\item \code{time_range}: the observed range of the fitted time axis, which
+\code{\link[=predict_gamm]{predict_gamm()}} predicts across; \code{c(0, 1)} on a unit axis.
+\item \code{n_segments}: segments on a sequential axis (\code{1} on a unit axis).
 }
 }
 \description{
@@ -90,7 +99,12 @@ with an AR1 correlation. For non-standard model structures, call
 \code{\link[=normalise_time_token]{normalise_time_token()}}), it is detected with
 \code{\link[=time_already_normalised]{time_already_normalised()}} and used as-is, so tokens whose samples
 do not span the full unit interval are not stretched a second time;
-override with \code{time_normalised}.
+override with \code{time_normalised}. A sequential landmark axis
+(\verb{<tier>_tseq} from \code{\link[=normalise_time_landmarks]{normalise_time_landmarks()}}, where segment \code{i}
+spans \verb{[i - 1, i]}) is recognised by name and also used as-is, on its
+own \code{0}-to-\code{n} scale: a per-token rescale would squeeze each token's
+first-to-last frame onto \verb{[0, 1]}, so the segment boundaries would no
+longer line up across tokens.
 \item Coerce \code{tone}, \code{speaker}, \code{item}, and (for difference smooths) an
 ordered \code{tone_ord} to factors with treatment contrasts.
 \item Build the formula based on \code{smooth_type} and \code{random_smooth}.

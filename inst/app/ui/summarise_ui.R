@@ -215,6 +215,21 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
       contour_data <- gca_pred_data()
     } else if (src == "gamm") {
       contour_data <- gamm_pred_data()
+      # Chao numerals read one syllable's contour on a 0-1 axis (onset at 0,
+      # offset at 1). A GAMM on a sequential landmark axis spans 0 to n
+      # segments, so its offset at 1 would be a segment boundary: refuse
+      # rather than return numerals for the wrong span.
+      n_seg <- attr(contour_data, "n_segments")
+      if (identical(attr(contour_data, "time_axis"), "sequential") &&
+          isTRUE(n_seg > 1)) {
+        showNotification(
+          sprintf(paste("Chao numerals describe one syllable's contour, and this",
+                        "GAMM was fit across %d segments on a sequential time axis.",
+                        "Use a monosyllabic batch (or one segment's rows) for Chao",
+                        "numerals."), n_seg),
+          type = "warning", duration = 10)
+        return()
+      }
     } else if (src == "raw_hz") {
       raw_data_for_robust <- dataset()
       req(raw_data_for_robust)

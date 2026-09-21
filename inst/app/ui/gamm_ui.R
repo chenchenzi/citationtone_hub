@@ -27,12 +27,22 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
 
   # Value-based check: a time column that is already proportional ([0, 1] per
   # token) is used as-is by fit_gamm() rather than rescaled again — say so
-  # before the user clicks Fit. Suppressed for _t01/_tseq columns: the red
-  # warning above owns _t01, and _tseq spans [0, n_segments] anyway.
+  # before the user clicks Fit. A sequential _tseq axis is also used as-is,
+  # on its own 0-to-n scale (fit_gamm() recognises it by name); the red
+  # warning above owns the within-segment _t01.
   output$gamm_timenorm_note <- renderUI({
     tv  <- input$gamm_time_var
     tok <- input$gamm_token_var
-    if (is.null(tv) || is.null(tok) || grepl("_tseq$", tv)) return(NULL)
+    if (is.null(tv)) return(NULL)
+    if (grepl("_tseq$", tv)) {
+      return(tags$div(
+        style = paste("background-color:#e8f5f0; border-left:4px solid #78c2ad;",
+                      "padding:10px 14px; margin:8px 0; border-radius:4px;",
+                      "color:#2a7a5a; font-size:0.9rem;"),
+        icon("circle-info"),
+        HTML(sprintf(" <code>%s</code> is a sequential landmark axis: each segment spans one unit (0&ndash;1, 1&ndash;2, &hellip;). The fit keeps it on that scale rather than rescaling each token to 0&ndash;1, so the segment boundaries line up across tokens, and the plot marks them.", tv))))
+    }
+    if (is.null(tok)) return(NULL)
     df <- tryCatch(active_data(), error = function(e) NULL)
     if (is.null(df) || !all(c(tv, tok) %in% names(df))) return(NULL)
     # A landmark set's within-segment <set>_t01 gets the red warning above,
@@ -936,25 +946,51 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
   })
 
   # --- Model plot ---
-  output$gamm_plot <- renderPlot({
-    req(gamm_plot_data())
-    pdat <- gamm_plot_data()
-    tone_var <- input$gamm_tone_var
-    f0_var <- input$gamm_f0_var
+  # Shared by the panel and the PNG download. Column names come from the fit,
+  # so the labels match the plotted model even if the pickers changed since.
+  # On a sequential landmark axis (<tier>_tseq) the x axis keeps its 0-to-n
+  # scale, with a dashed line at each segment boundary and each segment named.
+  gamm_prediction_plot <- function(pdat, fit) {
+    cn       <- if (!is.null(fit)) fit$col_names else list()
+    f0_var   <- if (!is.null(cn$f0))   cn$f0   else input$gamm_f0_var
+    tone_var <- if (!is.null(cn$tone)) cn$tone else input$gamm_tone_var
+    time_var <- if (!is.null(cn$time)) cn$time else input$gamm_time_var
+    seq_axis <- identical(attr(pdat, "time_axis"), "sequential")
+    n_seg    <- if (seq_axis) as.integer(attr(pdat, "n_segments")) else 1L
+    tier     <- sub("_tseq$", "", time_var)
 
-    ggplot(pdat, aes(x = time, y = f0_predicted, colour = tone, fill = tone)) +
+    p <- ggplot(pdat, aes(x = time, y = f0_predicted, colour = tone, fill = tone))
+    if (seq_axis) {
+      if (n_seg > 1) {
+        p <- p + geom_vline(xintercept = seq_len(n_seg - 1), linetype = "dashed",
+                            colour = "grey55", linewidth = 0.6)
+      }
+      p <- p + annotate("text", x = seq_len(n_seg) - 0.5, y = Inf, vjust = 1.6,
+                        label = paste(tier, seq_len(n_seg)), colour = "grey35", size = 4.2)
+    }
+    p <- p +
       geom_ribbon(aes(ymin = f0_predicted - 1.96 * se,
                       ymax = f0_predicted + 1.96 * se),
                   alpha = 0.2, colour = NA) +
       geom_line(linewidth = 1.2) +
       labs(
-        x = "Normalised time",
-        y = paste0("Predicted ", f0_var),
+        x = if (seq_axis) sprintf("Normalised time, %s by %s (%s)", tier, tier, time_var)
+            else "Normalised time",
+        # Same axis title as the other tabs: f₀ with its scale, not the raw
+        # column name (f0_axis_label() in global.R).
+        y = paste0("Predicted ", f0_axis_label(f0_var)),
         colour = tone_var,
         fill = tone_var
-      ) +
-      theme_bw(base_size = 14) +
-      theme(legend.position = "bottom")
+      )
+    if (seq_axis) {
+      p <- p + scale_x_continuous(limits = c(0, n_seg), breaks = seq(0, n_seg, by = 0.5))
+    }
+    p + theme_bw(base_size = 14) + theme(legend.position = "bottom")
+  }
+
+  output$gamm_plot <- renderPlot({
+    req(gamm_plot_data())
+    gamm_prediction_plot(gamm_plot_data(), gamm_fit_obj())
   }, width = 800, height = 500)
 
   # --- Download handler (plot image) ---
@@ -964,23 +1000,7 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
     },
     content = function(file) {
       req(gamm_plot_data())
-      pdat <- gamm_plot_data()
-      tone_var <- input$gamm_tone_var
-      f0_var <- input$gamm_f0_var
-
-      p <- ggplot(pdat, aes(x = time, y = f0_predicted, colour = tone, fill = tone)) +
-        geom_ribbon(aes(ymin = f0_predicted - 1.96 * se,
-                        ymax = f0_predicted + 1.96 * se),
-                    alpha = 0.2, colour = NA) +
-        geom_line(linewidth = 1.2) +
-        labs(
-          x = "Normalised time",
-          y = paste0("Predicted ", f0_var),
-          colour = tone_var,
-          fill = tone_var
-        ) +
-        theme_bw(base_size = 14) +
-        theme(legend.position = "bottom")
+      p <- gamm_prediction_plot(gamm_plot_data(), gamm_fit_obj())
 
       ggsave(file, plot = p, width = 8, height = 5, dpi = 300)
       showNotification(paste("Plot saved as", paste0(input$gamm_filename, ".png")),
@@ -1096,7 +1116,15 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
     df_now  <- tryCatch(active_data(), error = function(e) NULL)
     prenorm <- !is.null(df_now) && all(c(time_var, token_var) %in% names(df_now)) &&
       time_already_normalised(df_now[[time_var]], df_now[[token_var]])
-    norm_block <- if (prenorm) {
+    # A sequential landmark axis (<tier>_tseq) is kept on its own scale, as
+    # fit_gamm() does; predictions then span its observed range.
+    seq_axis <- grepl("_tseq$", time_var)
+    norm_block <- if (seq_axis) {
+      paste0(
+      '# ', time_var, ' is a sequential landmark axis (segment i spans [i - 1, i]):\n',
+      '# use it as-is, so segment boundaries stay at whole numbers across tokens\n',
+      'dat$time_norm <- dat$', time_var, '\n\n')
+    } else if (prenorm) {
       paste0(
       '# ', time_var, ' is already normalised to [0, 1] — use it as-is\n',
       '# (no per-token rescale, so partial-span tokens keep their position)\n',
@@ -1211,7 +1239,10 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
       '# Predict population-level smooth curves\n',
       'tone_levels <- levels(dat$', tone_var_pred, ')\n',
       'newdat <- expand.grid(\n',
-      '  time_norm = seq(0, 1, length.out = 200),\n',
+      if (seq_axis)
+        '  time_norm = seq(min(dat$time_norm, na.rm = TRUE), max(dat$time_norm, na.rm = TRUE), length.out = 200),\n'
+      else
+        '  time_norm = seq(0, 1, length.out = 200),\n',
       '  ', tone_var_pred, ' = tone_levels\n',
       ')\n',
       'newdat$', speaker_var, ' <- levels(dat$', speaker_var, ')[1]\n',
@@ -1232,12 +1263,19 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
       '# Plot predicted smooth curves with 95% CI\n',
       'ggplot(newdat, aes(x = time_norm, y = fit,\n',
       '                   colour = ', tone_var_pred, ', fill = ', tone_var_pred, ')) +\n',
+      if (seq_axis) paste0(
+      '  # dashed line at each segment boundary (1, 2, ...)\n',
+      '  geom_vline(xintercept = seq_len(ceiling(max(dat$time_norm, na.rm = TRUE)) - 1),\n',
+      '             linetype = "dashed", colour = "grey55") +\n'),
       '  geom_ribbon(aes(ymin = fit - 1.96 * se,\n',
       '                  ymax = fit + 1.96 * se),\n',
       '             alpha = 0.2, colour = NA) +\n',
       '  geom_line(linewidth = 1.2) +\n',
-      '  labs(x = "Normalised time",\n',
-      '       y = "Predicted ', f0_var, '",\n',
+      '  labs(x = "', if (seq_axis) sprintf("Normalised time, %s by %s (%s)",
+                                            sub("_tseq$", "", time_var),
+                                            sub("_tseq$", "", time_var), time_var)
+                    else "Normalised time", '",\n',
+      '       y = "Predicted ', f0_axis_label(f0_var), '",\n',
       '       colour = "', tone_var, '", fill = "', tone_var, '") +\n',
       '  theme_bw(base_size = 14) +\n',
       '  theme(legend.position = "bottom")\n\n',

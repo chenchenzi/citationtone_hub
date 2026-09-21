@@ -3,7 +3,8 @@
 #
 # Thin convenience wrapper around mgcv::bam() that prepares the data the way
 # citation-tone GAMM analysis typically wants:
-#   * time normalised to [0, 1] within each token
+#   * time normalised to [0, 1] within each token (a sequential landmark
+#     axis, <tier>_tseq, keeps its own 0-to-n-segments scale)
 #   * tone-by-time smooths (separate or reference-plus-difference)
 #   * optional speaker random smooths (Soskuthy 2021 strategies)
 #   * optional AR1 autocorrelation correction
@@ -35,7 +36,12 @@
 #'    [normalise_time_token()]), it is detected with
 #'    [time_already_normalised()] and used as-is, so tokens whose samples
 #'    do not span the full unit interval are not stretched a second time;
-#'    override with `time_normalised`.
+#'    override with `time_normalised`. A sequential landmark axis
+#'    (`<tier>_tseq` from [normalise_time_landmarks()], where segment `i`
+#'    spans `[i - 1, i]`) is recognised by name and also used as-is, on its
+#'    own `0`-to-`n` scale: a per-token rescale would squeeze each token's
+#'    first-to-last frame onto `[0, 1]`, so the segment boundaries would no
+#'    longer line up across tokens.
 #' 2. Coerce `tone`, `speaker`, `item`, and (for difference smooths) an
 #'    ordered `tone_ord` to factors with treatment contrasts.
 #' 3. Build the formula based on `smooth_type` and `random_smooth`.
@@ -90,9 +96,12 @@
 #' @param use_ar1 Logical. If `TRUE`, fit once, estimate `rho` from the
 #'   residuals' lag-1 autocorrelation, then refit with that `rho`.
 #' @param time_normalised One of `"auto"` (default: detect an
-#'   already-normalised `[0, 1]` time column and use it as-is), `"no"`
-#'   (always rescale to `[0, 1]` within each token), or `"yes"` (declare
-#'   the column already normalised). See [resolve_time_norm()].
+#'   already-normalised `[0, 1]` time column, or a `<tier>_tseq` column,
+#'   and use it as-is), `"no"` (always rescale to `[0, 1]` within each
+#'   token), `"yes"` (declare the column already normalised to `[0, 1]`),
+#'   or `"sequential"` (declare a sequential landmark axis running from 0
+#'   to the number of segments, whatever its name). See
+#'   [resolve_time_norm()].
 #'
 #' @return An S3 object of class `"shinytone_gamm"`, a list with:
 #' * `model`: the fitted [mgcv::bam()] object.
@@ -103,7 +112,13 @@
 #'   [predict_gamm()]).
 #' * `col_names`: original column names, for back-mapping.
 #' * `time_prenormalised`: logical; was the time column used as-is
-#'   because it was already normalised to `[0, 1]`?
+#'   because it was already normalised (to `[0, 1]`, or as a sequential
+#'   landmark axis)?
+#' * `time_axis`: `"unit"` for a `[0, 1]` axis, or `"sequential"` for a
+#'   landmark axis kept on its `0`-to-`n` scale.
+#' * `time_range`: the observed range of the fitted time axis, which
+#'   [predict_gamm()] predicts across; `c(0, 1)` on a unit axis.
+#' * `n_segments`: segments on a sequential axis (`1` on a unit axis).
 #'
 #' @seealso
 #' * [predict_gamm()] for per-tone prediction on a time grid.
@@ -164,7 +179,8 @@ fit_gamm <- function(data,
                                                   "speaker_by_tone",
                                                   "ref_diff"),
                      use_ar1                  = FALSE,
-                     time_normalised          = c("auto", "no", "yes")) {
+                     time_normalised          = c("auto", "no", "yes",
+                                                  "sequential")) {
 
   smooth_type     <- match.arg(smooth_type)
   random_smooth   <- match.arg(random_smooth)
@@ -185,8 +201,36 @@ fit_gamm <- function(data,
   # --- Data prep -----------------------------------------------------------
   # Time to [0, 1]: per-token min-max rescale, unless the column is already
   # normalised (detected, or declared via time_normalised) — then it is used
-  # as-is (see resolve_time_norm() in time_norm.R).
-  ts  <- resolve_time_norm(data, time, token, time_normalised)
+  # as-is (see resolve_time_norm() in time_norm.R). A sequential landmark
+  # axis (<tier>_tseq: segment i spans [i - 1, i]) is used as-is on its own
+  # scale; rescaling it per token would move the segment boundaries.
+  sequential <- time_normalised == "sequential" ||
+    (time_normalised == "auto" && grepl("_tseq$", time))
+  if (sequential) {
+    tv  <- as_time_numeric(data[[time]], time)
+    fin <- tv[is.finite(tv)]
+    if (length(fin) == 0 || min(fin) < -1e-8) {
+      stop("'", time, "' is used as a sequential landmark axis, which runs ",
+           "from 0 upward, but it has negative or no finite values. Pass ",
+           "time_normalised = \"no\" to rescale per token instead.",
+           call. = FALSE)
+    }
+    n_segments <- max(1L, as.integer(ceiling(max(fin) - 1e-8)))
+    if (time_normalised == "auto") {
+      message("Time column '", time, "' is a sequential landmark axis; ",
+              "using it as-is (0 to ", n_segments, ") so segment boundaries ",
+              "stay at whole numbers. Pass time_normalised = \"no\" to force ",
+              "per-token rescaling.")
+    }
+    ts <- list(time_norm = tv, prenormalised = TRUE)
+    time_axis  <- "sequential"
+    time_range <- range(fin)
+  } else {
+    ts <- resolve_time_norm(data, time, token, time_normalised)
+    time_axis  <- "unit"
+    time_range <- c(0, 1)
+    n_segments <- 1L
+  }
   dat <- data
   dat$.time_norm <- ts$time_norm
 
@@ -302,6 +346,9 @@ fit_gamm <- function(data,
                                  tone = tone, speaker = speaker, item = item,
                                  duration = duration),
       time_prenormalised  = ts$prenormalised,
+      time_axis           = time_axis,
+      time_range          = time_range,
+      n_segments          = n_segments,
       data_for_predict    = dat
     ),
     class = "shinytone_gamm"
@@ -365,7 +412,11 @@ build_gamm_display_formula <- function(smooth_type, random_smooth,
 #' Internally:
 #'
 #' 1. Build a per-tone time grid with `n` evenly-spaced points across
-#'    `[0, 1]`.
+#'    `[0, 1]`, or, for a fit on a sequential landmark axis
+#'    (`<tier>_tseq`), across the observed range of that axis, so the
+#'    curves keep the segment boundaries at whole numbers and are not
+#'    extrapolated into stretches no token was measured in (a voiceless
+#'    onset, say).
 #' 2. Set random-effect columns (speaker, item, and any random-smooth
 #'    grouping factors) to the first level of their respective factors;
 #'    these reference values are placeholders that don't affect the
@@ -382,10 +433,11 @@ build_gamm_display_formula <- function(smooth_type, random_smooth,
 #'
 #' @param gamm_obj An object of class `"shinytone_gamm"` from
 #'   [fit_gamm()].
-#' @param n Number of time points across `[0, 1]`. Default `200`.
+#' @param n Number of time points across the time axis. Default `200`.
 #'
 #' @return A data frame with columns `time`, `f0_predicted`, `se`,
-#'   `tone`.
+#'   `tone`, carrying the fit's `time_axis` (`"unit"` or `"sequential"`)
+#'   and `n_segments` as attributes of the same names.
 #'
 #' @seealso [fit_gamm()] for the model fit. [contour_to_chao()] for
 #'   converting the predicted contours to Chao numerals.
@@ -413,7 +465,9 @@ predict_gamm <- function(gamm_obj, n = 200) {
   dat           <- gamm_obj$data_for_predict
 
   tone_levels <- levels(dat$.tone)
-  time_seq    <- seq(0, 1, length.out = n)
+  # Fits saved before time_range existed were always on [0, 1].
+  time_range  <- if (is.null(gamm_obj$time_range)) c(0, 1) else gamm_obj$time_range
+  time_seq    <- seq(time_range[1], time_range[2], length.out = n)
   ref_speaker <- levels(dat$.speaker)[1]
   ref_item    <- levels(dat$.item)[1]
 
@@ -469,7 +523,10 @@ predict_gamm <- function(gamm_obj, n = 200) {
     )
   }
 
-  do.call(rbind, plot_rows)
+  out <- do.call(rbind, plot_rows)
+  attr(out, "time_axis")  <- if (is.null(gamm_obj$time_axis)) "unit" else gamm_obj$time_axis
+  attr(out, "n_segments") <- if (is.null(gamm_obj$n_segments)) 1L else gamm_obj$n_segments
+  out
 }
 
 

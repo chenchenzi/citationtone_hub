@@ -1,5 +1,23 @@
 # shinytone (development version)
 
+* **Model: GAMM tab keeps a `<tier>_tseq` axis on its own scale.** For
+  multisyllabic words the guide routes you to fit on `syllable_tseq`
+  (syllable 1 spans 0–1, syllable 2 spans 1–2), but `fit_gamm()` rescaled
+  each token's time to 0–1 like any other column. That squeezed every
+  token's first-to-last frame onto [0, 1], so the syllable boundary no
+  longer sat at the same point across tokens, and the plot showed a 0–1
+  axis. `fit_gamm()` now recognises a `_tseq` column and uses it as-is
+  (`time_normalised = "sequential"` declares any such axis). `predict_gamm()`
+  predicts across its observed range, and the fit records `time_axis`,
+  `time_range` and `n_segments`. The GAMM plot keeps the 0-to-n axis, marks
+  each segment boundary with a dashed line, and labels the segments. The tab
+  explains the axis when `_tseq` is chosen, and *Show R code* reproduces all
+  of it. Summarise now declines Chao numerals for such a fit, since they
+  describe one syllable on a 0–1 axis.
+* **Axis titles: `f₀ (st)` for semitones.** The GAMM plot labelled its y axis
+  with the raw column name (`Predicted f0_st`); it now uses the same title as
+  the other tabs (`Predicted f₀ (st)`). Semitone axes read `f₀ (st)` rather
+  than `f₀ (semitone)` throughout: Visualise, Curate, Cluster, GCA and GAMM.
 * **F0 Analysis Start tab: add a contour duration column.** A new *Add
   contour duration* block under *Attach metadata* adds how long each f0
   contour lasts: the time from the first to the last frame with f0, per
