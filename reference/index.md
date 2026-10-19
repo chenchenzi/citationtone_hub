@@ -33,6 +33,8 @@ only the frames inside chosen intervals (vowel, rhyme, or named labels).
 
 - [`tg_interval_tiers()`](https://chenchenzi.github.io/citationtone_hub/reference/tg_interval_tiers.md)
   : Interval-tier names across a set of TextGrids
+- [`tg_tier_names()`](https://chenchenzi.github.io/citationtone_hub/reference/tg_tier_names.md)
+  : Tier names across a set of TextGrids, read quickly
 - [`assign_tier_landmarks()`](https://chenchenzi.github.io/citationtone_hub/reference/assign_tier_landmarks.md)
   : Assign each time to its interval in a TextGrid interval tier
 - [`attach_landmarks()`](https://chenchenzi.github.io/citationtone_hub/reference/attach_landmarks.md)

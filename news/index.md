@@ -2,6 +2,17 @@
 
 ## shinytone (development version)
 
+- **F0 Correction tab: TextGrid tier names are no longer cut off.** The
+  plot’s left margin was fixed at 60 px, so a name longer than about
+  seven characters lost its start (“phoneme” showed as “honeme”). The
+  margin now fits the longest tier name across the uploaded TextGrids,
+  the same for every token, up to 150 px; a longer name is shortened
+  with “…” and shows in full on hover. The names come from the new
+  [`tg_tier_names()`](https://chenchenzi.github.io/citationtone_hub/reference/tg_tier_names.md),
+  which scans TextGrid text for tier headers (long or short format,
+  UTF-8 or UTF-16) instead of parsing each file, so it is quick enough
+  for a whole corpus. The selection band on the plot is also a lighter
+  grey.
 - **F0 Correction tab: play part of a token, as in Praat.** Select a
   stretch on the plot and it is shaded light grey across the waveform,
   f0 and TextGrid, staying shaded through redraws, zooming and panning.
@@ -23,10 +34,12 @@
   duration. The audio player above still plays the whole file. Playback
   goes through the Web Audio API, so the slice is sample-accurate rather
   than limited by the ~250 ms granularity of an `<audio>` element’s time
-  updates. The synthesised contour has its own **Selection** button,
-  mapped onto its own clock, and `S` plays the same stretch from it (the
-  corrected contour once you have edited), so the recording and the f0
-  track can be compared over the same stretch.
+  updates, and each slice fades in and out over 5 ms (and fades out when
+  stopped part-way), so cutting the sound mid-wave does not click. The
+  synthesised contour has its own **Selection** button, mapped onto its
+  own clock, and `S` plays the same stretch from it (the corrected
+  contour once you have edited), so the recording and the f0 track can
+  be compared over the same stretch.
 - **F0 Correction tab: the synthesised contour now plays in real time.**
   [`sonify_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/sonify_f0.md)
   synthesises only the stretch from the first to the last voiced frame,
