@@ -166,6 +166,12 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     if (nrow(row) == 0 || is.na(row$tg_path[1])) return(NULL)
     suppressWarnings(tryCatch(rPraat::tg.read(row$tg_path[1]), error = function(e) NULL))
   })
+  # TRUE when that TextGrid has an interval tier, i.e. something a click on
+  # the TextGrid strip can select (point tiers have no span).
+  has_interval_tier <- reactive({
+    tg <- current_textgrid()
+    length(tg) > 0 && any(vapply(tg, function(t) identical(t$type, "interval"), logical(1)))
+  })
 
   # Current token's contour (corrected if edited, else original)
   current_f0 <- reactive({
@@ -647,9 +653,13 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   # chance to register. Once the user navigates to the F0 Correction
   # tab and the plot renders, registration takes hold and the
   # event_data calls return real selections.
+  # priority = "event": the default ("input") keeps the last value in a
+  # deduplicating store, so clicking the same dot (or boxing the same dots)
+  # again after a waveform drag or TextGrid click had changed the selection
+  # was silently ignored, and edits hit the old frames.
   corr_event <- function(event) {
     tryCatch(
-      suppressWarnings(plotly::event_data(event, source = "fp_corr_plot")),
+      suppressWarnings(plotly::event_data(event, source = "fp_corr_plot", priority = "event")),
       error = function(e) NULL
     )
   }
@@ -667,6 +677,18 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     sel <- event_frames(ev)
     if (!is.null(sel)) fp_selected(sel)
   }, ignoreNULL = FALSE, ignoreInit = TRUE)
+
+  # A drag on the waveform or a click on a TextGrid interval selects every
+  # dot in that time span; an f0 box that holds no dots clears the frame
+  # selection (its band still plays). window.fpPlay sends the frames
+  # (possibly none), so the dots picked for editing stay inside the grey band.
+  observeEvent(input$fp_corr_span_frames, {
+    # Frames picked on the previous token's plot while the next one loads
+    # would land on the wrong rows.
+    if (!identical(input$fp_corr_span_frames$token, input$fp_corr_token)) return()
+    fr <- suppressWarnings(as.integer(unlist(input$fp_corr_span_frames$frames)))
+    fp_selected(unique(fr[!is.na(fr)]))
+  })
 
   # A fresh token starts with nothing selected: the event inputs are keyed
   # to the plot source, not the token, so without this the previous token's
@@ -1537,7 +1559,8 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   output$fp_corr_selection_text <- renderText({
     sel <- selected_indices()
     if (length(sel) == 0) {
-      return("No frames selected.\nClick a point, or box/lasso-select.")
+      return(paste0("No frames selected.\nClick a point, drag on the plot",
+                    if (has_interval_tier()) ", or click a TextGrid interval" else "", "."))
     }
     cur <- current_f0()
     if (is.null(cur)) return(sprintf("Selected: %d frame(s).", length(sel)))
@@ -1569,23 +1592,50 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     }
     bin <- readBin(row$wav_path[1], "raw", n = file.info(row$wav_path[1])$size)
     uri <- paste0("data:audio/wav;base64,", base64enc::base64encode(bin))
-    # The <audio> player plays the whole file; the buttons below play part of
-    # it (window.fpPlay, installed with the guide), entirely in the browser.
-    btn <- function(label, js, ic, tip) {
-      tags$button(type = "button", class = "btn btn-default btn-sm",
+    tags$audio(controls = NA, src = uri, type = "audio/wav",
+               style = "width: 100%; max-width: 600px;")
+  })
+
+  # ---- Play bar above the plot: play part of the token ----
+  # Sits on the plot it acts on. The buttons and the readout are driven
+  # entirely in the browser by window.fpPlay (installed with the guide): the
+  # readout shows the selected span, matching the grey band drawn on the plot.
+  output$fp_corr_playbar <- renderUI({
+    req(input$fp_corr_token)
+    audio <- fp_audio_data()
+    if (is.null(audio)) return(NULL)
+    row <- audio[audio$basename == input$fp_corr_token, , drop = FALSE]
+    if (nrow(row) == 0 || is.na(row$wav_path[1])) return(NULL)
+    btn <- function(label, js, ic, tip, cls = "") {
+      tags$button(type = "button", class = paste("btn btn-default", cls),
                   onclick = js, title = tip, icon(ic), label)
     }
-    tagList(
-      tags$audio(controls = NA, src = uri, type = "audio/wav",
-                 style = "width: 100%; max-width: 600px;"),
-      tags$div(style = "display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:6px;",
+    has_tg <- has_interval_tier()
+    tags$div(id = "fp-playbar", class = "fp-playbar",
+      tags$style(HTML("
+        .fp-playbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+          background:#f6f7f8;border:1px solid #e3e6e8;border-radius:6px;
+          padding:5px 10px;margin:4px 0 6px;font-size:0.84rem;}
+        .fp-playbar .btn-group .btn{padding:3px 10px;font-size:0.82rem;}
+        .fp-playbar.fp-playing .fp-stop{background:#d9534f;border-color:#c9302c;color:#fff;}
+        .fp-sel-readout{color:#999;font-style:italic;padding:1px 8px;
+          border-left:2px solid transparent;border-right:2px solid transparent;
+          font-variant-numeric:tabular-nums;}
+        .fp-playbar.fp-has-sel .fp-sel-readout{color:#333;font-style:normal;
+          background:#dcdcdc;border-color:#b5b5b5;}
+        .fp-playbar-hint{margin-left:auto;color:#999;}
+      ")),
+      tags$div(class = "btn-group btn-group-sm",
         btn(" Selection", "fpPlay.playSelection()", "play",
-            "Play the time span you dragged on the plot (the visible part if nothing is selected)"),
-        btn(" Visible part", "fpPlay.playVisible()", "play",
+            "Play the grey selection (the visible part if no stretch is selected). Key: Tab"),
+        btn(" Visible", "fpPlay.playVisible()", "play",
             "Play the part of the token currently in view"),
-        btn(" Stop", "fpPlay.stop()", "stop", "Stop playback"),
-        tags$small(style = "color:#888;",
-          "Drag across the plot to select, then ", tags$kbd("Tab"), " to play it.")))
+        btn("", "fpPlay.stop()", "stop", "Stop", cls = "fp-stop")),
+      tags$span(id = "fp-sel-text", class = "fp-sel-readout",
+                "No stretch selected: plays the visible part"),
+      tags$span(class = "fp-playbar-hint",
+        if (has_tg) "drag, or click a TextGrid interval, to select; " else "drag on the plot to select; ",
+        tags$kbd("Tab"), " plays the recording, ", tags$kbd("S"), " the f0 contour"))
   })
 
   # ---- Sonify the contour: original vs corrected ----
@@ -1648,8 +1698,10 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       bin <- readBin(tf, "raw", n = file.info(tf)$size); unlink(tf)
       uri <- paste0("data:audio/wav;base64,", base64enc::base64encode(bin))
       # data-t0 / data-span / data-dur let the partial player (window.fpPlay)
-      # map a span on the plot onto this synth's own clock.
+      # map a span on the plot onto this synth's own clock. The S key plays
+      # the row marked data-current (the contour as it stands now).
       tags$div(class = "fp-player-row",
+        `data-current` = if (label %in% c("Contour", "Corrected")) "1",
         style = "display:flex; align-items:center; gap:10px; margin-bottom:5px;",
         tags$span(style = paste0("flex:0 0 84px; font-weight:600; font-size:0.84rem; color:",
                                  colour, ";"), label),
@@ -1662,8 +1714,9 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                     onclick = "fpPlay.playSelection(this)",
                     title = paste0("Play the ",
                                    if (label == "Contour") "" else paste0(tolower(label), " "),
-                                   "contour over the span dragged on the plot ",
-                                   "(the visible part if nothing is selected)"),
+                                   "contour over the grey selection ",
+                                   "(the visible part if no stretch is selected)",
+                                   if (label %in% c("Contour", "Corrected")) ". Key: S" else ""),
                     icon("play"), " Selection"))
     }
 
@@ -1963,6 +2016,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       line = list(color = "#5cb89a", width = 1),
       customdata = plot_idx,               # original frame index
       text = hover_text, hoverinfo = "text",
+      name = "fp_f0",                      # found by name in window.fpPlay
       showlegend = FALSE
     )
 
@@ -2000,6 +2054,9 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     tg <- current_textgrid()
     n_tiers <- if (!is.null(tg)) length(tg) else 0
     shapes <- list(); annotations <- list()
+    # Interval tiers in paper coordinates, so a click on the strip can be
+    # turned into that interval's time span by window.fpPlay.
+    tg_js <- list()
 
     if (n_tiers > 0) {
       # Stack: waveform (top) → f0 (middle) → TextGrid (bottom).
@@ -2035,6 +2092,8 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
 
         if (identical(tier$type, "interval")) {
           n_iv <- length(tier$t1)
+          tg_js[[length(tg_js) + 1]] <- list(ymin = y_min, ymax = y_max,
+                                             t1 = I(tier$t1), t2 = I(tier$t2))
           for (j in seq_len(n_iv)) {
             # Right boundary — extend from this tier's bottom UP through f0
             # and waveform, so the line is visible against the audio + f0.
@@ -2084,11 +2143,13 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       wav_dom <- c(0.65, 1)
     }
 
-    # --- Vertical guide line(s) for currently-selected frame(s) ---
+    # --- Vertical guide line for a single selected frame ---
     # Spans from the bottom of the f0 panel up to the top of the waveform,
     # so you can read off the frame's time position against both the audio
     # and the f0 contour. Drawn in the selection orange to match the marker.
-    if (length(sel) > 0) {
+    # A multi-frame selection is shown by the grey band instead (drawn by
+    # window.fpPlay), so it gets no comb of lines.
+    if (length(sel) == 1) {
       sel_times <- f0_df$time[sel]
       sel_times <- sel_times[!is.na(sel_times)]
       for (st in sel_times) {
@@ -2205,13 +2266,14 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     p <- plotly::event_register(p, "plotly_selected")
     p <- plotly::event_register(p, "plotly_relayout")
     p <- plotly::config(p, displaylogo = FALSE, scrollZoom = TRUE)
-    # Tell the partial-play player (window.fpPlay) about this render, so it
-    # can track the span dragged on the plot and reset on a new token.
+    # Tell the selection / playback script (window.fpPlay) about this render,
+    # so it can track the selected span, reset on a new token, and map clicks
+    # on the TextGrid strip to intervals.
     htmlwidgets::onRender(p, "
       function(el, x, data) {
         if (window.fpPlay) window.fpPlay._onPlotRender(el, data);
         else window._fpPendingPlot = {el: el, data: data};
-      }", data = list(token = tok))
+      }", data = list(token = tok, tiers = tg_js))
   })
 
   # Preserve the x-axis zoom/pan (including keyboard pan, which is programmatic
@@ -2253,7 +2315,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           var ctx = null, node = null, raf = null, seq = 0, pending = false;
           var cache = {}, cacheKeys = [];
           var playFrom = 0, playTo = 0, startedAt = 0, playMap = {t0: 0, k: 1};
-          var sel = null, lastTok = null;
+          var sel = null, lastTok = null, tiers = [], quietDeselect = false;
 
           function recordingEl(){ return document.querySelector('#fp_corr_audio audio'); }
           function plotEl(){ return document.getElementById('fp_corr_plot'); }
@@ -2312,6 +2374,54 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
             return o;
           }
           function hidePlayhead(){ var o = overlay(); if (o) o.style.display = 'none'; }
+
+          // Light grey band over the selected time span, across the whole plot
+          // (waveform, f0, TextGrid): the one marker of the selection, however
+          // it was made. Plotly's own dashed box shows only while dragging (the
+          // style below hides the box it leaves behind, and its resize handles).
+          // Multiply blending tints the background without washing out the
+          // traces drawn over it; pointer-events:none keeps dragging working.
+          function band(){
+            var g = plotEl(); if (!g) return null;
+            var host = g.querySelector('.svg-container'); if (!host) return null;
+            if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
+            var b = host.querySelector('.fp-selband');
+            if (!b) {
+              b = document.createElement('div');
+              b.className = 'fp-selband';
+              b.style.cssText = 'position:absolute;top:0;pointer-events:none;z-index:4;display:none;' +
+                                'background:#dcdcdc;mix-blend-mode:multiply;' +
+                                'border-left:1px solid #b5b5b5;border-right:1px solid #b5b5b5;';
+              host.appendChild(b);
+            }
+            return b;
+          }
+          // Redrawn from the axis on every zoom, pan and re-render, so it stays
+          // on the same stretch of time; clipped to the plotting area.
+          function drawSel(){
+            var bar = document.getElementById('fp-playbar');
+            var txt = document.getElementById('fp-sel-text');
+            if (bar) bar.classList.toggle('fp-has-sel', !!sel);
+            if (txt) txt.textContent = sel
+              ? sel[0].toFixed(3) + '–' + sel[1].toFixed(3) + ' s  ·  ' +
+                (sel[1] - sel[0]).toFixed(3) + ' s'
+              : 'No stretch selected: plays the visible part';
+            var b = band(), g = plotEl();
+            if (!b) return;
+            if (!sel || !g || !g._fullLayout || !g._fullLayout.xaxis) { b.style.display = 'none'; return; }
+            var fl = g._fullLayout, xa = fl.xaxis;
+            var x0 = xa._offset + xa.l2p(sel[0]), x1 = xa._offset + xa.l2p(sel[1]);
+            var a = Math.max(xa._offset, Math.min(x0, x1)),
+                z = Math.min(xa._offset + xa._length, Math.max(x0, x1));
+            if (z <= a) { b.style.display = 'none'; return; }
+            b.style.left = a + 'px';  b.style.width = (z - a) + 'px';
+            b.style.top = fl._size.t + 'px';  b.style.height = fl._size.h + 'px';
+            b.style.display = 'block';
+          }
+          function setPlaying(on){
+            var bar = document.getElementById('fp-playbar');
+            if (bar) bar.classList.toggle('fp-playing', !!on);
+          }
           // Recomputed from the axis every frame, so the line follows the
           // plot if it is zoomed or panned mid-playback.
           function drawPlayhead(t){
@@ -2343,6 +2453,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
             }
             if (raf) { cancelAnimationFrame(raf); raf = null; }
             hidePlayhead();
+            setPlaying(false);
           }
 
           // a, b in plot time (seconds); el is the audio element to play.
@@ -2367,6 +2478,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
               node.onended = function(){ if (node) stop(); };
               playMap = m; playFrom = sa; playTo = sb; startedAt = c.currentTime;
               node.start(0, sa, sb - sa);
+              setPlaying(true);
               raf = requestAnimationFrame(tick);
             });
           }
@@ -2377,9 +2489,9 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
             if (!xa || !xa.range) return null;
             return [Math.min(xa.range[0], xa.range[1]), Math.max(xa.range[0], xa.range[1])];
           }
-          // A single clicked frame spans nothing worth hearing, so a selection
-          // shorter than 20 ms falls back to the visible window.
-          function range(){ return (sel && sel[1] - sel[0] >= 0.02) ? sel : visible(); }
+          // A band too narrow to play (under play()'s 5 ms floor) falls back
+          // to the visible window.
+          function range(){ return (sel && sel[1] - sel[0] >= 0.005) ? sel : visible(); }
           // A button can pass itself; the audio element sharing its row plays.
           function srcFor(btn){
             if (!btn || !btn.closest) return null;
@@ -2389,6 +2501,81 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           function playSelection(btn){ var r = range(); if (r) play(r[0], r[1], srcFor(btn)); }
           function playVisible(btn){ var r = visible(); if (r) play(r[0], r[1], srcFor(btn)); }
           function toggle(){ if (node || pending) stop(); else playSelection(); }
+          // S key: the synthesised contour as it stands (corrected, once edited).
+          function toggleSynth(){
+            if (node || pending) { stop(); return; }
+            var el = document.querySelector('#fp_corr_sonify .fp-player-row[data-current] audio');
+            var r = range(); if (el && r) play(r[0], r[1], el);
+          }
+
+          // ---- Selection: one time span for playing and for editing ----
+          // A box or lasso on the f0 panel edits the dots inside it (plotly
+          // reports them to Shiny itself). A drag on the waveform or a click on
+          // a TextGrid interval edits every dot in its time span, sent from
+          // here; an f0 box that holds no dots sends an empty list.
+          function arr(x){ return x == null ? [] : [].concat(x); }
+          function f0Trace(g){
+            var d = (g && g.data) || [];
+            for (var i = 0; i < d.length; i++) if (d[i].name === 'fp_f0') return {i: i, tr: d[i]};
+            return null;
+          }
+          function framesIn(a, b){
+            var f = f0Trace(plotEl()); if (!f) return [];
+            var xs = arr(f.tr.x), cd = arr(f.tr.customdata), out = [];
+            for (var i = 0; i < xs.length; i++) if (xs[i] >= a && xs[i] <= b) out.push(cd[i]);
+            return out;
+          }
+          function sendFrames(fr){
+            if (window.Shiny && Shiny.setInputValue)
+              Shiny.setInputValue('fp_corr_span_frames', {token: lastTok, frames: fr}, {priority: 'event'});
+          }
+          function hasDots(el, ev){
+            var f = f0Trace(el);
+            return !!(f && ev && ev.points &&
+                      ev.points.some(function(p){ return p.curveNumber === f.i; }));
+          }
+          function onWave(ev){
+            var o = (ev && (ev.range || ev.lassoPoints)) || {};
+            return Object.prototype.hasOwnProperty.call(o, 'y2');
+          }
+          // The interval under a click on the TextGrid strip, as [t1, t2].
+          function tgSpanAt(g, e){
+            if (!tiers.length || !g._fullLayout || !g._fullLayout.xaxis) return null;
+            var svg = g.querySelector('.main-svg'); if (!svg) return null;
+            var r = svg.getBoundingClientRect(), fl = g._fullLayout, xa = fl.xaxis, s = fl._size;
+            var px = e.clientX - r.left, py = e.clientY - r.top;
+            if (px < xa._offset || px > xa._offset + xa._length) return null;
+            var yp = 1 - (py - s.t) / s.h, t = xa.p2l(px - xa._offset);
+            for (var k = 0; k < tiers.length; k++) {
+              var T = tiers[k];
+              if (yp < T.ymin || yp > T.ymax) continue;
+              var t1 = arr(T.t1), t2 = arr(T.t2);
+              for (var j = 0; j < t1.length; j++) if (t >= t1[j] && t <= t2[j]) return [t1[j], t2[j]];
+            }
+            return null;
+          }
+          // Drop plotly's own box and the dimming it puts on the dots outside
+          // it. Plotly answers with an empty plotly_selected (and may emit a
+          // deselect); quietDeselect makes the handlers below ignore those.
+          function clearPlotlySel(g, then){
+            then = then || function(){};
+            if (!(g && window.Plotly && g.layout &&
+                  ((g.layout.selections && g.layout.selections.length) ||
+                   (g.data || []).some(function(t){ return t.selectedpoints != null; })))) {
+              then(); return;
+            }
+            quietDeselect = true;
+            Plotly.update(g, {selectedpoints: [null]}, {selections: []}).then(function(){
+              quietDeselect = false; setTimeout(then, 0);
+            }, function(){ quietDeselect = false; then(); });
+          }
+          function selectSpan(span){
+            sel = span; drawSel();
+            clearPlotlySel(plotEl(), function(){
+              sel = span; drawSel();
+              sendFrames(framesIn(span[0], span[1]));
+            });
+          }
 
           function pick(obj){
             if (!obj) return null;
@@ -2402,12 +2589,45 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           function onPlotRender(el, data){
             var tok = data && data.token;
             if (tok !== lastTok) { sel = null; stop(); lastTok = tok; }
+            tiers = arr(data && data.tiers);
             if (el._fpSelH) {
               el.removeListener('plotly_selected', el._fpSelH);
+              el.removeListener('plotly_selecting', el._fpSelingH);
               el.removeListener('plotly_deselect', el._fpDeselH);
+              el.removeListener('plotly_click', el._fpClickH);
+              el.removeListener('plotly_relayout', el._fpDrawH);
+              el.removeListener('plotly_afterplot', el._fpDrawH);
             }
-            el._fpSelH = function(ev){
-              if (!ev) { sel = null; return; }
+            // Plain DOM listeners: the TextGrid strip is not a plotly subplot,
+            // so plotly reports nothing for clicks on it.
+            // A drag along the strip selects from the interval under the
+            // press to the interval under the release, like a Shift-click.
+            if (!el._fpTgClick) {
+              el._fpTgDown = function(e){
+                el._fpTgPress = {x: e.clientX, y: e.clientY, span: tgSpanAt(el, e)};
+              };
+              el._fpTgClick = function(e){
+                var span = tgSpanAt(el, e), d = el._fpTgPress;
+                el._fpTgPress = null;
+                if (d && Math.abs(e.clientX - d.x) + Math.abs(e.clientY - d.y) > 4) {
+                  if (!span || !d.span) return;
+                  span = [Math.min(d.span[0], span[0]), Math.max(d.span[1], span[1])];
+                } else if (!span) return;
+                if (e.shiftKey && sel) span = [Math.min(sel[0], span[0]), Math.max(sel[1], span[1])];
+                selectSpan(span);
+              };
+              el._fpTgMove = function(e){
+                var on = !!tgSpanAt(el, e);
+                if (on !== !!el._fpTgHover) { el._fpTgHover = on; el.style.cursor = on ? 'pointer' : ''; }
+              };
+              el.addEventListener('mousedown', el._fpTgDown);
+              el.addEventListener('click', el._fpTgClick);
+              el.addEventListener('mousemove', el._fpTgMove);
+            }
+            el._fpDrawH = function(){ drawSel(); };
+            el.on('plotly_relayout', el._fpDrawH);
+            el.on('plotly_afterplot', el._fpDrawH);
+            function spanOf(ev){
               var r = null, xs = null;
               var box = pick(ev.range);
               if (box) r = box.slice();
@@ -2416,12 +2636,45 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                 xs = ev.points.map(function(p){ return +p.x; }).filter(isFinite);
               }
               if (!r && xs && xs.length) r = [Math.min.apply(null, xs), Math.max.apply(null, xs)];
-              sel = r ? [Math.min(r[0], r[1]), Math.max(r[0], r[1])] : null;
+              return r ? [Math.min(r[0], r[1]), Math.max(r[0], r[1])] : null;
+            }
+            el._fpSelH = function(ev){
+              // Echo of our own clearPlotlySel(): keep the span just chosen.
+              if (quietDeselect) return;
+              // A plain click emits plotly_selected(undefined). R keeps its
+              // frames on a plain click, so the band stays too; a dot click,
+              // a double-click or q clears both.
+              if (!ev) return;
+              sel = spanOf(ev); drawSel();
+              var drag = pick(ev.range) || pick(ev.lassoPoints);
+              if (!sel || !drag) return;
+              if (onWave(ev)) sendFrames(framesIn(sel[0], sel[1]));
+              else if (!hasDots(el, ev)) {
+                // Nothing inside the box: plotly has dimmed every dot.
+                sendFrames([]);
+                setTimeout(function(){ clearPlotlySel(el); }, 0);
+              }
             };
-            el._fpDeselH = function(){ sel = null; };
+            // While dragging, the band follows the mouse as in Praat.
+            el._fpSelingH = function(ev){
+              if (quietDeselect) return;
+              if (ev && (pick(ev.range) || pick(ev.lassoPoints))) { sel = spanOf(ev); drawSel(); }
+            };
+            el._fpDeselH = function(){ if (quietDeselect) return; sel = null; drawSel(); };
+            // Clicking a single dot selects just that frame, which spans no
+            // time worth playing: the band goes, and Tab plays the visible part.
+            el._fpClickH = function(ev){ if (hasDots(el, ev)) { sel = null; drawSel(); } };
             el.on('plotly_selected', el._fpSelH);
+            el.on('plotly_selecting', el._fpSelingH);
             el.on('plotly_deselect', el._fpDeselH);
+            el.on('plotly_click', el._fpClickH);
+            drawSel();
           }
+
+          var st = document.createElement('style');
+          st.textContent = '#fp_corr_plot .selectionlayer path, #fp_corr_plot .outline-controllers' +
+                           '{display:none !important;}';
+          document.head.appendChild(st);
 
           // Starting any full-length <audio> player stops a slice that is playing.
           document.addEventListener('play', function(e){
@@ -2430,9 +2683,9 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           }, true);
 
           window.fpPlay = {
-            play: play, stop: stop, toggle: toggle,
+            play: play, stop: stop, toggle: toggle, toggleSynth: toggleSynth,
             playSelection: playSelection, playVisible: playVisible,
-            _onPlotRender: onPlotRender,
+            _onPlotRender: onPlotRender, _selectSpan: selectSpan,
             _drawPlayhead: drawPlayhead,
             _state: function(){
               return { selection: sel, visible: visible(), playing: !!node,
@@ -2506,13 +2759,18 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
               if (xBtn) { e.preventDefault(); xBtn.click(); }
               return;
             }
-            // Tab (Praat's play key) or p → play the span dragged on the plot,
+            // Tab (Praat's play key) or p → play the grey selection on the plot,
             // or the visible window when nothing is selected; again to stop.
             // Text fields return early above, so Tab still moves between
             // inputs; only page-level Tab is taken on this tab.
             if ((e.key === 'Tab' && !e.shiftKey || e.key === 'p' || e.key === 'P') &&
                 !e.metaKey && !e.ctrlKey && !e.altKey) {
               if (window.fpPlay) { e.preventDefault(); window.fpPlay.toggle(); }
+              return;
+            }
+            // s → the same span, played from the synthesised f0 contour.
+            if ((e.key === 's' || e.key === 'S') && !e.metaKey && !e.ctrlKey && !e.altKey) {
+              if (window.fpPlay) { e.preventDefault(); window.fpPlay.toggleSynth(); }
               return;
             }
             // q → quit / clear the current point / box / lasso selection, so you
@@ -2570,10 +2828,24 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         tags$p(style = "margin: 6px 0 6px 0;",
           nows("Work on one token at a time. Pick one in the sidebar, or step ",
                "through with ", HTML("&#9664;"), " / ", HTML("&#9654;"), ". ",
-               "Click a point on the f0 plot to select a single frame, or drag a ",
-               tags$strong("box / lasso"), " to select multiple frames. ",
-               "Then apply one of the edits in the sidebar.")),
+               "Select frames on the plot, listen, then apply one of the edits in the sidebar.")),
         tags$ul(style = "margin-bottom: 4px; padding-left: 18px;",
+          tags$li(nows(tags$strong("Selecting:"),
+            " one selection serves both listening and editing, and its stretch is shaded grey.",
+            tags$ul(style = "padding-left: 16px; margin: 2px 0;",
+              tags$li("A ", tags$strong("box / lasso"), " on the f0 dots selects the dots inside it."),
+              tags$li("A drag on the waveform, or a click on a TextGrid interval (",
+                      tags$kbd("Shift"), "-click or drag along the tier to span several), ",
+                      "selects every dot in that stretch."),
+              tags$li("A click on one dot selects just that frame, marked by an orange line; ",
+                      tags$kbd("Tab"), " then plays the visible part."),
+              tags$li("A double-click on the plot, or ", tags$kbd("Q"), ", clears the selection.")))),
+          tags$li(nows(tags$strong("Listening:"), " ",
+            tags$kbd("Tab"), " or ", tags$code("Selection"), " on the play bar above the plot ",
+            "plays the grey stretch, as in Praat, or the visible part if no stretch is selected. ",
+            tags$kbd("S"), " plays the same stretch from the synthesised f0 contour (the ",
+            "corrected one once you have edited), so you can compare the recording and the ",
+            "f0 track. A red line follows the playback; press the key again to stop.")),
           tags$li(nows(tags$strong("Quick edits:"), " ", tags$code("÷ 2"),
             " (fix octave doubling), ", tags$code("× 2"),
             " (fix octave halving), ", tags$code("Delete"),
@@ -2590,12 +2862,6 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
             tags$em("N"), " non-selected valid frames (the ", tags$em("window"),
             "). If a selected frame is past the last valid anchor, the same fit ",
             "extrapolates.")),
-          tags$li(nows(tags$strong("Listen to part of a token:"),
-            " drag across the plot to select a stretch, then press ", tags$kbd("Tab"),
-            " or ", tags$code("Selection"), " under the audio player to hear just that part, ",
-            "as in Praat; with nothing selected it plays the visible part. A red line ",
-            "follows the playback. The synthesised contour has its own ", tags$code("Selection"),
-            " button, so you can compare the recording and the f0 track over the same stretch.")),
           tags$li(tags$strong("Manual entry:"),
             " type a specific Hz value and click ", tags$code("Apply"),
             " to set every selected frame to it."),
@@ -2650,7 +2916,11 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
               tags$div(class = "kbd-keys",
                 tags$kbd("Tab"), tags$span(class = "sep", "/"), tags$kbd("P")),
               tags$div(class = "kbd-desc",
-                       "Play the span dragged on the plot, or the visible part if nothing is selected (as in Praat). Press again to stop.")),
+                       "Play the grey selection, or the visible part if no stretch is selected (as in Praat). Press again to stop.")),
+            tags$div(class = "kbd-row",
+              tags$div(class = "kbd-keys", tags$kbd("S")),
+              tags$div(class = "kbd-desc",
+                       "Play the same stretch from the synthesised f0 contour (the corrected one once you have edited). Press again to stop.")),
 
             tags$div(class = "kbd-set-title", "Navigation"),
             tags$div(class = "kbd-row",
@@ -3182,10 +3452,6 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         tags$kbd("←"), " / ", tags$kbd("→"), " to pan, ",
         tags$kbd("0"), " to reset (time axis only).",
         tags$br(),
-        tags$strong("Play:"), " drag to select a stretch, then ", tags$kbd("Tab"),
-        " plays it (the visible part if nothing is selected); ", tags$kbd("Tab"),
-        " again stops.",
-        tags$br(),
         tags$strong("Edits:"), " ",
         tags$kbd("Delete"), " (or ", tags$kbd("Backspace"),
         ") mark selected frames as NA, ",
@@ -3204,6 +3470,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       uiOutput("fp_corr_plot_legend"),
       uiOutput("fp_corr_dropped_status"),
       uiOutput("fp_corr_edit_status"),
+      uiOutput("fp_corr_playbar"),
       plotly::plotlyOutput("fp_corr_plot", height = "560px"),
       # Sonify the (edited) contour, placed below the plot so the top stays
       # uncluttered. Synthetic only (complex tone or vowel) via sonify_f0() --
@@ -3916,10 +4183,10 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   # distinguishes them.
   observeEvent(
     suppressWarnings(plotly::event_data("plotly_click",
-                                        source = "fp_corr_plot")),
+                                        source = "fp_corr_plot", priority = "event")),
   {
     click <- suppressWarnings(
-      plotly::event_data("plotly_click", source = "fp_corr_plot")
+      plotly::event_data("plotly_click", source = "fp_corr_plot", priority = "event")
     )
     if (is.null(click) || is.null(click$customdata)) return()
     cd <- as.character(click$customdata)

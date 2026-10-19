@@ -1,17 +1,30 @@
 # shinytone (development version)
 
-* **F0 Correction tab: play part of a token, as in Praat.** Drag across the
-  plot to select a stretch, then press `Tab` (or `P`), or the new
-  **Selection** button under the audio player, to hear just that part; with
-  nothing selected it plays the visible part, which is Praat's rule. `Tab`
-  again stops, and a red playhead follows the playback across the waveform
-  and f0. **Visible part** and **Stop** buttons sit alongside, and the
-  existing player still plays the whole file. Playback goes through the Web
+* **F0 Correction tab: play part of a token, as in Praat.** Select a
+  stretch on the plot and it is shaded light grey across the waveform, f0
+  and TextGrid, staying shaded through redraws, zooming and panning. One
+  selection serves both listening and editing: a box or lasso on the f0
+  dots selects the dots inside it, while a drag on the waveform or a click
+  on a TextGrid interval (`Shift`-click, or drag along the tier, to span
+  several) selects every dot in that stretch, so the dots the edits act on
+  always lie inside the grey band. A click on one dot selects just that
+  frame; a double-click or `Q` clears the selection.
+  (Before, a drag on the waveform, or a box with no dots in it, left the
+  earlier dots selected, so `Delete` could hit frames outside the stretch in
+  view; and clicking the same dot again after selecting elsewhere was
+  ignored.) Plotly's dashed box now shows only while dragging.
+  Then press `Tab` (or `P`), or **Selection** on the new play bar above the
+  plot, to hear just that part; with no stretch selected it plays the
+  visible part, which is Praat's rule. `Tab` again stops, and a red playhead follows
+  the playback. The play bar also has **Visible** and **Stop**, and reads
+  out the selection's start, end and duration. The audio player above still
+  plays the whole file. Playback goes through the Web
   Audio API, so the slice is sample-accurate rather than limited by the
   ~250 ms granularity of an `<audio>` element's time updates. The
   synthesised contour has its own **Selection** button, mapped onto its own
-  clock, so the recording and the f0 track can be compared over the same
-  stretch.
+  clock, and `S` plays the same stretch from it (the corrected contour once
+  you have edited), so the recording and the f0 track can be compared over
+  the same stretch.
 * **F0 Correction tab: the synthesised contour now plays in real time.**
   `sonify_f0()` synthesises only the stretch from the first to the last
   voiced frame, but the duration it was given was the span of every frame,
