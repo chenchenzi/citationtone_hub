@@ -1,5 +1,23 @@
 # shinytone (development version)
 
+* **F0 Correction tab: play part of a token, as in Praat.** Drag across the
+  plot to select a stretch, then press `Tab` (or `P`), or the new
+  **Selection** button under the audio player, to hear just that part; with
+  nothing selected it plays the visible part, which is Praat's rule. `Tab`
+  again stops, and a red playhead follows the playback across the waveform
+  and f0. **Visible part** and **Stop** buttons sit alongside, and the
+  existing player still plays the whole file. Playback goes through the Web
+  Audio API, so the slice is sample-accurate rather than limited by the
+  ~250 ms granularity of an `<audio>` element's time updates. The
+  synthesised contour has its own **Selection** button, mapped onto its own
+  clock, so the recording and the f0 track can be compared over the same
+  stretch.
+* **F0 Correction tab: the synthesised contour now plays in real time.**
+  `sonify_f0()` synthesises only the stretch from the first to the last
+  voiced frame, but the duration it was given was the span of every frame,
+  silence included, so the voiced contour played slowed down to fill the
+  whole file (1.7x on a token with 0.37 s of edge silence). It now runs at
+  the voiced stretch's own duration, so it lines up with the recording.
 * **Model: GAMM tab keeps a `<tier>_tseq` axis on its own scale.** For
   multisyllabic words the guide routes you to fit on `syllable_tseq`
   (syllable 1 spans 0–1, syllable 2 spans 1–2), but `fit_gamm()` rescaled

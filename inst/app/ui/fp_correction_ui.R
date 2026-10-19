@@ -1569,8 +1569,23 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     }
     bin <- readBin(row$wav_path[1], "raw", n = file.info(row$wav_path[1])$size)
     uri <- paste0("data:audio/wav;base64,", base64enc::base64encode(bin))
-    tags$audio(controls = NA, src = uri, type = "audio/wav",
-               style = "width: 100%; max-width: 600px;")
+    # The <audio> player plays the whole file; the buttons below play part of
+    # it (window.fpPlay, installed with the guide), entirely in the browser.
+    btn <- function(label, js, ic, tip) {
+      tags$button(type = "button", class = "btn btn-default btn-sm",
+                  onclick = js, title = tip, icon(ic), label)
+    }
+    tagList(
+      tags$audio(controls = NA, src = uri, type = "audio/wav",
+                 style = "width: 100%; max-width: 600px;"),
+      tags$div(style = "display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:6px;",
+        btn(" Selection", "fpPlay.playSelection()", "play",
+            "Play the time span you dragged on the plot (the visible part if nothing is selected)"),
+        btn(" Visible part", "fpPlay.playVisible()", "play",
+            "Play the part of the token currently in view"),
+        btn(" Stop", "fpPlay.stop()", "stop", "Stop playback"),
+        tags$small(style = "color:#888;",
+          "Drag across the plot to select, then ", tags$kbd("Tab"), " to play it.")))
   })
 
   # ---- Sonify the contour: original vs corrected ----
@@ -1587,10 +1602,18 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     vowel <- input$fp_corr_sonify_vowel %||% "a"
     # The f0 here is raw Hz, so play it faithfully -- no smoothing. The point is
     # to *hear* stray frames (and confirm an edit removed them), so every frame
-    # must stay audible. Play at the token's own duration so the timing matches
-    # the recording above.
-    span <- suppressWarnings(diff(range(cur$time, na.rm = TRUE)))
-    dur  <- if (is.finite(span) && span > 0) max(0.15, min(4, span)) else 0.7
+    # must stay audible. sonify_f0() synthesises only the stretch from the first
+    # to the last voiced frame, so the duration must be that stretch's span for
+    # the timing to match the recording above. (Using the span of every frame,
+    # silence included, played the voiced part slowed to fill the whole file.)
+    times <- cur$time
+    voiced_span <- function(f0_vec) {
+      vt <- times[is.finite(f0_vec)]
+      if (length(vt) < 2) return(NULL)
+      sp <- diff(range(vt))
+      if (!is.finite(sp) || sp <= 0) return(NULL)
+      list(t0 = min(vt), span = sp, dur = max(0.15, min(4, sp)))
+    }
     # Per-frame intensity (dB), aligned to the f0 frames, so the synth swells and
     # fades like the syllable. Same for original/corrected (intensity is not
     # edited). NULL when the data carries no intensity column.
@@ -1610,6 +1633,8 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
 
     make_player <- function(f0_vec, label, colour) {
       iv  <- if (!is.null(intens) && length(intens) == length(f0_vec)) intens else NULL
+      vs  <- voiced_span(f0_vec)
+      dur <- if (is.null(vs)) 0.7 else vs$dur
       wav <- tryCatch(sonify_f0(f0_vec, dur = dur, source = src, vowel = vowel,
                                 intensity = iv),
                       error = function(e) NULL)
@@ -1622,11 +1647,24 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       tuneR::writeWave(wav, tf, extensible = FALSE)
       bin <- readBin(tf, "raw", n = file.info(tf)$size); unlink(tf)
       uri <- paste0("data:audio/wav;base64,", base64enc::base64encode(bin))
-      tags$div(style = "display:flex; align-items:center; gap:10px; margin-bottom:5px;",
+      # data-t0 / data-span / data-dur let the partial player (window.fpPlay)
+      # map a span on the plot onto this synth's own clock.
+      tags$div(class = "fp-player-row",
+        style = "display:flex; align-items:center; gap:10px; margin-bottom:5px;",
         tags$span(style = paste0("flex:0 0 84px; font-weight:600; font-size:0.84rem; color:",
                                  colour, ";"), label),
         tags$audio(controls = NA, src = uri, type = "audio/wav",
-                   style = "flex:1; max-width:520px;"))
+                   style = "flex:1; max-width:520px;",
+                   `data-t0` = if (!is.null(vs)) format(vs$t0, digits = 15),
+                   `data-span` = if (!is.null(vs)) format(vs$span, digits = 15),
+                   `data-dur` = if (!is.null(vs)) format(vs$dur, digits = 15)),
+        tags$button(type = "button", class = "btn btn-default btn-sm",
+                    onclick = "fpPlay.playSelection(this)",
+                    title = paste0("Play the ",
+                                   if (label == "Contour") "" else paste0(tolower(label), " "),
+                                   "contour over the span dragged on the plot ",
+                                   "(the visible part if nothing is selected)"),
+                    icon("play"), " Selection"))
     }
 
     if (is.null(edit_diff())) {
@@ -2166,7 +2204,14 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     p <- plotly::event_register(p, "plotly_click")
     p <- plotly::event_register(p, "plotly_selected")
     p <- plotly::event_register(p, "plotly_relayout")
-    plotly::config(p, displaylogo = FALSE, scrollZoom = TRUE)
+    p <- plotly::config(p, displaylogo = FALSE, scrollZoom = TRUE)
+    # Tell the partial-play player (window.fpPlay) about this render, so it
+    # can track the span dragged on the plot and reset on a new token.
+    htmlwidgets::onRender(p, "
+      function(el, x, data) {
+        if (window.fpPlay) window.fpPlay._onPlotRender(el, data);
+        else window._fpPendingPlot = {el: el, data: data};
+      }", data = list(token = tok))
   })
 
   # Preserve the x-axis zoom/pan (including keyboard pan, which is programmatic
@@ -2187,6 +2232,223 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   output$fp_correction_guide <- renderUI({
     box_style <- "background-color: #f0faf7; border-left: 4px solid #78c2ad; padding: 10px 14px; margin-bottom: 12px; border-radius: 4px; font-size: 0.88rem; color: #555;"
     tagList(
+      # Partial playback, installed once per session. Plays an exact time
+      # slice through the Web Audio API: an audio element's file is decoded once
+      # into an AudioBuffer, and AudioBufferSourceNode.start(0, from, duration)
+      # plays [from, to] sample-accurately. (Stopping an <audio> element at an
+      # end time needs its timeupdate event, which fires only every ~250 ms:
+      # too coarse for a vowel onset.) The range is the span dragged on the
+      # plot; with nothing selected it is the visible window, which is Praat's
+      # rule. A playhead sweeps the plot while it plays.
+      #
+      # Each source maps plot time to its own audio time. The recording shares
+      # the plot's clock (the waveform is drawn at (sample - 1) / rate, seconds
+      # from the start of the file), so the map is the identity. A sonified
+      # contour carries data-t0 / data-span / data-dur: sonify_f0() spreads the
+      # frames at proportional positions 0..1 over dur, so audio time
+      # s = (t - t0) / span * dur, exact for a uniform frame grid.
+      tags$script(HTML("
+        (function(){
+          if (window.fpPlay) return;
+          var ctx = null, node = null, raf = null, seq = 0, pending = false;
+          var cache = {}, cacheKeys = [];
+          var playFrom = 0, playTo = 0, startedAt = 0, playMap = {t0: 0, k: 1};
+          var sel = null, lastTok = null;
+
+          function recordingEl(){ return document.querySelector('#fp_corr_audio audio'); }
+          function plotEl(){ return document.getElementById('fp_corr_plot'); }
+          function allPlayers(){
+            return document.querySelectorAll('#fp_corr_audio audio, #fp_corr_sonify audio');
+          }
+
+          // Created and resumed synchronously inside the click / keydown, so
+          // the browser's autoplay policy treats it as user-initiated.
+          function getCtx(){
+            if (!ctx) {
+              var AC = window.AudioContext || window.webkitAudioContext;
+              if (!AC) return null;
+              ctx = new AC();
+            }
+            if (ctx.state === 'suspended') ctx.resume();
+            return ctx;
+          }
+
+          // Small cache: a sonified contour gets a new src on every edit.
+          function loadBuffer(c, el){
+            if (!el || !el.src) return Promise.resolve(null);
+            var src = el.src;
+            if (cache[src]) return Promise.resolve(cache[src]);
+            return fetch(src)
+              .then(function(r){ return r.arrayBuffer(); })
+              // callback form of decodeAudioData, which older Safari needs
+              .then(function(ab){ return new Promise(function(res, rej){ c.decodeAudioData(ab, res, rej); }); })
+              .then(function(b){
+                cache[src] = b; cacheKeys.push(src);
+                if (cacheKeys.length > 6) delete cache[cacheKeys.shift()];
+                return b;
+              });
+          }
+
+          function mapping(el){
+            var t0 = parseFloat(el.getAttribute('data-t0')),
+                span = parseFloat(el.getAttribute('data-span')),
+                dur = parseFloat(el.getAttribute('data-dur'));
+            if (isFinite(t0) && span > 0 && dur > 0) return {t0: t0, k: dur / span};
+            return {t0: 0, k: 1};
+          }
+
+          function overlay(){
+            var g = plotEl(); if (!g) return null;
+            var host = g.querySelector('.svg-container'); if (!host) return null;
+            if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
+            var o = host.querySelector('.fp-playhead');
+            if (!o) {
+              o = document.createElement('div');
+              o.className = 'fp-playhead';
+              o.style.cssText = 'position:absolute;top:0;width:2px;margin-left:-1px;' +
+                                'background:#d9534f;pointer-events:none;z-index:5;display:none;';
+              host.appendChild(o);
+            }
+            return o;
+          }
+          function hidePlayhead(){ var o = overlay(); if (o) o.style.display = 'none'; }
+          // Recomputed from the axis every frame, so the line follows the
+          // plot if it is zoomed or panned mid-playback.
+          function drawPlayhead(t){
+            var g = plotEl(), o = overlay();
+            if (!g || !o || !g._fullLayout || !g._fullLayout.xaxis) return;
+            var fl = g._fullLayout, xa = fl.xaxis, r = xa.range;
+            if (t < Math.min(r[0], r[1]) || t > Math.max(r[0], r[1])) { o.style.display = 'none'; return; }
+            o.style.left   = (xa._offset + xa.l2p(t)) + 'px';
+            o.style.top    = fl._size.t + 'px';
+            o.style.height = fl._size.h + 'px';
+            o.style.display = 'block';
+          }
+
+          function tick(){
+            if (!node) return;
+            var s = playFrom + (ctx.currentTime - startedAt);
+            if (s >= playTo) { stop(); return; }
+            drawPlayhead(playMap.t0 + s / playMap.k);       // audio time -> plot time
+            raf = requestAnimationFrame(tick);
+          }
+
+          function stop(){
+            seq++;                                  // cancels a play still decoding
+            pending = false;
+            if (node) {
+              try { node.onended = null; node.stop(); } catch (e) {}
+              try { node.disconnect(); } catch (e) {}
+              node = null;
+            }
+            if (raf) { cancelAnimationFrame(raf); raf = null; }
+            hidePlayhead();
+          }
+
+          // a, b in plot time (seconds); el is the audio element to play.
+          function play(a, b, el){
+            stop();
+            var my = seq;
+            el = el || recordingEl();
+            var c = getCtx(); if (!c || !el) return;
+            Array.prototype.forEach.call(allPlayers(), function(x){ if (!x.paused) x.pause(); });
+            var m = mapping(el);
+            pending = true;                         // decoding: a 2nd press must stop
+            loadBuffer(c, el).then(function(B){
+              if (my !== seq) return;
+              pending = false;
+              if (!B) return;
+              var sa = Math.max(0, Math.min((a - m.t0) * m.k, B.duration)),
+                  sb = Math.max(0, Math.min((b - m.t0) * m.k, B.duration));
+              if (sb - sa < 0.005) return;
+              node = c.createBufferSource();
+              node.buffer = B;
+              node.connect(c.destination);
+              node.onended = function(){ if (node) stop(); };
+              playMap = m; playFrom = sa; playTo = sb; startedAt = c.currentTime;
+              node.start(0, sa, sb - sa);
+              raf = requestAnimationFrame(tick);
+            });
+          }
+
+          function visible(){
+            var g = plotEl();
+            var xa = g && g._fullLayout && g._fullLayout.xaxis;
+            if (!xa || !xa.range) return null;
+            return [Math.min(xa.range[0], xa.range[1]), Math.max(xa.range[0], xa.range[1])];
+          }
+          // A single clicked frame spans nothing worth hearing, so a selection
+          // shorter than 20 ms falls back to the visible window.
+          function range(){ return (sel && sel[1] - sel[0] >= 0.02) ? sel : visible(); }
+          // A button can pass itself; the audio element sharing its row plays.
+          function srcFor(btn){
+            if (!btn || !btn.closest) return null;
+            var row = btn.closest('.fp-player-row');
+            return row ? row.querySelector('audio') : null;
+          }
+          function playSelection(btn){ var r = range(); if (r) play(r[0], r[1], srcFor(btn)); }
+          function playVisible(btn){ var r = visible(); if (r) play(r[0], r[1], srcFor(btn)); }
+          function toggle(){ if (node || pending) stop(); else playSelection(); }
+
+          function pick(obj){
+            if (!obj) return null;
+            var k = Object.keys(obj).filter(function(k){ return /^x[0-9]*$/.test(k); })[0];
+            return k ? obj[k] : null;
+          }
+          // Called by the plot's htmlwidgets::onRender on every render. The
+          // plot re-renders whenever the selection changes (to highlight the
+          // picked frames), so the stored range survives re-renders and is
+          // only dropped on a deselect or a change of token.
+          function onPlotRender(el, data){
+            var tok = data && data.token;
+            if (tok !== lastTok) { sel = null; stop(); lastTok = tok; }
+            if (el._fpSelH) {
+              el.removeListener('plotly_selected', el._fpSelH);
+              el.removeListener('plotly_deselect', el._fpDeselH);
+            }
+            el._fpSelH = function(ev){
+              if (!ev) { sel = null; return; }
+              var r = null, xs = null;
+              var box = pick(ev.range);
+              if (box) r = box.slice();
+              if (!r) { xs = pick(ev.lassoPoints); }
+              if (!r && !xs && ev.points && ev.points.length) {
+                xs = ev.points.map(function(p){ return +p.x; }).filter(isFinite);
+              }
+              if (!r && xs && xs.length) r = [Math.min.apply(null, xs), Math.max.apply(null, xs)];
+              sel = r ? [Math.min(r[0], r[1]), Math.max(r[0], r[1])] : null;
+            };
+            el._fpDeselH = function(){ sel = null; };
+            el.on('plotly_selected', el._fpSelH);
+            el.on('plotly_deselect', el._fpDeselH);
+          }
+
+          // Starting any full-length <audio> player stops a slice that is playing.
+          document.addEventListener('play', function(e){
+            if (node && e.target && e.target.closest &&
+                e.target.closest('#fp_corr_audio, #fp_corr_sonify')) stop();
+          }, true);
+
+          window.fpPlay = {
+            play: play, stop: stop, toggle: toggle,
+            playSelection: playSelection, playVisible: playVisible,
+            _onPlotRender: onPlotRender,
+            _drawPlayhead: drawPlayhead,
+            _state: function(){
+              return { selection: sel, visible: visible(), playing: !!node,
+                       fromAudio: playFrom, toAudio: playTo, map: playMap,
+                       fromPlot: playMap.t0 + playFrom / playMap.k,
+                       toPlot: playMap.t0 + playTo / playMap.k,
+                       cached: cacheKeys.length, context: ctx ? ctx.state : null };
+            }
+          };
+          // The plot may have rendered before this script ran.
+          if (window._fpPendingPlot) {
+            onPlotRender(window._fpPendingPlot.el, window._fpPendingPlot.data);
+            window._fpPendingPlot = null;
+          }
+        })();
+      ")),
       # Keyboard zoom/pan handler — installed once per session
       tags$script(HTML("
         (function(){
@@ -2242,6 +2504,15 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
               var xBtn = document.getElementById('fp_corr_discard') ||
                          document.getElementById('fp_corr_restore');
               if (xBtn) { e.preventDefault(); xBtn.click(); }
+              return;
+            }
+            // Tab (Praat's play key) or p → play the span dragged on the plot,
+            // or the visible window when nothing is selected; again to stop.
+            // Text fields return early above, so Tab still moves between
+            // inputs; only page-level Tab is taken on this tab.
+            if ((e.key === 'Tab' && !e.shiftKey || e.key === 'p' || e.key === 'P') &&
+                !e.metaKey && !e.ctrlKey && !e.altKey) {
+              if (window.fpPlay) { e.preventDefault(); window.fpPlay.toggle(); }
               return;
             }
             // q → quit / clear the current point / box / lasso selection, so you
@@ -2319,6 +2590,12 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
             tags$em("N"), " non-selected valid frames (the ", tags$em("window"),
             "). If a selected frame is past the last valid anchor, the same fit ",
             "extrapolates.")),
+          tags$li(nows(tags$strong("Listen to part of a token:"),
+            " drag across the plot to select a stretch, then press ", tags$kbd("Tab"),
+            " or ", tags$code("Selection"), " under the audio player to hear just that part, ",
+            "as in Praat; with nothing selected it plays the visible part. A red line ",
+            "follows the playback. The synthesised contour has its own ", tags$code("Selection"),
+            " button, so you can compare the recording and the f0 track over the same stretch.")),
           tags$li(tags$strong("Manual entry:"),
             " type a specific Hz value and click ", tags$code("Apply"),
             " to set every selected frame to it."),
@@ -2367,6 +2644,13 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
             tags$div(class = "kbd-row",
               tags$div(class = "kbd-keys", tags$kbd("Q")),
               tags$div(class = "kbd-desc", "Clear the current point / box / lasso selection.")),
+
+            tags$div(class = "kbd-set-title", "Playback"),
+            tags$div(class = "kbd-row",
+              tags$div(class = "kbd-keys",
+                tags$kbd("Tab"), tags$span(class = "sep", "/"), tags$kbd("P")),
+              tags$div(class = "kbd-desc",
+                       "Play the span dragged on the plot, or the visible part if nothing is selected (as in Praat). Press again to stop.")),
 
             tags$div(class = "kbd-set-title", "Navigation"),
             tags$div(class = "kbd-row",
@@ -2897,6 +3181,10 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         tags$kbd("+"), " / ", tags$kbd("-"), " to zoom, ",
         tags$kbd("←"), " / ", tags$kbd("→"), " to pan, ",
         tags$kbd("0"), " to reset (time axis only).",
+        tags$br(),
+        tags$strong("Play:"), " drag to select a stretch, then ", tags$kbd("Tab"),
+        " plays it (the visible part if nothing is selected); ", tags$kbd("Tab"),
+        " again stops.",
         tags$br(),
         tags$strong("Edits:"), " ",
         tags$kbd("Delete"), " (or ", tags$kbd("Backspace"),
