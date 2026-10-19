@@ -14,6 +14,46 @@
 # columns.
 ###############################################
 
+# ---- Tier-name labels in the plot's left margin ----
+# Plotly does not size margins to annotations, so the width of each tier name
+# is estimated here. Widths (in em) of printable ASCII, chr(32) to chr(126),
+# in Verdana: the wider of plotly's default fonts ("Open Sans", verdana), so
+# the estimate errs towards a little spare room. Other characters count as
+# 0.65 em, CJK and full-width ones as 1 em, combining marks as 0.
+tier_label_em <- c(
+  0.35, 0.39, 0.46, 0.82, 0.64, 1.08, 0.73, 0.27, 0.45, 0.45, 0.64, 0.82, 0.36,
+  0.45, 0.36, 0.45, 0.64, 0.64, 0.64, 0.64, 0.64, 0.64, 0.64, 0.64, 0.64, 0.64,
+  0.45, 0.45, 0.82, 0.82, 0.82, 0.55, 1.00, 0.68, 0.69, 0.70, 0.77, 0.63, 0.57,
+  0.78, 0.75, 0.42, 0.45, 0.69, 0.56, 0.84, 0.75, 0.79, 0.60, 0.79, 0.70, 0.68,
+  0.62, 0.73, 0.68, 0.99, 0.69, 0.62, 0.69, 0.45, 0.45, 0.45, 0.82, 0.64, 0.64,
+  0.60, 0.62, 0.52, 0.62, 0.60, 0.35, 0.62, 0.63, 0.27, 0.34, 0.59, 0.27, 0.97,
+  0.63, 0.61, 0.62, 0.62, 0.43, 0.52, 0.39, 0.63, 0.59, 0.82, 0.59, 0.59, 0.53,
+  0.63, 0.45, 0.63, 0.82)
+
+tier_label_px <- function(x, size = 14) {
+  vapply(x, function(s) {
+    if (is.na(s) || !nzchar(s)) return(0)
+    cp <- utf8ToInt(enc2utf8(s))
+    if (anyNA(cp)) return(nchar(s, type = "chars", allowNA = TRUE) * 0.65 * size)
+    ch <- intToUtf8(cp, multiple = TRUE)
+    w <- ifelse(cp >= 32 & cp <= 126, tier_label_em[pmin(pmax(cp - 31, 1), 95)], 0.65)
+    w[grepl("^\\p{M}$", ch, perl = TRUE)] <- 0
+    w[grepl("^[\\p{Han}\\p{Hiragana}\\p{Katakana}\\p{Hangul}]$", ch, perl = TRUE) |
+      (cp >= 0x3000 & cp <= 0x303F) | (cp >= 0xFF00 & cp <= 0xFFEF)] <- 1
+    sum(w) * size
+  }, numeric(1), USE.NAMES = FALSE)
+}
+
+# The name if it fits in `avail` px, else its start plus an ellipsis.
+fit_tier_label <- function(s, avail, size = 14) {
+  if (tier_label_px(s, size) <= avail) return(s)
+  ch <- strsplit(s, "")[[1]]
+  while (length(ch) > 1 &&
+         tier_label_px(paste0(paste(ch, collapse = ""), "…"), size) > avail)
+    ch <- ch[-length(ch)]
+  paste0(paste(ch, collapse = ""), "…")
+}
+
 fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                              fp_pitch_candidates = NULL,
                              fp_corrected_data = NULL,
@@ -171,6 +211,14 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   has_interval_tier <- reactive({
     tg <- current_textgrid()
     length(tg) > 0 && any(vapply(tg, function(t) identical(t$type, "interval"), logical(1)))
+  })
+  # Every tier name in the uploaded TextGrids (a quick text scan, about 2 ms
+  # per file), so the plot's left margin is sized once for the whole dataset
+  # and does not shift from token to token.
+  tg_name_set <- reactive({
+    audio <- fp_audio_data()
+    if (is.null(audio) || !"tg_path" %in% names(audio)) return(character(0))
+    tg_tier_names(audio$tg_path)
   })
 
   # Current token's contour (corrected if edited, else original)
@@ -1622,7 +1670,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           border-left:2px solid transparent;border-right:2px solid transparent;
           font-variant-numeric:tabular-nums;}
         .fp-playbar.fp-has-sel .fp-sel-readout{color:#333;font-style:normal;
-          background:#dcdcdc;border-color:#b5b5b5;}
+          background:#efefef;border-color:#cfcfcf;}
         .fp-playbar-hint{margin-left:auto;color:#999;}
       ")),
       tags$div(class = "btn-group btn-group-sm",
@@ -2054,6 +2102,18 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     tg <- current_textgrid()
     n_tiers <- if (!is.null(tg)) length(tg) else 0
     shapes <- list(); annotations <- list()
+    # Left margin: wide enough for the longest tier name in the dataset (and
+    # this token's, in case the scan missed a file), from 60 px up to a cap of
+    # 150 px. A longer name is shortened with an ellipsis and shows in full on
+    # hover.
+    tier_font <- 14
+    margin_l <- 60
+    if (n_tiers > 0) {
+      tier_names <- unique(c(tg_name_set(),
+                             vapply(tg, function(t) if (is.null(t$name)) "" else t$name, "")))
+      margin_l <- min(150, max(60, ceiling(max(tier_label_px(tier_names, tier_font)) + 10)))
+    }
+    tier_avail <- margin_l - 8   # the label sits a few px left of the plot
     # Interval tiers in paper coordinates, so a click on the strip can be
     # turned into that interval's time span by window.fpPlay.
     tg_js <- list()
@@ -2080,15 +2140,19 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           x0 = 0, x1 = 1, y0 = y_max, y1 = y_max,
           line = list(color = "#ddd", width = 1)
         )
-        # Tier name on the left margin
-        annotations[[length(annotations) + 1]] <- list(
+        # Tier name on the left margin (escaped: plotly reads annotation text
+        # as HTML).
+        lbl <- fit_tier_label(tier$name, tier_avail, tier_font)
+        ann <- list(
           x = -0.005, y = (y_min + y_max) / 2,
           xref = "paper", yref = "paper",
           xanchor = "right", yanchor = "middle",
-          text = tier$name,
+          text = htmltools::htmlEscape(lbl),
           showarrow = FALSE,
-          font = list(size = 14, color = "#666")
+          font = list(size = tier_font, color = "#666")
         )
+        if (!identical(lbl, tier$name)) ann$hovertext <- htmltools::htmlEscape(tier$name)
+        annotations[[length(annotations) + 1]] <- ann
 
         if (identical(tier$type, "interval")) {
           n_iv <- length(tier$t1)
@@ -2247,7 +2311,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       dragmode = "select",
       shapes = shapes,
       annotations = annotations,
-      margin = list(l = 60, r = 20, t = 20, b = bottom_margin),
+      margin = list(l = margin_l, r = 20, t = 20, b = bottom_margin),
       # `uirevision` keyed on the token keeps Plotly's UI state (zoom,
       # pan, current selection) across re-renders triggered by data
       # changes inside the same token. Switching tokens changes the key,
@@ -2312,7 +2376,10 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       tags$script(HTML("
         (function(){
           if (window.fpPlay) return;
-          var ctx = null, node = null, raf = null, seq = 0, pending = false;
+          var ctx = null, node = null, gainNode = null, raf = null, seq = 0, pending = false;
+          // Each slice fades in and out over 5 ms (less for a slice under
+          // 20 ms), so cutting the sound mid-wave does not click.
+          var FADE = 0.005;
           var cache = {}, cacheKeys = [];
           var playFrom = 0, playTo = 0, startedAt = 0, playMap = {t0: 0, k: 1};
           var sel = null, lastTok = null, tiers = [], quietDeselect = false;
@@ -2390,8 +2457,8 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
               b = document.createElement('div');
               b.className = 'fp-selband';
               b.style.cssText = 'position:absolute;top:0;pointer-events:none;z-index:4;display:none;' +
-                                'background:#dcdcdc;mix-blend-mode:multiply;' +
-                                'border-left:1px solid #b5b5b5;border-right:1px solid #b5b5b5;';
+                                'background:#efefef;mix-blend-mode:multiply;' +
+                                'border-left:1px solid #cfcfcf;border-right:1px solid #cfcfcf;';
               host.appendChild(b);
             }
             return b;
@@ -2447,9 +2514,22 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
             seq++;                                  // cancels a play still decoding
             pending = false;
             if (node) {
-              try { node.onended = null; node.stop(); } catch (e) {}
-              try { node.disconnect(); } catch (e) {}
-              node = null;
+              // Stopped part-way: a quick fade-out instead of a cut. The old
+              // nodes finish on their own, so a new slice can start at once.
+              var n = node, g = gainNode;
+              node = null; gainNode = null;
+              n.onended = null;
+              try {
+                var now = ctx.currentTime;
+                g.gain.cancelScheduledValues(now);
+                g.gain.setValueAtTime(g.gain.value, now);
+                g.gain.linearRampToValueAtTime(0, now + FADE);
+                n.stop(now + FADE);
+              } catch (e) { try { n.stop(); } catch (e2) {} }
+              setTimeout(function(){
+                try { n.disconnect(); } catch (e) {}
+                try { g.disconnect(); } catch (e) {}
+              }, FADE * 1000 + 50);
             }
             if (raf) { cancelAnimationFrame(raf); raf = null; }
             hidePlayhead();
@@ -2472,12 +2552,19 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
               var sa = Math.max(0, Math.min((a - m.t0) * m.k, B.duration)),
                   sb = Math.max(0, Math.min((b - m.t0) * m.k, B.duration));
               if (sb - sa < 0.005) return;
+              var dur = sb - sa, f = Math.min(FADE, dur / 4), t0 = c.currentTime;
               node = c.createBufferSource();
               node.buffer = B;
-              node.connect(c.destination);
+              gainNode = c.createGain();
+              gainNode.gain.setValueAtTime(0, t0);
+              gainNode.gain.linearRampToValueAtTime(1, t0 + f);
+              gainNode.gain.setValueAtTime(1, t0 + dur - f);
+              gainNode.gain.linearRampToValueAtTime(0, t0 + dur);
+              node.connect(gainNode);
+              gainNode.connect(c.destination);
               node.onended = function(){ if (node) stop(); };
-              playMap = m; playFrom = sa; playTo = sb; startedAt = c.currentTime;
-              node.start(0, sa, sb - sa);
+              playMap = m; playFrom = sa; playTo = sb; startedAt = t0;
+              node.start(t0, sa, dur);
               setPlaying(true);
               raf = requestAnimationFrame(tick);
             });
@@ -2840,12 +2927,17 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
               tags$li("A click on one dot selects just that frame, marked by an orange line; ",
                       tags$kbd("Tab"), " then plays the visible part."),
               tags$li("A double-click on the plot, or ", tags$kbd("Q"), ", clears the selection.")))),
-          tags$li(nows(tags$strong("Listening:"), " ",
-            tags$kbd("Tab"), " or ", tags$code("Selection"), " on the play bar above the plot ",
-            "plays the grey stretch, as in Praat, or the visible part if no stretch is selected. ",
-            tags$kbd("S"), " plays the same stretch from the synthesised f0 contour (the ",
-            "corrected one once you have edited), so you can compare the recording and the ",
-            "f0 track. A red line follows the playback; press the key again to stop.")),
+          tags$li(nows(tags$strong("Listening:"),
+            tags$ul(style = "padding-left: 16px; margin: 2px 0;",
+              tags$li(nows(tags$kbd("Tab"), " or ", tags$code("Selection"),
+                      " on the play bar above the plot plays the grey stretch, as in Praat, ",
+                      "or the visible part if no stretch is selected.")),
+              tags$li(nows(tags$kbd("S"), " plays the same stretch from the synthesised f0 ",
+                      "contour (the corrected one once you have edited), to compare with the recording.")),
+              tags$li("Press the key again to stop. A red line follows the playback, and each ",
+                      "stretch fades in and out over 5 ms so its edges do not click."),
+              tags$li("A few dots' worth sounds more like a click than a pitch: to judge the ",
+                      "contour, select a vowel or more.")))),
           tags$li(nows(tags$strong("Quick edits:"), " ", tags$code("÷ 2"),
             " (fix octave doubling), ", tags$code("× 2"),
             " (fix octave halving), ", tags$code("Delete"),

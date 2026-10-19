@@ -30,6 +30,58 @@ tg_interval_tiers <- function(tg_paths, max_read = 12) {
   sort(unique(nms))
 }
 
+#' Tier names across a set of TextGrids, read quickly
+#'
+#' Scans each file's text for tier headers instead of parsing it with
+#' `rPraat::tg.read()`, which takes tens of milliseconds per file, so it is fast
+#' enough to run over every TextGrid in a corpus. Reads Praat's long and short
+#' text formats, in UTF-8 or UTF-16 (with a byte-order mark). Files that cannot
+#' be read, or are in Praat's binary format, contribute no names.
+#'
+#' @param tg_paths Character vector of `.TextGrid` paths (NA / "" entries skipped).
+#' @return Character vector of unique tier names (interval and point tiers), in
+#'   the order first seen.
+#' @export
+tg_tier_names <- function(tg_paths) {
+  tg_paths <- unique(tg_paths[!is.na(tg_paths) & nzchar(tg_paths)])
+  nms <- character(0)
+  for (p in tg_paths) nms <- c(nms, tg_tier_names_one(p))
+  unique(nms)
+}
+
+tg_tier_names_one <- function(path) {
+  if (!file.exists(path)) return(character(0))
+  raw <- tryCatch(readBin(path, "raw", file.size(path)), error = function(e) raw(0))
+  if (length(raw) < 2) return(character(0))
+  bom <- function(...) length(raw) >= length(c(...)) &&
+    all(raw[seq_along(c(...))] == as.raw(c(...)))
+  txt <- tryCatch({
+    if (bom(0xff, 0xfe)) {
+      iconv(list(raw[-(1:2)]), "UTF-16LE", "UTF-8")
+    } else if (bom(0xfe, 0xff)) {
+      iconv(list(raw[-(1:2)]), "UTF-16BE", "UTF-8")
+    } else {
+      if (bom(0xef, 0xbb, 0xbf)) raw <- raw[-(1:3)]
+      s <- rawToChar(raw)
+      if (validUTF8(s)) { Encoding(s) <- "UTF-8"; s } else iconv(s, "latin1", "UTF-8")
+    }
+  }, error = function(e) NA_character_)
+  if (is.na(txt)) return(character(0))
+  lines <- strsplit(txt, "\r\n|\n|\r")[[1]]
+  unquote <- function(x) gsub('""', '"', x, fixed = TRUE)
+  # Long format: each tier header has a `name = "..."` line, and nothing else
+  # in the file does (intervals use `text =`, points `mark =`).
+  long <- '^\\s*name\\s*=\\s*"(.*)"\\s*$'
+  hit <- grepl(long, lines)
+  if (any(hit)) return(unquote(sub(long, "\\1", lines[hit])))
+  # Short format: the line after "IntervalTier" / "TextTier" holds the name.
+  k <- grep('^\\s*"(IntervalTier|TextTier)"\\s*$', lines)
+  k <- k[k < length(lines)]
+  short <- '^\\s*"(.*)"\\s*$'
+  nm <- lines[k + 1]
+  unquote(sub(short, "\\1", nm[grepl(short, nm)]))
+}
+
 #' Assign each time to its interval in a TextGrid interval tier
 #'
 #' @param times Numeric vector of frame times (seconds).

@@ -50,6 +50,7 @@ reference:
       named labels).
     contents:
       - tg_interval_tiers
+      - tg_tier_names
       - assign_tier_landmarks
       - attach_landmarks
       - filter_interval_rows

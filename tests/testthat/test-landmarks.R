@@ -203,3 +203,47 @@ test_that("di- and triphthongs match, including j/w offglide spellings", {
   expect_false(any(ipa_vowel_label(
     c("j", "w", "ɥ", "jw", "ang", "an", "ai n"))))
 })
+
+# ---------- tg_tier_names -----------------------------------------------------
+
+test_that("tg_tier_names reads long-format tier names, interval and point", {
+  skip_if_not_installed("rPraat")
+  tg <- rPraat::tg.createNewTextGrid(0, 0.8)
+  tg <- rPraat::tg.insertNewIntervalTier(tg, 1, "syllable")
+  tg <- rPraat::tg.insertNewPointTier(tg, 2, "tone_target")
+  f <- tempfile(fileext = ".TextGrid")
+  rPraat::tg.write(tg, f)                       # long format by default
+  expect_equal(tg_tier_names(f), c("syllable", "tone_target"))
+  # Names match a full parse.
+  expect_equal(tg_tier_names(f), unname(vapply(rPraat::tg.read(f), `[[`, "", "name")))
+})
+
+test_that("tg_tier_names reads the short format, UTF-16 and escaped quotes", {
+  short <- c('File type = "ooTextFile"', 'Object class = "TextGrid"', "",
+             "0", "0.8", "<exists>", "2",
+             '"IntervalTier"', '"say ""hi"""', "0", "0.8", "1", "0", "0.8", '""',
+             '"TextTier"', '"声调"', "0", "0.8", "0")
+  f1 <- tempfile(fileext = ".TextGrid")
+  writeLines(enc2utf8(short), f1, useBytes = TRUE)
+  expect_equal(tg_tier_names(f1), c('say "hi"', "声调"))
+
+  long <- c('File type = "ooTextFile"', 'Object class = "TextGrid"', "",
+            "xmin = 0", "xmax = 0.8", "tiers? <exists>", "size = 1", "item []:",
+            "    item [1]:", '        class = "IntervalTier"', '        name = "ségment"',
+            "        xmin = 0", "        xmax = 0.8", "        intervals: size = 1",
+            "        intervals [1]:", "            xmin = 0", "            xmax = 0.8",
+            '            text = "name = x"')
+  f2 <- tempfile(fileext = ".TextGrid")
+  con <- file(f2, "wb")
+  writeBin(as.raw(c(0xff, 0xfe)), con)
+  writeBin(iconv(paste(long, collapse = "\n"), "UTF-8", "UTF-16LE", toRaw = TRUE)[[1]], con)
+  close(con)
+  expect_equal(tg_tier_names(f2), "ségment")
+
+  expect_equal(tg_tier_names(c(f1, f2, f1, NA, "")),
+               c('say "hi"', "声调", "ségment"))
+})
+
+test_that("tg_tier_names skips unreadable files", {
+  expect_equal(tg_tier_names(c(tempfile(), NA, "")), character(0))
+})

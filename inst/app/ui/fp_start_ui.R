@@ -131,7 +131,7 @@ fp_start_ui <- function(input, output, session, fp_audio_data) {
                 "Optionally attaches metadata (upload CSV or derive from filename) and downloads a tidy result."),
         tags$li(HTML("&#128295; "),
                 tags$strong(style = "color: #78c2ad;", "F0 Correction"),
-                " Interactively review and correct extraction errors (octave jumps, halving, spurious frames, voiced/unvoiced boundaries).")
+                " Interactively review and correct extraction errors (octave jumps, halving, spurious frames, voiced/unvoiced boundaries), listening to any stretch of the recording or of its synthesised f0 contour.")
       ),
       tags$hr(),
 
