@@ -63,7 +63,7 @@ offer_bulk_triage <- function(n_tokens, n_flagged) {
 
 var_patterns <- list(
   token    = c("^token$", "^token", "^filename", "^basename", "^item$", "^segment", "^id$"),
-  f0       = c("^f0_st$", "^f0_zscore$", "^f0_norm", "^f0_hz$", "^f0$", "^f0_", "^pitch"),
+  f0       = c("^f0_st$", "^f0_zscore$", "^f0_lz$", "^f0_norm", "^f0_hz$", "^f0$", "^f0_", "^pitch"),
   time     = c("^time$", "^time", "^t$", "^timepoint", "^measurement"),
   speaker  = c("^speaker$", "^speaker", "^spk", "^subject", "^subj"),
   tone     = c("^tone$", "^tone", "^category", "^tonecat", "^label"),
@@ -139,7 +139,7 @@ guess_time_var <- function(vars, fallback_idx = 1) {
 # Pretty y-axis label for an f0 column. Maps the column *name* to a typeset
 # label with a subscript zero (f0 -> f₀):
 #   *_hz / raw f0 -> "f₀ (Hz)"        *_st / semitone -> "f₀ (semitone)"
-#   *_zscore       -> "normalised f₀"  other *_norm    -> "normalised f₀"
+#   *_zscore, *_lz -> "normalised f₀"  other *_norm    -> "normalised f₀"
 # Anything unrecognised falls back to the column name unchanged, so a custom
 # column still gets a sensible axis title. Shared by the Visualise and Curate
 # plots so both label the f0 axis consistently.
@@ -147,7 +147,7 @@ guess_time_var <- function(vars, fallback_idx = 1) {
 f0_axis_label <- function(col) {
   if (is.null(col) || !nzchar(col)) return("f₀")
   c0 <- tolower(col)
-  if (grepl("zscore|z[._-]?score", c0))    return("normalised f₀")
+  if (grepl("zscore|z[._-]?score|_lz$", c0)) return("normalised f₀")
   if (grepl("semitone|_st$|_st[._]", c0))  return("f₀ (st)")
   if (grepl("hz", c0))                     return("f₀ (Hz)")
   if (grepl("norm", c0))                   return("normalised f₀")

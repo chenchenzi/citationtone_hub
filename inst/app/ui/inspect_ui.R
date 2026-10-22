@@ -79,7 +79,7 @@ inspect_ui <- function(input, output, session, dataset, inspect_result = reactiv
                       input$dataset_name)),
         selectInput("inspect_f0_var", "Select f0 (Hz) variable:",
                     choices = setNames(vars, var_types),
-                    selected = guess_var(vars, var_patterns$f0, 1)),
+                    selected = guess_var(vars, c("^f0_hz$", "^f0$", var_patterns$f0), 1)),
         selectInput("inspect_token_var", "Select Token ID variable:",
                     choices = setNames(vars, var_types),
                     selected = guess_var(vars, var_patterns$token, 2)),

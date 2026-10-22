@@ -42,8 +42,8 @@ working on lexical tone production.
 - 🔍 **Inspect**: token-level outlier flags (by-speaker z-score) and
   sample-level artefact detection (octave jumps, rate-of-change
   violations, carryover frames; Steffman & Cole 2022).
-- 📏 **Normalise**: by-speaker semitone or z-score normalisation, with
-  simple or weighted speaker means.
+- 📏 **Normalise**: by-speaker semitone, z-score or log z-score (LZ)
+  normalisation, with simple or weighted speaker means.
 - 📈 **Visualise**: f0 contours coloured by tone, with optional
   faceting by speaker.
 - 📊 **Model**: per-token Legendre polynomials, growth-curve analysis

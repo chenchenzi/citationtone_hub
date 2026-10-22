@@ -283,7 +283,7 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
                     choices = stats::setNames(vars, var_types),
                     selected = guess_var(vars, var_patterns$f0, 2)),
         tags$div(style = "font-size: 0.72rem; color: #999; margin: -8px 0 10px 0;",
-                 "Defaults to your normalised f0 (e.g. semitones or z-score) when available."),
+                 "Defaults to your normalised f0 (e.g. semitones, z-score or log z-score) when available."),
         selectInput("curate_item_var", "Item / word variable (for facetting):",
                     choices = c("(none)" = "__none__", stats::setNames(vars, var_types)),
                     selected = item_default),

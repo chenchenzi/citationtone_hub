@@ -11,13 +11,19 @@ normalised_ui <- function(input, output, session, dataset, normalised_data) {
         ),
         tags$strong("Speaker mean methods:"),
         tags$ul(style = "margin-bottom: 8px; padding-left: 18px;",
-          tags$li(tags$strong("Simple average:"), " Mean f0 across all data points for each speaker. Fast and straightforward."),
-          tags$li(tags$strong(HTML("Equally weighted by tone &#128077;:")), " Compute per-tone means first, then average those. This better estimates the centre of a speaker's tonal space, giving each tone equal weight.")
+          tags$li(tags$strong("Simple average:"), " Mean (and, for z-scores, SD) over all data points for each speaker, as R\u2019s mean() and sd(). The classic z-score and LZ formulas."),
+          tags$li(tags$strong(HTML("Equally weighted by tone &#128077;:")), " Each tone counts once, however many tokens it has: the mean of the per-tone means, and for z-scores an SD weighted the same way, as R\u2019s cov.wt(). Same as simple when every tone has the same number of data points.")
         ),
         tags$strong("F0 normalisation methods:"),
         tags$ul(style = "margin-bottom: 8px; padding-left: 18px;",
-          tags$li(tags$strong("Z-score:"), " ", tags$code(style = "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;", "z = (f0 \u2212 \u03bc) / \u03c3"), " Centres f0 on 0 and scales by speaker variability."),
-          tags$li(tags$strong("Semitone:"), " ", tags$code(style = "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;", "ST = 12 \u00d7 log\u2082(f0 / \u03bc)"), " Converts Hz to a perceptually uniform scale referenced on each speaker's mean.")
+          tags$li(tags$strong("Semitone:"), " ", tags$code(style = "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;", "ST = 12 \u00d7 log\u2082(f0 / \u03bc)"), " Converts Hz to a perceptually uniform scale referenced on each speaker's mean. Keeps each speaker's own pitch range."),
+          tags$li(tags$strong("Z-score:"), " ", tags$code(style = "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;", "z = (f0 \u2212 \u03bc) / \u03c3"), " Centres f0 on 0 and scales by speaker variability, in Hz."),
+          tags$li(tags$strong("Log z-score (LZ):"), " ", tags$code(style = "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;", "LZ = (log\u2081\u2080 f0 \u2212 \u03bc) / \u03c3"), " A z-score of log\u2081\u2080 f0 (\u03bc, \u03c3 taken on log\u2081\u2080 f0): like semitones, but also evens out speakers' pitch ranges. Common in Chinese tone studies (Zhu 1999).")
+        ),
+        tags$strong("Bessel\u2019s correction (z-score and LZ only):"),
+        tags$ul(style = "margin-bottom: 8px; padding-left: 18px;",
+          tags$li(tags$strong("Corrected (default):"), " The sample SD, dividing by n \u2212 1, as R\u2019s sd() and the published formulas do (cov.wt(method = \"unbiased\") when equally weighted)."),
+          tags$li(tags$strong("Uncorrected:"), " The population SD, dividing by n (cov.wt(method = \"ML\") when equally weighted). The difference is negligible unless a tone has only a few data points.")
         )
       ),
         # --- Collapsible illustrated guide, shown below the green guide ---
@@ -77,7 +83,9 @@ normalised_ui <- function(input, output, session, dataset, normalised_data) {
                       input$dataset_name)),
         selectInput("f0_var", "Select f0 (Hz) variable:",
                     choices = setNames(vars, var_types),
-                    selected = guess_var(vars, var_patterns$f0, 1), multiple = FALSE),
+                    # Hz first: a re-uploaded normalised file also has f0_st / f0_lz.
+                    selected = guess_var(vars, c("^f0_hz$", "^f0$", var_patterns$f0), 1),
+                    multiple = FALSE),
         selectInput("speaker_var", "Select Speaker variable:",
                     choices = setNames(vars, var_types),
                     selected = guess_var(vars, var_patterns$speaker, 2), multiple = FALSE),
@@ -92,8 +100,12 @@ normalised_ui <- function(input, output, session, dataset, normalised_data) {
         tags$hr(),
         radioButtons("normalisation_method", "F0 Normalisation Options",
                      choices = list("Semitone referenced on speaker mean" = "semitone",
-                                    "By-speaker Z-score" = "zscore"),
+                                    "By-speaker Z-score" = "zscore",
+                                    "By-speaker log Z-score (LZ)" = "lz"),
                      selected = "semitone"),
+        # Semitones use no SD, so the correction only shows for the z-scores.
+        conditionalPanel("input.normalisation_method != 'semitone'",
+          checkboxInput("sd_correction", "Bessel\u2019s correction for the SD (n \u2212 1)", value = TRUE)),
         tags$hr(),
         # Pointer to the illustrated time-normalisation guide on the right.
         tags$div(style = "color:#888; font-size:0.72rem; margin:0 0 4px;",
@@ -178,7 +190,8 @@ normalised_ui <- function(input, output, session, dataset, normalised_data) {
           speaker     = input$speaker_var,
           tone        = input$tone_var,
           method      = input$normalisation_method,
-          mean_method = input$mean_calc_method
+          mean_method = input$mean_calc_method,
+          sd_correction = !isFALSE(input$sd_correction)
         )
         f0_ok <- TRUE
         d
@@ -215,7 +228,8 @@ normalised_ui <- function(input, output, session, dataset, normalised_data) {
     normalised_data(data)
 
     # Display subset: f0 columns (when produced) + any time-normalisation columns.
-    norm_col <- if (input$normalisation_method == "zscore") "f0_zscore" else "f0_st"
+    norm_col <- switch(input$normalisation_method,
+                       zscore = "f0_zscore", lz = "f0_lz", "f0_st")
     keep <- c(input$f0_var, input$speaker_var, input$tone_var,
               if (f0_ok) c("speaker_mean", norm_col),
               if (length(time_cols) > 0) c(time_ctx, time_cols))

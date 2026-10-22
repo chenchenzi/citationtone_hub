@@ -29,7 +29,7 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
         tags$ul(style = "margin-bottom: 0; padding-left: 18px;",
           tags$li(tags$strong("Data source:"), " Use the uploaded (raw) dataset or the normalised dataset (available after using the Normalise tab)."),
           tags$li(tags$strong("X (time):"), " A time-related or index variable, e.g., normalised time points within a syllable."),
-          tags$li(tags$strong("Y (f0):"), " An f0-related variable, e.g., raw Hz or normalised (z-score, semitone)."),
+          tags$li(tags$strong("Y (f0):"), " An f0-related variable, e.g., raw Hz or normalised (semitone, z-score, log z-score)."),
           tags$li(tags$strong("Tone category:"), " The column labelling tone types (e.g., T1, T2, T3, T4)."),
           tags$li(tags$strong("Speaker* (optional):"), " A speaker ID column, used for faceting."),
           tags$li(tags$strong("Align time by landmark (optional):"),

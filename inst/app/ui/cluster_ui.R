@@ -32,7 +32,7 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
   f0_axis_label <- function(v) {
     v <- tolower(v %||% "")
     if (grepl("semitone|_st$|_st[^a-z]", v))        "mean f₀ (st)"
-    else if (grepl("zscore|z[._-]?score|norm", v))  "mean f₀ (normalised)"
+    else if (grepl("zscore|z[._-]?score|_lz$|norm", v)) "mean f₀ (normalised)"
     else if (grepl("(^|[^a-z])hz", v))              "mean f₀ (Hz)"
     else                                            "mean f₀"
   }
@@ -87,7 +87,7 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
         "of categories. This is a <strong>hypothesis generator</strong> (Kaland, 2023a),",
         "not a verdict: clusters can reflect speaker, syllable structure, or recording effects",
         "as well as tone, so confirm the result with linguistic analysis.",
-        "Cluster speaker-normalised f0 (semitone or z-score, from the <strong>Normalise</strong> tab):",
+        "Cluster speaker-normalised f0 (semitone, z-score or log z-score, from the <strong>Normalise</strong> tab):",
         "on raw Hz, clusters tend to separate speakers by pitch range rather than tones."))),
       tags$p(style = "margin: 4px 0 2px 0; font-size:0.85rem; color:#444; font-weight:700;",
              "What you do here"),
@@ -469,7 +469,7 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
     msg <- if (has_norm)
       "A normalised dataset is available. Select \"Normalised data\" above so clusters reflect tone shape, not each speaker's pitch range."
     else
-      "Tip: cluster speaker-normalised f0 (Normalise tab, semitone or z-score). On raw Hz, clusters often just separate speakers by pitch range."
+      "Tip: cluster speaker-normalised f0 (Normalise tab, semitone, z-score or log z-score). On raw Hz, clusters often just separate speakers by pitch range."
     tags$div(style = "background:#fff8e1; border-left:4px solid #e0a800; padding:6px 11px; border-radius:5px; font-size:0.82rem; color:#8a6d00; margin-bottom:10px;",
       HTML("&#9888; "), msg)
   })

@@ -76,8 +76,9 @@ See `?sample_f0` for the full schema and source citation.
 ## Normalise f0 by speaker
 
 Raw Hz isn't comparable across speakers (men and women have very different
-baseline f0). `normalise_f0()` adds a `speaker_mean` column plus either
-`f0_st` (semitones, default) or `f0_zscore`, computed per speaker:
+baseline f0). `normalise_f0()` adds a `speaker_mean` column plus one of
+`f0_st` (semitones, default), `f0_zscore` or `f0_lz` (log z-score, common
+in studies of Chinese tone), computed per speaker:
 
 ```{r}
 normed <- normalise_f0(sample_f0,

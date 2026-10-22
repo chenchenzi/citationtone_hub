@@ -9,8 +9,9 @@ normalise_f0(
   f0 = "f0",
   speaker = "speaker",
   tone = "tone",
-  method = c("semitone", "zscore"),
-  mean_method = c("weighted", "simple")
+  method = c("semitone", "zscore", "lz"),
+  mean_method = c("weighted", "simple"),
+  sd_correction = TRUE
 )
 }
 \arguments{
@@ -30,20 +31,36 @@ read when \code{mean_method = "weighted"}.}
 \item \code{"semitone"} (default): \code{ST = 12 * log2(f0 / speaker_mean)}.
 Result is 0 at the speaker mean and ±12 at one octave above or
 below.
-\item \code{"zscore"}: \code{Z = (f0 - speaker_mean) / sd(speaker_f0)}. Result has
-mean approximately 0 and SD approximately 1 within each speaker.
-}}
+\item \code{"zscore"}: \code{Z = (f0 - speaker_mean) / s}, where \code{s} is the
+speaker's SD of f0.
+\item \code{"lz"}: \code{LZ = (log10(f0) - m) / s}, where \code{m} and \code{s} are the
+speaker's mean and SD of log10 f0, as in Zhu (1999). Any base gives
+the same LZ, since it only rescales the logs.
+}
 
-\item{mean_method}{How the per-speaker mean used by \code{method} is
-computed: \code{"weighted"} (default; mean of per-tone means) or
-\code{"simple"} (arithmetic mean across all observations).}
+With \code{mean_method = "simple"} both z-scores have mean 0 and SD 1
+within each speaker (SD 1 as measured with the same \code{sd_correction}).
+With \code{"weighted"} the same holds with every tone counting equally:
+the per-tone means average to 0, while the plain mean over all
+observations moves away from 0 when tones have unequal numbers of
+observations.}
+
+\item{mean_method}{How the per-speaker mean, and the SD for the
+z-scores, are computed: \code{"weighted"} (default; every tone counts
+equally) or \code{"simple"} (all observations alike; the classic formula).}
+
+\item{sd_correction}{Logical: apply Bessel's correction to the SD.
+\code{TRUE} (default) uses the corrected (sample) SD, dividing by n - 1;
+\code{FALSE} the uncorrected (population) SD, dividing by n. Only affects \code{"zscore"} and
+\code{"lz"}. See "The SD correction" below.}
 }
 \value{
 The input data frame with two added columns:
 \itemize{
-\item \code{speaker_mean}: the per-speaker mean used for normalisation.
-\item \code{f0_st} (if \code{method = "semitone"}) or \code{f0_zscore} (if
-\code{method = "zscore"}).
+\item \code{speaker_mean}: the per-speaker mean used for normalisation, in Hz.
+For \code{"lz"} this is the geometric mean, \code{10^m}.
+\item \code{f0_st} (if \code{method = "semitone"}), \code{f0_zscore} (if
+\code{method = "zscore"}) or \code{f0_lz} (if \code{method = "lz"}).
 }
 }
 \description{
@@ -53,18 +70,21 @@ speakers on a comparable scale, and is a near-universal pre-processing
 step before cross-speaker tone modelling, plotting, or contour
 summarisation (Rose 1987; Zhu 1999).
 
-Two formulae are available. Semitones above or below the speaker's
+Three formulae are available. Semitones above or below the speaker's
 mean give a perceptually uniform scale. By-speaker z-scores combine
-centring with unit-variance scaling. Both formulae rely on a
-per-speaker mean of f0, which can itself be computed in two ways:
-a simple arithmetic mean of all observations, or a mean of per-tone
-means so that every tone contributes equally to the speaker's centre.
+centring with unit-variance scaling. Log z-scores (LZ) do both on a
+logarithmic scale: they are z-scores of log f0. Every formula relies on a
+per-speaker mean (and the z-scores on a per-speaker SD), which can be
+computed in two ways: over all observations alike, or so that every tone
+contributes equally whatever its number of tokens.
 }
 \details{
 \subsection{What the function does internally}{
 \enumerate{
-\item Compute a per-speaker mean of \code{f0} using \code{mean_method} (see below).
-\item Join that mean back to \code{data} as a new column called \code{speaker_mean}.
+\item Compute a per-speaker mean of \code{f0} (of log f0 for \code{"lz"}) using
+\code{mean_method}, and for the z-scores a per-speaker SD the same way
+(see below).
+\item Add that mean to \code{data} as a new column called \code{speaker_mean}.
 \item Apply the selected normalisation formula sample by sample and
 return the augmented data frame.
 }
@@ -80,27 +100,67 @@ logarithmic structure of musical pitch perception.
 i.e., when you want to remove each speaker's baseline \emph{and} equalise
 their f0 variability. Useful for cross-speaker statistical models
 where the raw variance differs strongly across speakers.
+\item \code{"lz"} (log z-score) is the z-score of log f0 (Zhu 1999). Like
+semitones it works on ratios, so the same interval counts the same in
+a low and a high voice; like \code{"zscore"} it also divides by each
+speaker's spread, so speakers with narrow and wide pitch ranges end up
+on one scale. It equals semitones measured from the speaker's
+geometric mean (the \code{speaker_mean} that \code{"lz"} reports) divided by
+the speaker's SD in semitones. \code{f0_st} is measured from the arithmetic
+mean instead: with \code{mean_method = "simple"}, \code{f0_st / sd(f0_st)} has
+the same shape as LZ, shifted by a small per-speaker constant; with
+\code{"weighted"}, LZ also divides by the tone-weighted SD, so the two
+differ slightly in scale as well. It is the usual "z-score" in studies
+of tone in languages of China: 37 of the 136 studies reviewed by Xu
+and Zhang (2024) used it, against 4 that used a plain z-score.
+Because it equalises
+ranges, prefer semitones when differences in range are themselves of
+interest (e.g. comparing the size of tone spaces across speakers or
+varieties).
 }
 }
 
 \subsection{Choosing \code{mean_method}}{
 \itemize{
-\item \code{"weighted"} (default) first computes a mean f0 per (speaker, tone)
-cell, then averages those per-tone means. Each tone contributes
-equally to the speaker's centre regardless of how many tokens it
-has. This is the right default for unbalanced designs in which
-token counts differ across tones, common in fieldwork and
-naturalistic corpora.
-\item \code{"simple"} takes the arithmetic mean of every f0 observation for a
-speaker. Faster, and equivalent to weighted when the design is
-balanced.
+\item \code{"weighted"} (default) lets every tone count once, regardless of how
+many tokens it has. The centre is the mean of the per-tone means. For
+the z-scores the SD is weighted the same way: each observation gets
+weight 1 / (number of tones x observations of its tone), as in
+\code{\link[stats:cov.wt]{stats::cov.wt()}}. This is the right default for unbalanced designs
+in which token counts differ across tones, common in fieldwork and
+naturalistic corpora. It is this package's tone-balanced variant.
+\item \code{"simple"} takes the mean (and SD) of every observation for a speaker.
+This is the classic formula: Rose's (1987) z-score and Zhu's (1999)
+LZ. Choose it to reproduce published values.
 }
+
+The two give identical results when every tone has the same number of
+observations.
+}
+
+\subsection{The SD correction}{
+
+With \code{sd_correction = TRUE} (default) the z-scores use the corrected
+(sample) SD, dividing by n - 1 (Bessel's correction) as \code{\link[stats:sd]{stats::sd()}} and
+the published formulas do; with
+\code{"weighted"} this is the reliability-weights correction of
+\code{stats::cov.wt(method = "unbiased")}, which reduces to n - 1 when every
+tone has the same number of observations. \code{FALSE} gives the uncorrected
+(population) SD, dividing by n. With \code{"simple"}, or equal numbers of
+observations per tone, the two differ by a factor of sqrt(n / (n - 1)),
+negligible for a speaker with hundreds of observations. With
+\code{"weighted"} the factor is 1 / sqrt(1 - sum(w^2)), which is set mostly by
+the tone with the fewest observations: a tone with only a few frames
+can make it several percent. Semitones use no SD, so the argument does
+not affect them.
 }
 
 \subsection{NA handling}{
 
 All summary statistics use \code{na.rm = TRUE}. Sample-level \code{NA} f0
-values propagate as \code{NA} in the normalised column.
+values propagate as \code{NA} in the normalised column. For \code{"lz"}, f0
+values of 0 or below (sometimes used to mark unvoiced frames) have no
+logarithm, so they are treated as \code{NA} too.
 }
 }
 \examples{
@@ -120,6 +180,14 @@ out_z <- normalise_f0(sample_f0,
                       tone    = "tone",
                       method  = "zscore")
 head(out_z[, c("speaker", "f0_Hz", "speaker_mean", "f0_zscore")])
+
+# Log z-score (LZ), common in studies of Chinese tone:
+out_lz <- normalise_f0(sample_f0,
+                       f0      = "f0_Hz",
+                       speaker = "speaker",
+                       tone    = "tone",
+                       method  = "lz")
+head(out_lz[, c("speaker", "f0_Hz", "speaker_mean", "f0_lz")])
 
 }
 \references{

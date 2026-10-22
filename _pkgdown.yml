@@ -32,7 +32,7 @@ reference:
 
   - title: Normalisation
     desc: >
-      By-speaker semitone or z-score f0 normalisation, plus landmark-based
+      By-speaker semitone, z-score or log z-score (LZ) f0 normalisation, plus landmark-based
       time normalisation for multisyllabic words and auto-detection of
       time columns that are already on a [0, 1] scale.
     contents:
