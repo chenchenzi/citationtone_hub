@@ -1,5 +1,14 @@
 # shinytone (development version)
 
+* **About: "Shinytone in numbers".** A new section at the bottom of the About
+  page shows the project's GitHub stars, as a line built from the date of
+  each star, and the views and downloads of the Zenodo archive. A daily
+  GitHub Action (`.github/workflows/usage-stats.yaml`) collects these public
+  figures into `usage.json` on the `usage-data` branch, and the app's server
+  reads that file (cached for 6 hours), so the page never waits on it, new
+  figures appear without redeploying, and visitors' browsers do not contact
+  GitHub or Zenodo. Zenodo reports only running totals, so its line starts
+  on the first day of recording.
 * **Normalise: log z-score (LZ) option.** `normalise_f0(method = "lz")`, and
   "By-speaker log Z-score (LZ)" in the Normalise tab, add an `f0_lz` column:
   the z-score of log10 f0, `(log10 f0 - mean) / sd` with the speaker's mean

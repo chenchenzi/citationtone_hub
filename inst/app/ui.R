@@ -540,7 +540,7 @@ ui <- fluidPage(
                            the Shinytone navbar + sticky TOC when jumped to. */
                         #about-sec-terminology, #about-sec-features,
                         #about-sec-workflows, #about-sec-faq,
-                        #about-sec-rpackage {
+                        #about-sec-rpackage, #about-sec-numbers {
                           scroll-margin-top: 130px;
                         }
                         html { scroll-behavior: smooth; }
@@ -848,7 +848,9 @@ ui <- fluidPage(
                         tags$span(class = "sep", " · "),
                         tags$a(href = "#about-sec-rpackage",     "R package"),
                         tags$span(class = "sep", " · "),
-                        tags$a(href = "#about-sec-faq",          "FAQ")
+                        tags$a(href = "#about-sec-faq",          "FAQ"),
+                        tags$span(class = "sep", " · "),
+                        tags$a(href = "#about-sec-numbers",      "In numbers")
                       ),
 
                       # --- Section break + landing heading ---
@@ -1736,6 +1738,17 @@ ui <- fluidPage(
                             tags$p(tags$strong("I found a bug or have a feature request.")),
                             tags$p("Please open an issue on the ", tags$a(href = "https://github.com/chenchenzi/citationtone_hub/issues", target = "_blank", "GitHub repository"), ".")
                           )
+                        ),
+
+                        # --- Shinytone in numbers (filled in by about_usage_ui) ---
+                        tags$div(id = "about-sec-numbers",
+                          style = "margin: 56px auto 0 auto; text-align: center;",
+                          tags$div(style = "width: 56px; height: 3px; background: #78c2ad; margin: 0 auto 24px auto; border-radius: 2px;"),
+                          tags$h2(style = "color: #2c5f4f; margin: 0 0 8px 0; font-weight: 700;",
+                                  "Shinytone in numbers"),
+                          tags$p(style = "color: #777; font-size: 0.95rem; margin: 0 0 16px 0;",
+                                 "GitHub stars and the Zenodo archive, updated daily."),
+                          uiOutput("about_usage")
                         ),
 
                         # --- Footer ---

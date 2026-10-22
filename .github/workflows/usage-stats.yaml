@@ -1,0 +1,57 @@
+# Collects the public figures shown under "Shinytone in numbers" on the app's
+# About page (GitHub stars with their dates; Zenodo views and downloads) once
+# a day, and commits them as usage.json to the `usage-data` branch, which is
+# created on the first run. The app reads that file, so new figures appear
+# without redeploying. Only public data is collected; the built-in
+# GITHUB_TOKEN is enough (listing stargazers with dates needs a token).
+
+on:
+  schedule:
+    - cron: "17 3 * * *"   # daily, 03:17 UTC
+  workflow_dispatch:
+
+name: usage-stats.yaml
+
+permissions: read-all
+
+# A manual run during the scheduled one waits rather than racing its push.
+concurrency:
+  group: usage-stats
+  cancel-in-progress: false
+
+jobs:
+  usage-stats:
+    if: github.repository == 'chenchenzi/citationtone_hub'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # Not "data/": that is the package's own data folder.
+      - name: Check out the usage-data branch (created on the first run)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git ls-remote --exit-code --heads origin usage-data > /dev/null; then
+            git fetch --no-tags --depth=1 origin usage-data:usage-data
+            git worktree add usage-branch usage-data
+          else
+            git worktree add --orphan -b usage-data usage-branch
+          fi
+
+      - name: Collect figures
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 .github/scripts/usage_stats.py usage-branch/usage.json
+
+      - name: Commit if changed
+        working-directory: usage-branch
+        run: |
+          git add usage.json
+          if git diff --cached --quiet; then
+            echo "No change."
+          else
+            git commit -m "Usage figures $(date -u +%Y-%m-%d)"
+            git push origin usage-data
+          fi

@@ -14,8 +14,10 @@
 #' `run_app()` quietly checks the package repository for a newer shinytone
 #' release (2-second timeout; skipped silently when offline). If one exists, a
 #' reminder with the update command is printed to the console and shown once
-#' inside the app. Disable the check with
-#' `options(shinytone.check_updates = FALSE)`.
+#' inside the app. The About page's "Shinytone in numbers" section also
+#' reads a small file of public figures (GitHub stars, Zenodo views and
+#' downloads) from the repository, with a 5-second timeout. Turn off both
+#' requests with `options(shinytone.check_updates = FALSE)`.
 #'
 #' @return Does not return; runs until the app is stopped.
 #'

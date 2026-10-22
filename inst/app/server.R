@@ -39,6 +39,7 @@ source("ui/fp_start_ui.R")
 source("ui/fp_extraction_ui.R")
 source("ui/fp_correction_ui.R")
 source("ui/fp_praat_script_ui.R")
+source("ui/about_usage_ui.R")
 options(shiny.maxRequestSize = 100 * 1024^2)  # 100 MB cap for batch WAV uploads
 #options(shiny.useragg = TRUE)
 
@@ -228,6 +229,7 @@ server <- function(input, output, session) {
   fp_metadata         <- reactiveVal(NULL)   # optional user-uploaded metadata CSV (data.frame). Joined to fp_f0_data at download time on a filename column the user selects.
 
   # Call the Start tab UI and server logic (start_ui function)
+  about_usage_ui(input, output, session)
   start_ui(input, output, session, dataset, raw_dataset, attached_metadata, duration_specs)
   view_ui(input, output, session, dataset)
   normalised_ui(input, output, session, dataset, normalised_data)
