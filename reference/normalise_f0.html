@@ -4,22 +4,24 @@ frame. Speaker normalisation puts contours from male and female
 speakers on a comparable scale, and is a near-universal pre-processing
 step before cross-speaker tone modelling, plotting, or contour
 summarisation (Rose 1987; Zhu 1999).
-Two formulae are available. Semitones above or below the speaker's
+Three formulae are available. Semitones above or below the speaker's
 mean give a perceptually uniform scale. By-speaker z-scores combine
-centring with unit-variance scaling. Both formulae rely on a
-per-speaker mean of f0, which can itself be computed in two ways:
-a simple arithmetic mean of all observations, or a mean of per-tone
-means so that every tone contributes equally to the speaker's centre."><meta property="og:description" content="Adds a within-speaker normalised f0 column to a long-format f0 data
+centring with unit-variance scaling. Log z-scores (LZ) do both on a
+logarithmic scale: they are z-scores of log f0. Every formula relies on a
+per-speaker mean (and the z-scores on a per-speaker SD), which can be
+computed in two ways: over all observations alike, or so that every tone
+contributes equally whatever its number of tokens."><meta property="og:description" content="Adds a within-speaker normalised f0 column to a long-format f0 data
 frame. Speaker normalisation puts contours from male and female
 speakers on a comparable scale, and is a near-universal pre-processing
 step before cross-speaker tone modelling, plotting, or contour
 summarisation (Rose 1987; Zhu 1999).
-Two formulae are available. Semitones above or below the speaker's
+Three formulae are available. Semitones above or below the speaker's
 mean give a perceptually uniform scale. By-speaker z-scores combine
-centring with unit-variance scaling. Both formulae rely on a
-per-speaker mean of f0, which can itself be computed in two ways:
-a simple arithmetic mean of all observations, or a mean of per-tone
-means so that every tone contributes equally to the speaker's centre."><meta property="og:image" content="https://chenchenzi.github.io/citationtone_hub/logo.png"></head><body>
+centring with unit-variance scaling. Log z-scores (LZ) do both on a
+logarithmic scale: they are z-scores of log f0. Every formula relies on a
+per-speaker mean (and the z-scores on a per-speaker SD), which can be
+computed in two ways: over all observations alike, or so that every tone
+contributes equally whatever its number of tokens."><meta property="og:image" content="https://chenchenzi.github.io/citationtone_hub/logo.png"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -66,12 +68,13 @@ frame. Speaker normalisation puts contours from male and female
 speakers on a comparable scale, and is a near-universal pre-processing
 step before cross-speaker tone modelling, plotting, or contour
 summarisation (Rose 1987; Zhu 1999).</p>
-<p>Two formulae are available. Semitones above or below the speaker's
+<p>Three formulae are available. Semitones above or below the speaker's
 mean give a perceptually uniform scale. By-speaker z-scores combine
-centring with unit-variance scaling. Both formulae rely on a
-per-speaker mean of f0, which can itself be computed in two ways:
-a simple arithmetic mean of all observations, or a mean of per-tone
-means so that every tone contributes equally to the speaker's centre.</p>
+centring with unit-variance scaling. Log z-scores (LZ) do both on a
+logarithmic scale: they are z-scores of log f0. Every formula relies on a
+per-speaker mean (and the z-scores on a per-speaker SD), which can be
+computed in two ways: over all observations alike, or so that every tone
+contributes equally whatever its number of tokens.</p>
     </div>
 
     <div class="section level2">
@@ -81,8 +84,9 @@ means so that every tone contributes equally to the speaker's centre.</p>
 <span>  f0 <span class="op">=</span> <span class="st">"f0"</span>,</span>
 <span>  speaker <span class="op">=</span> <span class="st">"speaker"</span>,</span>
 <span>  tone <span class="op">=</span> <span class="st">"tone"</span>,</span>
-<span>  method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"semitone"</span>, <span class="st">"zscore"</span><span class="op">)</span>,</span>
-<span>  mean_method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"weighted"</span>, <span class="st">"simple"</span><span class="op">)</span></span>
+<span>  method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"semitone"</span>, <span class="st">"zscore"</span>, <span class="st">"lz"</span><span class="op">)</span>,</span>
+<span>  mean_method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"weighted"</span>, <span class="st">"simple"</span><span class="op">)</span>,</span>
+<span>  sd_correction <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -113,22 +117,38 @@ read when <code>mean_method = "weighted"</code>.</p></dd>
 <dd><p>Normalisation formula. One of:</p><ul><li><p><code>"semitone"</code> (default): <code>ST = 12 * log2(f0 / speaker_mean)</code>.
 Result is 0 at the speaker mean and ±12 at one octave above or
 below.</p></li>
-<li><p><code>"zscore"</code>: <code>Z = (f0 - speaker_mean) / sd(speaker_f0)</code>. Result has
-mean approximately 0 and SD approximately 1 within each speaker.</p></li>
-</ul></dd>
+<li><p><code>"zscore"</code>: <code>Z = (f0 - speaker_mean) / s</code>, where <code>s</code> is the
+speaker's SD of f0.</p></li>
+<li><p><code>"lz"</code>: <code>LZ = (log10(f0) - m) / s</code>, where <code>m</code> and <code>s</code> are the
+speaker's mean and SD of log10 f0, as in Zhu (1999). Any base gives
+the same LZ, since it only rescales the logs.</p></li>
+</ul><p>With <code>mean_method = "simple"</code> both z-scores have mean 0 and SD 1
+within each speaker (SD 1 as measured with the same <code>sd_correction</code>).
+With <code>"weighted"</code> the same holds with every tone counting equally:
+the per-tone means average to 0, while the plain mean over all
+observations moves away from 0 when tones have unequal numbers of
+observations.</p></dd>
 
 
 <dt id="arg-mean-method">mean_method<a class="anchor" aria-label="anchor" href="#arg-mean-method"></a></dt>
-<dd><p>How the per-speaker mean used by <code>method</code> is
-computed: <code>"weighted"</code> (default; mean of per-tone means) or
-<code>"simple"</code> (arithmetic mean across all observations).</p></dd>
+<dd><p>How the per-speaker mean, and the SD for the
+z-scores, are computed: <code>"weighted"</code> (default; every tone counts
+equally) or <code>"simple"</code> (all observations alike; the classic formula).</p></dd>
+
+
+<dt id="arg-sd-correction">sd_correction<a class="anchor" aria-label="anchor" href="#arg-sd-correction"></a></dt>
+<dd><p>Logical: apply Bessel's correction to the SD.
+<code>TRUE</code> (default) uses the corrected (sample) SD, dividing by n - 1;
+<code>FALSE</code> the uncorrected (population) SD, dividing by n. Only affects <code>"zscore"</code> and
+<code>"lz"</code>. See "The SD correction" below.</p></dd>
 
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>The input data frame with two added columns:</p><ul><li><p><code>speaker_mean</code>: the per-speaker mean used for normalisation.</p></li>
-<li><p><code>f0_st</code> (if <code>method = "semitone"</code>) or <code>f0_zscore</code> (if
-<code>method = "zscore"</code>).</p></li>
+    <p>The input data frame with two added columns:</p><ul><li><p><code>speaker_mean</code>: the per-speaker mean used for normalisation, in Hz.
+For <code>"lz"</code> this is the geometric mean, <code>10^m</code>.</p></li>
+<li><p><code>f0_st</code> (if <code>method = "semitone"</code>), <code>f0_zscore</code> (if
+<code>method = "zscore"</code>) or <code>f0_lz</code> (if <code>method = "lz"</code>).</p></li>
 </ul></div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -136,8 +156,10 @@ computed: <code>"weighted"</code> (default; mean of per-tone means) or
 <div class="section">
 <h3 id="what-the-function-does-internally">What the function does internally<a class="anchor" aria-label="anchor" href="#what-the-function-does-internally"></a></h3>
 
-<ol><li><p>Compute a per-speaker mean of <code>f0</code> using <code>mean_method</code> (see below).</p></li>
-<li><p>Join that mean back to <code>data</code> as a new column called <code>speaker_mean</code>.</p></li>
+<ol><li><p>Compute a per-speaker mean of <code>f0</code> (of log f0 for <code>"lz"</code>) using
+<code>mean_method</code>, and for the z-scores a per-speaker SD the same way
+(see below).</p></li>
+<li><p>Add that mean to <code>data</code> as a new column called <code>speaker_mean</code>.</p></li>
 <li><p>Apply the selected normalisation formula sample by sample and
 return the augmented data frame.</p></li>
 </ol></div>
@@ -153,28 +175,69 @@ logarithmic structure of musical pitch perception.</p></li>
 i.e., when you want to remove each speaker's baseline <em>and</em> equalise
 their f0 variability. Useful for cross-speaker statistical models
 where the raw variance differs strongly across speakers.</p></li>
+<li><p><code>"lz"</code> (log z-score) is the z-score of log f0 (Zhu 1999). Like
+semitones it works on ratios, so the same interval counts the same in
+a low and a high voice; like <code>"zscore"</code> it also divides by each
+speaker's spread, so speakers with narrow and wide pitch ranges end up
+on one scale. It equals semitones measured from the speaker's
+geometric mean (the <code>speaker_mean</code> that <code>"lz"</code> reports) divided by
+the speaker's SD in semitones. <code>f0_st</code> is measured from the arithmetic
+mean instead: with <code>mean_method = "simple"</code>, <code>f0_st / sd(f0_st)</code> has
+the same shape as LZ, shifted by a small per-speaker constant; with
+<code>"weighted"</code>, LZ also divides by the tone-weighted SD, so the two
+differ slightly in scale as well. It is the usual "z-score" in studies
+of tone in languages of China: 37 of the 136 studies reviewed by Xu
+and Zhang (2024) used it, against 4 that used a plain z-score.
+Because it equalises
+ranges, prefer semitones when differences in range are themselves of
+interest (e.g. comparing the size of tone spaces across speakers or
+varieties).</p></li>
 </ul></div>
 
 <div class="section">
 <h3 id="choosing-mean-method">Choosing <code>mean_method</code><a class="anchor" aria-label="anchor" href="#choosing-mean-method"></a></h3>
 
-<ul><li><p><code>"weighted"</code> (default) first computes a mean f0 per (speaker, tone)
-cell, then averages those per-tone means. Each tone contributes
-equally to the speaker's centre regardless of how many tokens it
-has. This is the right default for unbalanced designs in which
-token counts differ across tones, common in fieldwork and
-naturalistic corpora.</p></li>
-<li><p><code>"simple"</code> takes the arithmetic mean of every f0 observation for a
-speaker. Faster, and equivalent to weighted when the design is
-balanced.</p></li>
-</ul></div>
+<ul><li><p><code>"weighted"</code> (default) lets every tone count once, regardless of how
+many tokens it has. The centre is the mean of the per-tone means. For
+the z-scores the SD is weighted the same way: each observation gets
+weight 1 / (number of tones x observations of its tone), as in
+<code><a href="https://rdrr.io/r/stats/cov.wt.html" class="external-link">stats::cov.wt()</a></code>. This is the right default for unbalanced designs
+in which token counts differ across tones, common in fieldwork and
+naturalistic corpora. It is this package's tone-balanced variant.</p></li>
+<li><p><code>"simple"</code> takes the mean (and SD) of every observation for a speaker.
+This is the classic formula: Rose's (1987) z-score and Zhu's (1999)
+LZ. Choose it to reproduce published values.</p></li>
+</ul><p>The two give identical results when every tone has the same number of
+observations.</p>
+</div>
+
+<div class="section">
+<h3 id="the-sd-correction">The SD correction<a class="anchor" aria-label="anchor" href="#the-sd-correction"></a></h3>
+
+
+<p>With <code>sd_correction = TRUE</code> (default) the z-scores use the corrected
+(sample) SD, dividing by n - 1 (Bessel's correction) as <code><a href="https://rdrr.io/r/stats/sd.html" class="external-link">stats::sd()</a></code> and
+the published formulas do; with
+<code>"weighted"</code> this is the reliability-weights correction of
+<code>stats::cov.wt(method = "unbiased")</code>, which reduces to n - 1 when every
+tone has the same number of observations. <code>FALSE</code> gives the uncorrected
+(population) SD, dividing by n. With <code>"simple"</code>, or equal numbers of
+observations per tone, the two differ by a factor of sqrt(n / (n - 1)),
+negligible for a speaker with hundreds of observations. With
+<code>"weighted"</code> the factor is 1 / sqrt(1 - sum(w^2)), which is set mostly by
+the tone with the fewest observations: a tone with only a few frames
+can make it several percent. Semitones use no SD, so the argument does
+not affect them.</p>
+</div>
 
 <div class="section">
 <h3 id="na-handling">NA handling<a class="anchor" aria-label="anchor" href="#na-handling"></a></h3>
 
 
 <p>All summary statistics use <code>na.rm = TRUE</code>. Sample-level <code>NA</code> f0
-values propagate as <code>NA</code> in the normalised column.</p>
+values propagate as <code>NA</code> in the normalised column. For <code>"lz"</code>, f0
+values of 0 or below (sometimes used to mark unvoiced frames) have no
+logarithm, so they are treated as <code>NA</code> too.</p>
 </div>
 
     </div>
@@ -224,15 +287,28 @@ numerals, often called on <code>normalise_f0()</code> output.</p></li>
 <span class="r-in"><span>                      tone    <span class="op">=</span> <span class="st">"tone"</span>,</span></span>
 <span class="r-in"><span>                      method  <span class="op">=</span> <span class="st">"zscore"</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">out_z</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"speaker"</span>, <span class="st">"f0_Hz"</span>, <span class="st">"speaker_mean"</span>, <span class="st">"f0_zscore"</span><span class="op">)</span><span class="op">]</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># A tibble: 6 × 4</span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   speaker f0_Hz speaker_mean f0_zscore</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span>        <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span>     <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">1</span> dc102    246.         237.     0.194</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">2</span> dc102    246.         237.     0.210</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">3</span> dc102    248.         237.     0.234</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">4</span> dc102    249.         237.     0.257</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">5</span> dc102    250.         237.     0.283</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">6</span> dc102    252.         237.     0.327</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   speaker    f0_Hz speaker_mean f0_zscore</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1   dc102 245.7078     237.0675 0.1935695</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2   dc102 246.4516     237.0675 0.2102331</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3   dc102 247.5111     237.0675 0.2339705</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4   dc102 248.5496     237.0675 0.2572359</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5   dc102 249.7015     237.0675 0.2830415</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6   dc102 251.6647     237.0675 0.3270239</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Log z-score (LZ), common in studies of Chinese tone:</span></span></span>
+<span class="r-in"><span><span class="va">out_lz</span> <span class="op">&lt;-</span> <span class="fu">normalise_f0</span><span class="op">(</span><span class="va">sample_f0</span>,</span></span>
+<span class="r-in"><span>                       f0      <span class="op">=</span> <span class="st">"f0_Hz"</span>,</span></span>
+<span class="r-in"><span>                       speaker <span class="op">=</span> <span class="st">"speaker"</span>,</span></span>
+<span class="r-in"><span>                       tone    <span class="op">=</span> <span class="st">"tone"</span>,</span></span>
+<span class="r-in"><span>                       method  <span class="op">=</span> <span class="st">"lz"</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">out_lz</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"speaker"</span>, <span class="st">"f0_Hz"</span>, <span class="st">"speaker_mean"</span>, <span class="st">"f0_lz"</span><span class="op">)</span><span class="op">]</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   speaker    f0_Hz speaker_mean     f0_lz</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1   dc102 245.7078     233.0639 0.2886142</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2   dc102 246.4516     233.0639 0.3051268</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3   dc102 247.5111     233.0639 0.3285633</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4   dc102 248.5496     233.0639 0.3514366</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5   dc102 249.7015     233.0639 0.3766959</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6   dc102 251.6647     233.0639 0.4194796</span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>

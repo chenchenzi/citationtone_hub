@@ -2,6 +2,52 @@
 
 ## shinytone (development version)
 
+- **About: “Shinytone in numbers”.** A new section at the bottom of the
+  About page shows the project’s GitHub stars, as a line built from the
+  date of each star, and the views and downloads of the Zenodo archive.
+  A daily GitHub Action (`.github/workflows/usage-stats.yaml`) collects
+  these public figures into `usage.json` on the `usage-data` branch, and
+  the app’s server reads that file (cached for 6 hours), so the page
+  never waits on it, new figures appear without redeploying, and
+  visitors’ browsers do not contact GitHub or Zenodo. Zenodo reports
+  only running totals, so its line starts on the first day of recording.
+- **Normalise: log z-score (LZ) option.** `normalise_f0(method = "lz")`,
+  and “By-speaker log Z-score (LZ)” in the Normalise tab, add an `f0_lz`
+  column: the z-score of log10 f0, `(log10 f0 - mean) / sd` with the
+  speaker’s mean and SD of log10 f0 (Zhu 1999); any other base gives the
+  same LZ. It works on ratios like semitones and also evens out
+  speakers’ pitch ranges. It is the usual “z-score” in studies of tone
+  in languages of China: 37 of the 136 studies in Xu & Zhang (2024) used
+  it, against 4 that used a plain z-score. `speaker_mean` is then the
+  geometric mean in Hz, and f0 of 0 or below counts as missing. The
+  default stays `"semitone"`. In the Normalise and Inspect tabs, the “f0
+  (Hz)” selector now prefers an Hz column over normalised ones. The
+  About page no longer lists ERB, which
+  [`normalise_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_f0.md)
+  never offered.
+- **Normalise: “equally weighted by tone” now also weights the z-score
+  SD, and the SD correction is a choice.** With
+  `mean_method = "weighted"` (the default) every tone already counted
+  once in the speaker’s centre, but the z-scores still divided by an SD
+  pooled over all frames, so a tone with many tokens shaped the scale:
+  two speakers with identical tones but 50/50 versus 90/10 token counts
+  got LZ tone means of ±0.99 versus ±1.65. The SD is now weighted the
+  same way (as
+  [`stats::cov.wt()`](https://rdrr.io/r/stats/cov.wt.html)), for both
+  `"zscore"` and `"lz"`. `mean_method = "simple"` keeps the classic Rose
+  1987. z-score and Zhu (1999) LZ, and the two agree exactly when every
+        tone has the same number of f0 values. A new `sd_correction`
+        argument (default `TRUE`: Bessel’s correction, the n - 1 sample
+        SD; `FALSE` divides by n), shown in the Normalise tab as a
+        “Bessel’s correction for the SD (n − 1)” checkbox for the
+        z-scores, makes that step visible. **This changes `"zscore"`
+        output with the default weighted mean** whenever tones have
+        unequal numbers of f0 values (unequal token counts, unvoiced
+        frames, or tokens of different lengths): on `sample_f0`, where
+        some speakers have a token or two more or fewer of some tones,
+        each speaker’s SD moves by −0.9% to +2.2%. Semitones are
+        unchanged, and `"zscore"` now returns the same class as its
+        input (it used to return a tibble).
 - **F0 Correction tab: TextGrid tier names are no longer cut off.** The
   plot’s left margin was fixed at 60 px, so a name longer than about
   seven characters lost its start (“phoneme” showed as “honeme”). The

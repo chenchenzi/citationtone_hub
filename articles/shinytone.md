@@ -76,8 +76,9 @@ for the full schema and source citation.
 Raw Hz isn’t comparable across speakers (men and women have very
 different baseline f0).
 [`normalise_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_f0.md)
-adds a `speaker_mean` column plus either `f0_st` (semitones, default) or
-`f0_zscore`, computed per speaker:
+adds a `speaker_mean` column plus one of `f0_st` (semitones, default),
+`f0_zscore` or `f0_lz` (log z-score, common in studies of Chinese tone),
+computed per speaker:
 
 ``` r
 

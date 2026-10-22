@@ -10,9 +10,9 @@ no upload limits, recordings stay on your machine.
 
 ## Normalisation
 
-By-speaker semitone or z-score f0 normalisation, plus landmark-based
-time normalisation for multisyllabic words and auto-detection of time
-columns that are already on a \[0, 1\] scale.
+By-speaker semitone, z-score or log z-score (LZ) f0 normalisation, plus
+landmark-based time normalisation for multisyllabic words and
+auto-detection of time columns that are already on a \[0, 1\] scale.
 
 - [`normalise_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_f0.md)
   : Normalise f0 by speaker
