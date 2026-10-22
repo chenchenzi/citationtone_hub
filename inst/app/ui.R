@@ -540,7 +540,7 @@ ui <- fluidPage(
                            the Shinytone navbar + sticky TOC when jumped to. */
                         #about-sec-terminology, #about-sec-features,
                         #about-sec-workflows, #about-sec-faq,
-                        #about-sec-rpackage, #about-sec-numbers {
+                        #about-sec-rpackage, #about-sec-community {
                           scroll-margin-top: 130px;
                         }
                         html { scroll-behavior: smooth; }
@@ -850,7 +850,7 @@ ui <- fluidPage(
                         tags$span(class = "sep", " · "),
                         tags$a(href = "#about-sec-faq",          "FAQ"),
                         tags$span(class = "sep", " · "),
-                        tags$a(href = "#about-sec-numbers",      "In numbers")
+                        tags$a(href = "#about-sec-community",    "Community")
                       ),
 
                       # --- Section break + landing heading ---
@@ -1652,11 +1652,11 @@ ui <- fluidPage(
                           ),
                           tags$div(class = "faq-item",
                             tags$p(tags$strong("Does this app use cookies?")),
-                            tags$p("The app itself sets no cookies. Shiny/shinyapps.io sets a session-scoped cookie to route server responses to the correct client. It expires when the browser session ends.")
+                            tags$p("Yes, for counting visits: Google Analytics (see below) sets its own cookies. Shiny/shinyapps.io also sets a session-scoped cookie to route server responses to the correct client; it expires when the browser session ends. The app sets no other cookies.")
                           ),
                           tags$div(class = "faq-item",
                             tags$p(tags$strong("Does this app use analytics?")),
-                            tags$p("This app uses Google Analytics to collect anonymous usage statistics (e.g., page views, session duration). No personally identifiable information or uploaded data is sent to Google Analytics.")
+                            tags$p("Yes. This app uses Google Analytics to collect anonymous usage statistics (e.g., page views, session duration). No personally identifiable information or uploaded data is sent to Google Analytics. The daily visit totals are shown under Community & reach on this page.")
                           )
                         ),
 
@@ -1740,14 +1740,12 @@ ui <- fluidPage(
                           )
                         ),
 
-                        # --- Shinytone in numbers (filled in by about_usage_ui) ---
-                        tags$div(id = "about-sec-numbers",
+                        # --- Community & reach (filled in by about_usage_ui) ---
+                        tags$div(id = "about-sec-community",
                           style = "margin: 56px auto 0 auto; text-align: center;",
                           tags$div(style = "width: 56px; height: 3px; background: #78c2ad; margin: 0 auto 24px auto; border-radius: 2px;"),
                           tags$h2(style = "color: #2c5f4f; margin: 0 0 8px 0; font-weight: 700;",
-                                  "Shinytone in numbers"),
-                          tags$p(style = "color: #777; font-size: 0.95rem; margin: 0 0 16px 0;",
-                                 "GitHub stars and the Zenodo archive, updated daily."),
+                                  "Community & reach"),
                           uiOutput("about_usage")
                         ),
 

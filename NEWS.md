@@ -1,6 +1,6 @@
 # shinytone (development version)
 
-* **About: "Shinytone in numbers".** A new section at the bottom of the About
+* **About: "Community & reach".** A new section at the bottom of the About
   page shows the project's GitHub stars, as a line built from the date of
   each star, and the views and downloads of the Zenodo archive. A daily
   GitHub Action (`.github/workflows/usage-stats.yaml`) collects these public

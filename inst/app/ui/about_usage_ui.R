@@ -1,5 +1,5 @@
 ###############################################
-# About tab → "Shinytone in numbers"
+# About tab → "Community & reach"
 #
 # Public figures collected once a day by .github/workflows/usage-stats.yaml
 # (GitHub stars with their dates; Zenodo views and downloads) and committed as
@@ -84,10 +84,12 @@ about_usage_cards <- function(d) {
   star_t  <- sort(usage_time(if (length(st)) st else character(0)))
   hist    <- as.data.frame(d$zenodo$history)
   zen_t   <- as.POSIXct(paste(hist$date, "00:00:00"), tz = "UTC")
-  t0 <- min(c(star_t, zen_t, updated))
+  vis     <- if (length(d$visits$daily)) as.data.frame(d$visits$daily) else NULL
+  vis_t   <- if (!is.null(vis)) as.POSIXct(paste(vis$date, "00:00:00"), tz = "UTC")
+  t0 <- min(c(vis_t, star_t, zen_t, updated))
   if (difftime(updated, t0, units = "days") < 1) t0 <- updated - 86400
 
-  star_col <- "#a8821f"; view_col <- "#2f8f74"; dl_col <- "#c4673a"
+  star_col <- "#a8821f"; view_col <- "#2f8f74"; dl_col <- "#c4673a"; vis_col <- "#f3969a"   # the theme pink (Minty secondary)
   card <- function(bg, dot, title, kind, number, unit, legend, svg)
     tags$div(class = "usage-card", style = paste0("background:", bg, ";"),
       tags$div(class = "usage-head",
@@ -110,6 +112,16 @@ about_usage_cards <- function(d) {
       list(t = zen_t, y = hist$downloads, col = dl_col,
            tip = sprintf("%s: %s downloads", usage_day(zen_t), usage_num(hist$downloads)))),
     t0, updated, max(hist$views, hist$downloads))
+  vis_card <- if (!is.null(vis)) {
+    cum <- cumsum(vis$sessions)
+    card("#fdf1f1", vis_col, "App visits", "total", usage_num(d$visits$total), "visits", NULL,
+         usage_svg(list(list(
+             t = vis_t, y = cum, col = vis_col, fill = TRUE, from0 = TRUE,
+             tip = sprintf("%s: %s visits (%s in all)", usage_day(vis_t),
+                           usage_num(vis$sessions), usage_num(cum)))),
+           t0, updated, max(cum)))
+  }
+
   legend_item <- function(col, label, n)
     tags$span(class = "usage-leg", tags$span(class = "usage-dot sm", style = paste0("background:", col, ";")),
               label, " ", tags$strong(usage_num(n)))
@@ -117,7 +129,7 @@ about_usage_cards <- function(d) {
   tagList(
     tags$style(HTML("
       .usage-grid{display:flex;flex-wrap:wrap;gap:18px;margin-top:6px;}
-      .usage-card{flex:1 1 300px;border-radius:16px;padding:18px 22px 12px;text-align:left;
+      .usage-card{flex:1 1 250px;border-radius:16px;padding:18px 22px 12px;text-align:left;
                display:flex;flex-direction:column;}
       .usage-head{display:flex;align-items:center;gap:8px;margin-bottom:4px;}
       .usage-title{font-weight:700;color:#2c3e3a;}
@@ -133,7 +145,11 @@ about_usage_cards <- function(d) {
       .usage-notes summary{cursor:pointer;}
       .usage-notes ul{margin:6px 0 0;padding-left:18px;}
     ")),
+    tags$p(style = "color: #777; font-size: 0.95rem; margin: 0 0 16px 0;",
+           if (!is.null(vis)) "App visits, GitHub stars and the Zenodo archive, updated daily."
+           else "GitHub stars and the Zenodo archive, updated daily."),
     tags$div(class = "usage-grid",
+      vis_card,
       card("#fbf6e7", star_col, "GitHub stars", "current", usage_num(n_star),
            if (n_star == 1) "star" else "stars", NULL, stars_svg),
       card("#eef6f3", view_col, "Zenodo archive", "total", usage_num(d$zenodo$views), "views",
@@ -147,6 +163,11 @@ about_usage_cards <- function(d) {
     tags$details(class = "usage-notes",
       tags$summary("About these numbers"),
       tags$ul(
+        if (!is.null(vis))
+          tags$li(nows("App visits: visits (sessions) to the online app counted by Google ",
+                       "Analytics since ", usage_day(as.POSIXct(paste(d$visits$since, "00:00:00"), tz = "UTC")),
+                       ", when it was added, up to the day before the update. Ad blockers and some ",
+                       "privacy browsers stop it, so the real number is higher.")),
         tags$li(nows("GitHub stars: when each current stargazer starred the ",
                 tags$a(href = paste0("https://github.com/", d$github$repo), target = "_blank",
                        rel = "noopener noreferrer", "repository"),

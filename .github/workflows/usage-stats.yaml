@@ -1,9 +1,11 @@
-# Collects the public figures shown under "Shinytone in numbers" on the app's
+# Collects the public figures shown under "Community & reach" on the app's
 # About page (GitHub stars with their dates; Zenodo views and downloads) once
 # a day, and commits them as usage.json to the `usage-data` branch, which is
 # created on the first run. The app reads that file, so new figures appear
-# without redeploying. Only public data is collected; the built-in
-# GITHUB_TOKEN is enough (listing stargazers with dates needs a token).
+# without redeploying. The built-in GITHUB_TOKEN is enough for the public
+# figures (listing stargazers with dates needs a token). App visits come from
+# Google Analytics and are read only when the GA4_SA_KEY repository secret
+# (a service-account key with Viewer access to the property) is set.
 
 on:
   schedule:
@@ -28,6 +30,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       # Not "data/": that is the package's own data folder.
       - name: Check out the usage-data branch (created on the first run)
         run: |
@@ -43,7 +49,12 @@ jobs:
       - name: Collect figures
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python3 .github/scripts/usage_stats.py usage-branch/usage.json
+          GA4_SA_KEY: ${{ secrets.GA4_SA_KEY }}
+        run: |
+          if [ -n "$GA4_SA_KEY" ]; then
+            python -m pip install --quiet google-analytics-data
+          fi
+          python .github/scripts/usage_stats.py usage-branch/usage.json
 
       - name: Commit if changed
         working-directory: usage-branch

@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-"""Collect public usage figures for the About page's "In numbers" section.
+"""Collect public usage figures for the About page's "Community & reach" section.
 
 Writes a small JSON file with
   * GitHub stars: the current count and the date each current stargazer
     starred the repository (people who unstar drop out of the history);
   * Zenodo: unique views and downloads across all versions of the archived
     release, as the record page shows them. Zenodo only reports totals, so
-    one sample is kept per day and the history grows from the first run.
+    one sample is kept per day and the history grows from the first run;
+  * app visits: sessions per day from Google Analytics since it was added,
+    read only when a service-account key is set in $GA4_SA_KEY (needs the
+    google-analytics-data package). If that read fails, the previous visit
+    figures are kept and the rest is still updated.
 
 Run daily by .github/workflows/usage-stats.yaml, which commits the file to the
 `usage-data` branch; the app reads it from there. Locally, it authenticates
@@ -26,6 +30,8 @@ import urllib.request
 
 REPO = "chenchenzi/citationtone_hub"
 ZENODO_CONCEPT = "22632508"   # concept record: all versions of the release
+GA4_PROPERTY = os.environ.get("GA4_PROPERTY_ID", "530488345")
+GA4_SINCE = "2026-03-30"      # when Google Analytics was added to the app
 UA = "shinytone-usage-stats"
 
 
@@ -70,6 +76,31 @@ def zenodo():
             "version": rec.get("metadata", {}).get("version")}
 
 
+def visits():
+    """Sessions per day from Google Analytics, or None when no key is set."""
+    key = os.environ.get("GA4_SA_KEY")
+    if not key:
+        return None
+    from google.analytics.data_v1beta import BetaAnalyticsDataClient
+    from google.analytics.data_v1beta.types import (DateRange, Dimension, Metric,
+                                                    RunReportRequest)
+    client = BetaAnalyticsDataClient.from_service_account_info(json.loads(key))
+    resp = client.run_report(RunReportRequest(
+        property="properties/" + GA4_PROPERTY,
+        dimensions=[Dimension(name="date")],
+        metrics=[Metric(name="sessions")],
+        date_ranges=[DateRange(start_date=GA4_SINCE, end_date="yesterday")],
+        limit=100000))
+    daily = []
+    for row in resp.rows:   # days with no visits are left out
+        d = row.dimension_values[0].value   # YYYYMMDD
+        daily.append({"date": f"{d[:4]}-{d[4:6]}-{d[6:]}",
+                      "sessions": int(row.metric_values[0].value)})
+    daily.sort(key=lambda r: r["date"])
+    return {"source": "Google Analytics", "since": GA4_SINCE,
+            "total": sum(r["sessions"] for r in daily), "daily": daily}
+
+
 def main(path):
     old = {}
     if os.path.exists(path):
@@ -79,6 +110,12 @@ def main(path):
     now = dt.datetime.now(dt.timezone.utc).replace(microsecond=0)
     today = now.date().isoformat()
     gh, zn = stars(), zenodo()   # any failure exits non-zero and leaves the old file
+    try:
+        vs = visits()
+    except Exception as e:       # keep the last visit figures; stars and Zenodo still update
+        print(f"::warning::Google Analytics not read ({type(e).__name__}: {e})")
+        vs = None
+    vs = vs or old.get("visits")
 
     history = [h for h in old.get("zenodo", {}).get("history", []) if h.get("date") != today]
     history.append({"date": today, "views": zn["views"], "downloads": zn["downloads"]})
@@ -92,6 +129,8 @@ def main(path):
                    "views": zn["views"], "downloads": zn["downloads"],
                    "history": history},
     }
+    if vs:
+        out["visits"] = vs
     with open(path, "w", encoding="utf-8") as f:
         json.dump(out, f, indent=1, ensure_ascii=False)
         f.write("\n")
