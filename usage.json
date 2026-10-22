@@ -1,0 +1,26 @@
+{
+ "updated": "2026-10-22T07:39:09Z",
+ "github": {
+  "repo": "chenchenzi/citationtone_hub",
+  "stars": 4,
+  "starred_at": [
+   "2026-07-03T06:45:20Z",
+   "2026-08-03T20:46:47Z",
+   "2026-08-07T13:38:56Z",
+   "2026-09-22T02:47:29Z"
+  ]
+ },
+ "zenodo": {
+  "concept_doi": "10.5281/zenodo.22632508",
+  "latest_version": "1.0.0",
+  "views": 17,
+  "downloads": 1,
+  "history": [
+   {
+    "date": "2026-10-22",
+    "views": 17,
+    "downloads": 1
+   }
+  ]
+ }
+}
