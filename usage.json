@@ -1,5 +1,5 @@
 {
- "updated": "2026-10-23T08:37:22Z",
+ "updated": "2026-10-24T08:11:53Z",
  "github": {
   "repo": "chenchenzi/citationtone_hub",
   "stars": 4,
@@ -13,7 +13,7 @@
  "zenodo": {
   "concept_doi": "10.5281/zenodo.22632508",
   "latest_version": "1.0.0",
-  "views": 17,
+  "views": 19,
   "downloads": 1,
   "history": [
    {
@@ -24,6 +24,11 @@
    {
     "date": "2026-10-23",
     "views": 17,
+    "downloads": 1
+   },
+   {
+    "date": "2026-10-24",
+    "views": 19,
     "downloads": 1
    }
   ]
