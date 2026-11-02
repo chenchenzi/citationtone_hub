@@ -77,8 +77,19 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
             ": (0,1]\u21921, (1,2]\u21922, (2,3]\u21923, (3,4]\u21924, (4,5]\u21925."
           )
         ),
+        tags$pre(style = "font-size: 0.76rem; line-height: 1.35; background: #f7f7f7; border: none; padding: 6px 8px; margin: 2px 0 8px 0; overflow-x: auto;",
+          paste(c(
+            "Reference-line, round(): digits are the lines, boundaries half-way",
+            "  line:   1       2       3       4       5",
+            "  digit:  1   |   2   |   3   |   4   |   5",
+            "             1.5     2.5     3.5     4.5",
+            "",
+            "Interval, ceiling(): digits are the bands, boundaries at integers",
+            "  value:  0       1       2       3       4       5",
+            "  digit:  |   1   |   2   |   3   |   4   |   5   |"
+          ), collapse = "\n")),
         tags$p(style = "margin: 4px 0 8px 0; font-size: 0.84rem; color: #777;",
-          HTML("Note: Within a given conversion system, scaled values near a digit boundary can be ambiguous. In the interval-based system the boundaries are the integers 1\u20134: a scaled value of 1.1 could reasonably be assigned to digit 1 or 2, depending on the tonal contrasts in the language. In the reference-line system they lie half-way between the lines (1.5, 2.5, 3.5, 4.5), so 2.45 could be 2 or 3. Values within the fuzzy boundary threshold (\u00b1<em>t</em>) are highlighted in <span style='color:#d9534f; font-weight:bold;'>red</span>. For more discussion on conversion methods and boundary handling, see Xu &amp; Zhang (2024).")
+          HTML("Note: Scaled values near a digit boundary (| above) can be ambiguous: 2.45 on the reference-line scale could be 2 or 3, and 1.1 on the interval scale could be 1 or 2, depending on the tonal contrasts in the language. Values within the fuzzy boundary threshold (\u00b1<em>t</em>) are highlighted in <span style='color:#d9534f; font-weight:bold;'>red</span>. For more discussion on conversion methods and boundary handling, see Xu &amp; Zhang (2024).")
         ),
         tags$strong("Data source:"),
         tags$ul(style = "margin-bottom: 0; padding-left: 18px;",
