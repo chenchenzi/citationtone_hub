@@ -118,6 +118,12 @@ values, as in speaker-normalised f0, need no special handling.
 given if only one of them contains negative values, which suggests a mix
 of Hz and normalised f0.
 
+f0 in Hz from several speakers should be normalised by speaker first,
+for example to LZ, the log z-score Zhu (1999) found best for tone:
+averaging Hz mixes higher and lower voices, which shifts the mean
+contours and widens the robust range. The app's Chao tab converts raw f0
+to LZ by speaker automatically.
+
 ### Turning-point detection
 
 For each tone, the function samples the contour either at its two
@@ -164,25 +170,25 @@ Acoustical Society of America*, 156(4), 2538–2565.
 
 ``` r
 data(sample_f0)
-mc <- compute_mean_contour(sample_f0,
-                           token = "token", f0 = "f0_Hz",
-                           time  = "time",  tone = "tone")
-chao <- contour_to_chao(mc,
-                        raw_data  = sample_f0,
-                        raw_token = "token",
-                        raw_f0    = "f0_Hz",
-                        raw_tone  = "tone")
+# Normalise by speaker first (here LZ), so that higher and lower voices
+# are not averaged together in Hz.
+lz <- normalise_f0(sample_f0, f0 = "f0_Hz", speaker = "speaker",
+                   tone = "tone", method = "lz")
+mc <- compute_mean_contour(lz, token = "token", f0 = "f0_lz",
+                           time = "time", tone = "tone")
+chao <- contour_to_chao(mc, raw_data = lz, raw_token = "token",
+                        raw_f0 = "f0_lz", raw_tone = "tone")
 chao[, c("tone", "refline", "interval", "robust", "shape")]
-#>   tone refline interval robust         shape
-#> 1    1      22       22     22 mid-low level
-#> 2    2     212      111    212       dipping
-#> 3    3      32       32     22       falling
-#> 4    4      45       45     34        rising
-#> 5    5      22       21     22 mid-low level
-#> 6    6      23       13     22        rising
+#>   tone refline interval robust   shape
+#> 1    1      32       22     22 falling
+#> 2    2     212      112    212 dipping
+#> 3    3      32       32     32 falling
+#> 4    4      45       55     44  rising
+#> 5    5      31       21     21 falling
+#> 6    6      23       23     23  rising
 
-# On semitones, which are often negative, the numerals are on a
-# log-frequency scale and between-speaker level differences are removed.
+# Semitones also give numerals on a log-frequency scale, but keep each
+# speaker's own pitch range.
 st <- normalise_f0(sample_f0, f0 = "f0_Hz", speaker = "speaker",
                    tone = "tone", method = "semitone")
 mc_st <- compute_mean_contour(st, token = "token", f0 = "f0_st",

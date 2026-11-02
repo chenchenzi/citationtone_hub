@@ -271,28 +271,26 @@ head(diag$acf)
 
 [`contour_to_chao()`](https://chenchenzi.github.io/citationtone_hub/reference/contour_to_chao.md)
 reduces per-tone mean (or model-predicted) contours into Chao numerals —
-5-level digit strings like `55`, `35`, or `214`.
+5-level digit strings like `55`, `35`, or `214`. Give it
+speaker-normalised f0, here the semitone mean contours from above:
+averaging Hz over speakers would mix higher and lower voices. (The app’s
+Chao tab converts raw f0 to LZ by speaker before converting.)
 
 ``` r
 
-# Pre-aggregate into a per-tone mean contour over all speakers
-mean_contour <- compute_mean_contour(sample_f0,
-                                     token = "token", f0 = "f0_Hz",
-                                     time  = "time",  tone = "tone")
-
 chao <- contour_to_chao(
   mean_contour,
-  raw_data  = sample_f0,
-  raw_token = "token", raw_f0 = "f0_Hz", raw_tone = "tone"
+  raw_data  = normed,
+  raw_token = "token", raw_f0 = "f0_st", raw_tone = "tone"
 )
 chao[, c("tone", "refline", "interval", "robust", "shape")]
 #>   tone refline interval robust         shape
 #> 1    1      22       22     22 mid-low level
-#> 2    2     212      111    212       dipping
-#> 3    3      32       32     22       falling
-#> 4    4      45       45     34        rising
-#> 5    5      22       21     22 mid-low level
-#> 6    6      23       13     22        rising
+#> 2    2     212      112    212       dipping
+#> 3    3      33       32     32     mid level
+#> 4    4      45       55     44        rising
+#> 5    5      31       21     21       falling
+#> 6    6      23       23     23        rising
 ```
 
 Three conversion methods in one pass:

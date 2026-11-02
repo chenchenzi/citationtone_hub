@@ -159,6 +159,11 @@ linear in Hz. Negative values, as in speaker-normalised f0, need no
 special handling. <code>raw_data</code> and <code>contour_data</code> must be on the same
 scale; a warning is given if only one of them contains negative
 values, which suggests a mix of Hz and normalised f0.</p>
+<p>f0 in Hz from several speakers should be normalised by speaker first,
+for example to LZ, the log z-score Zhu (1999) found best for tone:
+averaging Hz mixes higher and lower voices, which shifts the mean
+contours and widens the robust range. The app's Chao tab converts raw
+f0 to LZ by speaker automatically.</p>
 </div>
 
 <div class="section">
@@ -201,25 +206,25 @@ sources.</p></li>
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">sample_f0</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">mc</span> <span class="op">&lt;-</span> <span class="fu"><a href="compute_mean_contour.html">compute_mean_contour</a></span><span class="op">(</span><span class="va">sample_f0</span>,</span></span>
-<span class="r-in"><span>                           token <span class="op">=</span> <span class="st">"token"</span>, f0 <span class="op">=</span> <span class="st">"f0_Hz"</span>,</span></span>
-<span class="r-in"><span>                           time  <span class="op">=</span> <span class="st">"time"</span>,  tone <span class="op">=</span> <span class="st">"tone"</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">chao</span> <span class="op">&lt;-</span> <span class="fu">contour_to_chao</span><span class="op">(</span><span class="va">mc</span>,</span></span>
-<span class="r-in"><span>                        raw_data  <span class="op">=</span> <span class="va">sample_f0</span>,</span></span>
-<span class="r-in"><span>                        raw_token <span class="op">=</span> <span class="st">"token"</span>,</span></span>
-<span class="r-in"><span>                        raw_f0    <span class="op">=</span> <span class="st">"f0_Hz"</span>,</span></span>
-<span class="r-in"><span>                        raw_tone  <span class="op">=</span> <span class="st">"tone"</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="co"># Normalise by speaker first (here LZ), so that higher and lower voices</span></span></span>
+<span class="r-in"><span><span class="co"># are not averaged together in Hz.</span></span></span>
+<span class="r-in"><span><span class="va">lz</span> <span class="op">&lt;-</span> <span class="fu"><a href="normalise_f0.html">normalise_f0</a></span><span class="op">(</span><span class="va">sample_f0</span>, f0 <span class="op">=</span> <span class="st">"f0_Hz"</span>, speaker <span class="op">=</span> <span class="st">"speaker"</span>,</span></span>
+<span class="r-in"><span>                   tone <span class="op">=</span> <span class="st">"tone"</span>, method <span class="op">=</span> <span class="st">"lz"</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">mc</span> <span class="op">&lt;-</span> <span class="fu"><a href="compute_mean_contour.html">compute_mean_contour</a></span><span class="op">(</span><span class="va">lz</span>, token <span class="op">=</span> <span class="st">"token"</span>, f0 <span class="op">=</span> <span class="st">"f0_lz"</span>,</span></span>
+<span class="r-in"><span>                           time <span class="op">=</span> <span class="st">"time"</span>, tone <span class="op">=</span> <span class="st">"tone"</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">chao</span> <span class="op">&lt;-</span> <span class="fu">contour_to_chao</span><span class="op">(</span><span class="va">mc</span>, raw_data <span class="op">=</span> <span class="va">lz</span>, raw_token <span class="op">=</span> <span class="st">"token"</span>,</span></span>
+<span class="r-in"><span>                        raw_f0 <span class="op">=</span> <span class="st">"f0_lz"</span>, raw_tone <span class="op">=</span> <span class="st">"tone"</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">chao</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"tone"</span>, <span class="st">"refline"</span>, <span class="st">"interval"</span>, <span class="st">"robust"</span>, <span class="st">"shape"</span><span class="op">)</span><span class="op">]</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   tone refline interval robust         shape</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1    1      22       22     22 mid-low level</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2    2     212      111    212       dipping</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3    3      32       32     22       falling</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 4    4      45       45     34        rising</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5    5      22       21     22 mid-low level</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 6    6      23       13     22        rising</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   tone refline interval robust   shape</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1    1      32       22     22 falling</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2    2     212      112    212 dipping</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3    3      32       32     32 falling</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4    4      45       55     44  rising</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5    5      31       21     21 falling</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6    6      23       23     23  rising</span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># On semitones, which are often negative, the numerals are on a</span></span></span>
-<span class="r-in"><span><span class="co"># log-frequency scale and between-speaker level differences are removed.</span></span></span>
+<span class="r-in"><span><span class="co"># Semitones also give numerals on a log-frequency scale, but keep each</span></span></span>
+<span class="r-in"><span><span class="co"># speaker's own pitch range.</span></span></span>
 <span class="r-in"><span><span class="va">st</span> <span class="op">&lt;-</span> <span class="fu"><a href="normalise_f0.html">normalise_f0</a></span><span class="op">(</span><span class="va">sample_f0</span>, f0 <span class="op">=</span> <span class="st">"f0_Hz"</span>, speaker <span class="op">=</span> <span class="st">"speaker"</span>,</span></span>
 <span class="r-in"><span>                   tone <span class="op">=</span> <span class="st">"tone"</span>, method <span class="op">=</span> <span class="st">"semitone"</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">mc_st</span> <span class="op">&lt;-</span> <span class="fu"><a href="compute_mean_contour.html">compute_mean_contour</a></span><span class="op">(</span><span class="va">st</span>, token <span class="op">=</span> <span class="st">"token"</span>, f0 <span class="op">=</span> <span class="st">"f0_st"</span>,</span></span>

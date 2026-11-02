@@ -2,6 +2,27 @@
 
 ## shinytone (development version)
 
+- **Summarise: raw f0 is converted to LZ by speaker before Chao
+  conversion.** The Raw f0 and Curated f0 sources averaged Hz over all
+  speakers, so higher and lower voices were mixed in the mean contours
+  and in the robust range. Each speaker’s f0 is now converted to LZ, the
+  log z-score Zhu (1999) found best for tone, before the mean contours
+  are taken. The Raw f0 source has a speaker selector (or none, for one
+  speaker), and curated data find the speaker column by name. The
+  summary says how many speakers were normalised and gives the ranges in
+  LZ, the generated R code includes the step, and a raw source whose f0
+  has negative values is refused as already normalised. The README, the
+  vignette and the
+  [`contour_to_chao()`](https://chenchenzi.github.io/citationtone_hub/reference/contour_to_chao.md)
+  examples now normalise before converting.
+- **Summarise: reference-line values near a rounding edge are flagged.**
+  For the reference-line method, the red highlighting in the Chao table
+  and the grey zones in its plot marked values near the reference lines
+  1 to 5, where the digit is clear, instead of near the rounding edges
+  at 1.5, 2.5, 3.5 and 4.5, where it is not. Both now mark the rounding
+  edges, using the fuzzy boundary threshold chosen in the sidebar. The
+  note under the table states that threshold instead of a fixed ±0.1,
+  and the guide says where each method’s digit boundaries lie.
 - **Summarise: robust FOR is linear, on any input scale.** The robust
   Chao method took the logarithm of f0, floored its range at 1 Hz and
   dropped values at or below zero, so on speaker-normalised f0
@@ -16,7 +37,10 @@
   code for the robust method now follows the package (per-token peaks of
   the highest tone and valleys of the lowest) instead of extreme time
   bins, with comments that no longer describe a log step the code does
-  not take.
+  not take. The generated code also detects turning points as the app
+  does, so a dipping or peaking tone gets its three-digit numeral there
+  too; it used to sample only the onset and offset, so every numeral had
+  two digits.
 - **Summarise: IPA tone letters.** The Chao numeral table has a
   “Letters” column for each method (35 as ˧˥, 214 as ˨˩˦), and the CSV
   download has matching columns. The app bundles a 6 KB tone-letter

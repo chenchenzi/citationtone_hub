@@ -329,26 +329,24 @@ autocorrelation.</p>
 </h2>
 <p><code><a href="../reference/contour_to_chao.html">contour_to_chao()</a></code> reduces per-tone mean (or
 model-predicted) contours into Chao numerals — 5-level digit strings
-like <code>55</code>, <code>35</code>, or <code>214</code>.</p>
+like <code>55</code>, <code>35</code>, or <code>214</code>. Give it
+speaker-normalised f0, here the semitone mean contours from above:
+averaging Hz over speakers would mix higher and lower voices. (The app’s
+Chao tab converts raw f0 to LZ by speaker before converting.)</p>
 <div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Pre-aggregate into a per-tone mean contour over all speakers</span></span>
-<span><span class="va">mean_contour</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/compute_mean_contour.html">compute_mean_contour</a></span><span class="op">(</span><span class="va">sample_f0</span>,</span>
-<span>                                     token <span class="op">=</span> <span class="st">"token"</span>, f0 <span class="op">=</span> <span class="st">"f0_Hz"</span>,</span>
-<span>                                     time  <span class="op">=</span> <span class="st">"time"</span>,  tone <span class="op">=</span> <span class="st">"tone"</span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">chao</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/contour_to_chao.html">contour_to_chao</a></span><span class="op">(</span></span>
+<code class="sourceCode R"><span><span class="va">chao</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/contour_to_chao.html">contour_to_chao</a></span><span class="op">(</span></span>
 <span>  <span class="va">mean_contour</span>,</span>
-<span>  raw_data  <span class="op">=</span> <span class="va">sample_f0</span>,</span>
-<span>  raw_token <span class="op">=</span> <span class="st">"token"</span>, raw_f0 <span class="op">=</span> <span class="st">"f0_Hz"</span>, raw_tone <span class="op">=</span> <span class="st">"tone"</span></span>
+<span>  raw_data  <span class="op">=</span> <span class="va">normed</span>,</span>
+<span>  raw_token <span class="op">=</span> <span class="st">"token"</span>, raw_f0 <span class="op">=</span> <span class="st">"f0_st"</span>, raw_tone <span class="op">=</span> <span class="st">"tone"</span></span>
 <span><span class="op">)</span></span>
 <span><span class="va">chao</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"tone"</span>, <span class="st">"refline"</span>, <span class="st">"interval"</span>, <span class="st">"robust"</span>, <span class="st">"shape"</span><span class="op">)</span><span class="op">]</span></span>
 <span><span class="co">#&gt;   tone refline interval robust         shape</span></span>
 <span><span class="co">#&gt; 1    1      22       22     22 mid-low level</span></span>
-<span><span class="co">#&gt; 2    2     212      111    212       dipping</span></span>
-<span><span class="co">#&gt; 3    3      32       32     22       falling</span></span>
-<span><span class="co">#&gt; 4    4      45       45     34        rising</span></span>
-<span><span class="co">#&gt; 5    5      22       21     22 mid-low level</span></span>
-<span><span class="co">#&gt; 6    6      23       13     22        rising</span></span></code></pre></div>
+<span><span class="co">#&gt; 2    2     212      112    212       dipping</span></span>
+<span><span class="co">#&gt; 3    3      33       32     32     mid level</span></span>
+<span><span class="co">#&gt; 4    4      45       55     44        rising</span></span>
+<span><span class="co">#&gt; 5    5      31       21     21       falling</span></span>
+<span><span class="co">#&gt; 6    6      23       23     23        rising</span></span></code></pre></div>
 <p>Three conversion methods in one pass:</p>
 <ul>
 <li>
