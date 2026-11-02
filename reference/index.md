@@ -135,7 +135,7 @@ diagnostics.
 ## Chao tone numerals
 
 Convert mean or predicted contours into Chao tone numerals
-(reference-line, interval-based, robust FOR methods) and tone letters.
+(reference-line and interval-based FOR methods) and tone letters.
 
 - [`compute_mean_contour()`](https://chenchenzi.github.io/citationtone_hub/reference/compute_mean_contour.md)
   : Compute the per-tone mean f0 contour from long-format data

@@ -2,17 +2,30 @@
 
 ## shinytone (development version)
 
+- **Summarise: the robust Chao method is removed.** Its range, one SD
+  beyond the mean peak of the highest tone and the mean valley of the
+  lowest, suited single tokens but not the averaged contours the
+  numerals are read from: it squeezed them towards the middle digits, so
+  5 and 1 were rarely reached. It also moved more with pitch-tracking
+  errors than the range of the averaged contours used by the other two
+  methods, and Zhu (1999), the source cited for it, had tested this
+  range and found it worse than the plain extremes.
+  [`contour_to_chao()`](https://chenchenzi.github.io/citationtone_hub/reference/contour_to_chao.md)
+  no longer returns the `robust` and `rob_continuous` columns or the
+  `robust_stats` attribute; `raw_data`, `raw_token`, `raw_f0` and
+  `raw_tone` are deprecated and ignored, with a warning. The Chao tab,
+  its CSV download, plot and generated R code show the reference-line
+  and interval methods.
 - **Summarise: raw f0 is converted to LZ by speaker before Chao
   conversion.** The Raw f0 and Curated f0 sources averaged Hz over all
-  speakers, so higher and lower voices were mixed in the mean contours
-  and in the robust range. Each speaker’s f0 is now converted to LZ, the
-  log z-score Zhu (1999) found best for tone, before the mean contours
-  are taken. The Raw f0 source has a speaker selector (or none, for one
-  speaker), and curated data find the speaker column by name. The
-  summary says how many speakers were normalised and gives the ranges in
-  LZ, the generated R code includes the step, and a raw source whose f0
-  has negative values is refused as already normalised. The README, the
-  vignette and the
+  speakers, so higher and lower voices were mixed in the mean contours.
+  Each speaker’s f0 is now converted to LZ, the log z-score Zhu (1999)
+  found best for tone, before the mean contours are taken. The Raw f0
+  source has a speaker selector (or none, for one speaker), and curated
+  data find the speaker column by name. The summary says how many
+  speakers were normalised and gives the ranges in LZ, the generated R
+  code includes the step, and a raw source whose f0 has negative values
+  is refused as already normalised. The README, the vignette and the
   [`contour_to_chao()`](https://chenchenzi.github.io/citationtone_hub/reference/contour_to_chao.md)
   examples now normalise before converting.
 - **Summarise: reference-line values near a rounding edge are flagged.**
@@ -23,24 +36,13 @@
   edges, using the fuzzy boundary threshold chosen in the sidebar. The
   note under the table states that threshold instead of a fixed ±0.1,
   and the guide says where each method’s digit boundaries lie.
-- **Summarise: robust FOR is linear, on any input scale.** The robust
-  Chao method took the logarithm of f0, floored its range at 1 Hz and
-  dropped values at or below zero, so on speaker-normalised f0
-  (semitones, z-scores, LZ)
-  [`contour_to_chao()`](https://chenchenzi.github.io/citationtone_hub/reference/contour_to_chao.md)
-  stopped with an interpolation error. It now maps f0 linearly onto its
-  μ ± σ range, like the reference-line and interval methods, so the
-  input sets the pitch scale: semitones and LZ give a log-frequency
-  scale, Hz and z-scores a linear one. Robust numerals on Hz input
-  change as a result. The Summarise tab shows the range in Hz only for
-  Hz sources, its guide states the input-scale rule, and its generated R
-  code for the robust method now follows the package (per-token peaks of
-  the highest tone and valleys of the lowest) instead of extreme time
-  bins, with comments that no longer describe a log step the code does
-  not take. The generated code also detects turning points as the app
-  does, so a dipping or peaking tone gets its three-digit numeral there
-  too; it used to sample only the onset and offset, so every numeral had
-  two digits.
+- **Summarise: generated R code finds turning points.** The R code shown
+  under the Chao table now detects turning points as the app does, so a
+  dipping or peaking tone gets its three-digit numeral there too; it
+  used to sample only the onset and offset, so every numeral had two
+  digits. The guide also states that the conversion is linear in the
+  units of the input, so the input sets the pitch scale: semitones and
+  LZ give a log-frequency scale, Hz and z-scores a linear one.
 - **Summarise: IPA tone letters.** The Chao numeral table has a
   “Letters” column for each method (35 as ˧˥, 214 as ˨˩˦), and the CSV
   download has matching columns. The app bundles a 6 KB tone-letter

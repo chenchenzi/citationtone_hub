@@ -16,8 +16,8 @@ chao_to_letters(x)
 - x:
 
   A character (or integer) vector of Chao numerals, e.g.
-  `c("55", "35", "214", "51")`, such as the `refline`, `interval` or
-  `robust` column of
+  `c("55", "35", "214", "51")`, such as the `refline` or `interval`
+  column of
   [`contour_to_chao()`](https://chenchenzi.github.io/citationtone_hub/reference/contour_to_chao.md).
 
 ## Value

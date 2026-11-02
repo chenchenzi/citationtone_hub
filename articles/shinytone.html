@@ -334,20 +334,17 @@ speaker-normalised f0, here the semitone mean contours from above:
 averaging Hz over speakers would mix higher and lower voices. (The app’s
 Chao tab converts raw f0 to LZ by speaker before converting.)</p>
 <div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">chao</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/contour_to_chao.html">contour_to_chao</a></span><span class="op">(</span></span>
-<span>  <span class="va">mean_contour</span>,</span>
-<span>  raw_data  <span class="op">=</span> <span class="va">normed</span>,</span>
-<span>  raw_token <span class="op">=</span> <span class="st">"token"</span>, raw_f0 <span class="op">=</span> <span class="st">"f0_st"</span>, raw_tone <span class="op">=</span> <span class="st">"tone"</span></span>
-<span><span class="op">)</span></span>
-<span><span class="va">chao</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"tone"</span>, <span class="st">"refline"</span>, <span class="st">"interval"</span>, <span class="st">"robust"</span>, <span class="st">"shape"</span><span class="op">)</span><span class="op">]</span></span>
-<span><span class="co">#&gt;   tone refline interval robust         shape</span></span>
-<span><span class="co">#&gt; 1    1      22       22     22 mid-low level</span></span>
-<span><span class="co">#&gt; 2    2     212      112    212       dipping</span></span>
-<span><span class="co">#&gt; 3    3      33       32     32     mid level</span></span>
-<span><span class="co">#&gt; 4    4      45       55     44        rising</span></span>
-<span><span class="co">#&gt; 5    5      31       21     21       falling</span></span>
-<span><span class="co">#&gt; 6    6      23       23     23        rising</span></span></code></pre></div>
-<p>Three conversion methods in one pass:</p>
+<code class="sourceCode R"><span><span class="va">chao</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/contour_to_chao.html">contour_to_chao</a></span><span class="op">(</span><span class="va">mean_contour</span><span class="op">)</span></span>
+<span><span class="va">chao</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"tone"</span>, <span class="st">"refline"</span>, <span class="st">"interval"</span>, <span class="st">"shape"</span><span class="op">)</span><span class="op">]</span></span>
+<span><span class="co">#&gt;   tone refline interval         shape</span></span>
+<span><span class="co">#&gt; 1    1      22       22 mid-low level</span></span>
+<span><span class="co">#&gt; 2    2     212      112       dipping</span></span>
+<span><span class="co">#&gt; 3    3      33       32     mid level</span></span>
+<span><span class="co">#&gt; 4    4      45       55        rising</span></span>
+<span><span class="co">#&gt; 5    5      31       21       falling</span></span>
+<span><span class="co">#&gt; 6    6      23       23        rising</span></span></code></pre></div>
+<p>Two conversion methods in one pass, both on the range between the
+lowest and highest points of the mean contours:</p>
 <ul>
 <li>
 <strong><code>refline</code></strong> — reference-line FOR, rounded
@@ -355,9 +352,6 @@ on the <code>[1, 5]</code> scale</li>
 <li>
 <strong><code>interval</code></strong> — interval-based FOR, ceiling
 on the <code>(0, 5]</code> scale</li>
-<li>
-<strong><code>robust</code></strong> — robust FOR using μ ± σ of the
-highest- and lowest-tone extremes (requires <code>raw_data</code>)</li>
 </ul>
 <p>The <code>shape</code> column summarises the contour (“rising”,
 “falling”, “dipping”, etc.) and is derived from the reference-line

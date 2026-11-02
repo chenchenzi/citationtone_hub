@@ -105,7 +105,7 @@
 <li>📏 <strong>Normalise</strong>: by-speaker semitone, z-score or log z-score (LZ) normalisation, with simple or weighted speaker means.</li>
 <li>📈 <strong>Visualise</strong>: f0 contours coloured by tone, with optional faceting by speaker.</li>
 <li>📊 <strong>Model</strong>: per-token Legendre polynomials, growth-curve analysis (GCA) on orthogonal polynomials, and generalised additive mixed models (GAMM) with AR1 correction (on by default in the app) and one-click model diagnostics — basis-dimension check, residual panels, per-token residual ACF, and concurvity.</li>
-<li>🧮 <strong>Summarise</strong>: convert contours into Chao tone numerals using three FOR methods (reference-line, interval, robust).</li>
+<li>🧮 <strong>Summarise</strong>: convert contours into Chao tone numerals using two FOR methods (reference-line and interval).</li>
 </ul>
 </div>
 <div class="section level2">
@@ -142,12 +142,8 @@
 <span><span class="va">mc</span>   <span class="op">&lt;-</span> <span class="fu"><a href="reference/compute_mean_contour.html">compute_mean_contour</a></span><span class="op">(</span><span class="va">normed</span>,</span>
 <span>                             token <span class="op">=</span> <span class="st">"token"</span>, f0 <span class="op">=</span> <span class="st">"f0_st"</span>,</span>
 <span>                             time  <span class="op">=</span> <span class="st">"time"</span>,  tone <span class="op">=</span> <span class="st">"tone"</span><span class="op">)</span></span>
-<span><span class="va">chao</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/contour_to_chao.html">contour_to_chao</a></span><span class="op">(</span><span class="va">mc</span>,</span>
-<span>                        raw_data  <span class="op">=</span> <span class="va">normed</span>,</span>
-<span>                        raw_token <span class="op">=</span> <span class="st">"token"</span>,</span>
-<span>                        raw_f0    <span class="op">=</span> <span class="st">"f0_st"</span>,</span>
-<span>                        raw_tone  <span class="op">=</span> <span class="st">"tone"</span><span class="op">)</span></span>
-<span><span class="va">chao</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"tone"</span>, <span class="st">"refline"</span>, <span class="st">"interval"</span>, <span class="st">"robust"</span>, <span class="st">"shape"</span><span class="op">)</span><span class="op">]</span></span></code></pre></div>
+<span><span class="va">chao</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/contour_to_chao.html">contour_to_chao</a></span><span class="op">(</span><span class="va">mc</span><span class="op">)</span></span>
+<span><span class="va">chao</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"tone"</span>, <span class="st">"refline"</span>, <span class="st">"interval"</span>, <span class="st">"shape"</span><span class="op">)</span><span class="op">]</span></span></code></pre></div>
 </div>
 </div>
 <div class="section level2">

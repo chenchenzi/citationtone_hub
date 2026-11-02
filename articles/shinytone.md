@@ -278,27 +278,22 @@ Chao tab converts raw f0 to LZ by speaker before converting.)
 
 ``` r
 
-chao <- contour_to_chao(
-  mean_contour,
-  raw_data  = normed,
-  raw_token = "token", raw_f0 = "f0_st", raw_tone = "tone"
-)
-chao[, c("tone", "refline", "interval", "robust", "shape")]
-#>   tone refline interval robust         shape
-#> 1    1      22       22     22 mid-low level
-#> 2    2     212      112    212       dipping
-#> 3    3      33       32     32     mid level
-#> 4    4      45       55     44        rising
-#> 5    5      31       21     21       falling
-#> 6    6      23       23     23        rising
+chao <- contour_to_chao(mean_contour)
+chao[, c("tone", "refline", "interval", "shape")]
+#>   tone refline interval         shape
+#> 1    1      22       22 mid-low level
+#> 2    2     212      112       dipping
+#> 3    3      33       32     mid level
+#> 4    4      45       55        rising
+#> 5    5      31       21       falling
+#> 6    6      23       23        rising
 ```
 
-Three conversion methods in one pass:
+Two conversion methods in one pass, both on the range between the lowest
+and highest points of the mean contours:
 
 - **`refline`** — reference-line FOR, rounded on the `[1, 5]` scale
 - **`interval`** — interval-based FOR, ceiling on the `(0, 5]` scale
-- **`robust`** — robust FOR using μ ± σ of the highest- and lowest-tone
-  extremes (requires `raw_data`)
 
 The `shape` column summarises the contour (“rising”, “falling”,
 “dipping”, etc.) and is derived from the reference-line numeral via

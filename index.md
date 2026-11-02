@@ -45,8 +45,8 @@ lexical tone production.
   (GAMM) with AR1 correction (on by default in the app) and one-click
   model diagnostics — basis-dimension check, residual panels, per-token
   residual ACF, and concurvity.
-- 🧮 **Summarise**: convert contours into Chao tone numerals using three
-  FOR methods (reference-line, interval, robust).
+- 🧮 **Summarise**: convert contours into Chao tone numerals using two
+  FOR methods (reference-line and interval).
 
 ## Two ways to use it
 
@@ -91,12 +91,8 @@ normed <- normalise_f0(sample_f0,
 mc   <- compute_mean_contour(normed,
                              token = "token", f0 = "f0_st",
                              time  = "time",  tone = "tone")
-chao <- contour_to_chao(mc,
-                        raw_data  = normed,
-                        raw_token = "token",
-                        raw_f0    = "f0_st",
-                        raw_tone  = "tone")
-chao[, c("tone", "refline", "interval", "robust", "shape")]
+chao <- contour_to_chao(mc)
+chao[, c("tone", "refline", "interval", "shape")]
 ```
 
 ## Installation
