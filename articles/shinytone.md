@@ -287,12 +287,12 @@ chao <- contour_to_chao(
 )
 chao[, c("tone", "refline", "interval", "robust", "shape")]
 #>   tone refline interval robust         shape
-#> 1    1      22       22     33 mid-low level
-#> 2    2     212      111    222       dipping
-#> 3    3      32       32     33       falling
-#> 4    4      45       45     44        rising
-#> 5    5      22       21     32 mid-low level
-#> 6    6      23       13     23        rising
+#> 1    1      22       22     22 mid-low level
+#> 2    2     212      111    212       dipping
+#> 3    3      32       32     22       falling
+#> 4    4      45       45     34        rising
+#> 5    5      22       21     22 mid-low level
+#> 6    6      23       13     22        rising
 ```
 
 Three conversion methods in one pass:

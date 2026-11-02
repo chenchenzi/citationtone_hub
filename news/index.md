@@ -2,6 +2,30 @@
 
 ## shinytone (development version)
 
+- **Summarise: robust FOR is linear, on any input scale.** The robust
+  Chao method took the logarithm of f0, floored its range at 1 Hz and
+  dropped values at or below zero, so on speaker-normalised f0
+  (semitones, z-scores, LZ)
+  [`contour_to_chao()`](https://chenchenzi.github.io/citationtone_hub/reference/contour_to_chao.md)
+  stopped with an interpolation error. It now maps f0 linearly onto its
+  μ ± σ range, like the reference-line and interval methods, so the
+  input sets the pitch scale: semitones and LZ give a log-frequency
+  scale, Hz and z-scores a linear one. Robust numerals on Hz input
+  change as a result. The Summarise tab shows the range in Hz only for
+  Hz sources, its guide states the input-scale rule, and its generated R
+  code for the robust method now follows the package (per-token peaks of
+  the highest tone and valleys of the lowest) instead of extreme time
+  bins, with comments that no longer describe a log step the code does
+  not take.
+- **Summarise: IPA tone letters.** The Chao numeral table has a
+  “Letters” column for each method (35 as ˧˥, 214 as ˨˩˦), and the CSV
+  download has matching columns. The app bundles a 6 KB tone-letter
+  subset of Charis SIL (renamed under its Open Font License,
+  `inst/app/www/fonts/OFL.txt`), so a run of letters joins into one
+  contour line for every visitor. The new
+  [`chao_to_letters()`](https://chenchenzi.github.io/citationtone_hub/reference/chao_to_letters.md)
+  converts numerals to letters in the package, one letter per digit, so
+  a level tone keeps both (55 as ˥˥).
 - **About: “Community & reach”.** A new section at the bottom of the
   About page shows the project’s GitHub stars, as a line built from the
   date of each star, and the views and downloads of the Zenodo archive.

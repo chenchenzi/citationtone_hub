@@ -135,7 +135,7 @@ diagnostics.
 ## Chao tone numerals
 
 Convert mean or predicted contours into Chao tone numerals
-(reference-line, interval-based, robust FOR methods).
+(reference-line, interval-based, robust FOR methods) and tone letters.
 
 - [`compute_mean_contour()`](https://chenchenzi.github.io/citationtone_hub/reference/compute_mean_contour.md)
   : Compute the per-tone mean f0 contour from long-format data
@@ -143,6 +143,8 @@ Convert mean or predicted contours into Chao tone numerals
   : Convert per-tone contours to Chao tone numerals
 - [`classify_contour()`](https://chenchenzi.github.io/citationtone_hub/reference/classify_contour.md)
   : Classify a Chao tone numeral string as a shape
+- [`chao_to_letters()`](https://chenchenzi.github.io/citationtone_hub/reference/chao_to_letters.md)
+  : Write Chao tone numerals as IPA tone letters
 
 ## Bundled data
 
