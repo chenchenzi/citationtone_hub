@@ -271,6 +271,12 @@ chao_to_letters <- function(x) {
 #' scale; a warning is given if only one of them contains negative
 #' values, which suggests a mix of Hz and normalised f0.
 #'
+#' f0 in Hz from several speakers should be normalised by speaker first,
+#' for example to LZ, the log z-score Zhu (1999) found best for tone:
+#' averaging Hz mixes higher and lower voices, which shifts the mean
+#' contours and widens the robust range. The app's Chao tab converts raw
+#' f0 to LZ by speaker automatically.
+#'
 #' ## Turning-point detection
 #'
 #' For each tone, the function samples the contour either at its two
@@ -334,18 +340,18 @@ chao_to_letters <- function(x) {
 #'
 #' @examples
 #' data(sample_f0)
-#' mc <- compute_mean_contour(sample_f0,
-#'                            token = "token", f0 = "f0_Hz",
-#'                            time  = "time",  tone = "tone")
-#' chao <- contour_to_chao(mc,
-#'                         raw_data  = sample_f0,
-#'                         raw_token = "token",
-#'                         raw_f0    = "f0_Hz",
-#'                         raw_tone  = "tone")
+#' # Normalise by speaker first (here LZ), so that higher and lower voices
+#' # are not averaged together in Hz.
+#' lz <- normalise_f0(sample_f0, f0 = "f0_Hz", speaker = "speaker",
+#'                    tone = "tone", method = "lz")
+#' mc <- compute_mean_contour(lz, token = "token", f0 = "f0_lz",
+#'                            time = "time", tone = "tone")
+#' chao <- contour_to_chao(mc, raw_data = lz, raw_token = "token",
+#'                         raw_f0 = "f0_lz", raw_tone = "tone")
 #' chao[, c("tone", "refline", "interval", "robust", "shape")]
 #'
-#' # On semitones, which are often negative, the numerals are on a
-#' # log-frequency scale and between-speaker level differences are removed.
+#' # Semitones also give numerals on a log-frequency scale, but keep each
+#' # speaker's own pitch range.
 #' st <- normalise_f0(sample_f0, f0 = "f0_Hz", speaker = "speaker",
 #'                    tone = "tone", method = "semitone")
 #' mc_st <- compute_mean_contour(st, token = "token", f0 = "f0_st",

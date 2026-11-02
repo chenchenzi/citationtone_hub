@@ -23,6 +23,16 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
     paste(pieces, collapse = " → ")
   }
 
+  # --- Speaker column for the LZ step on raw f0: the first name that looks
+  # like a speaker ID, or ".none" to treat the data as one speaker ---
+  guess_speaker <- function(vars) {
+    for (pat in var_patterns$speaker) {
+      m <- grep(pat, vars, ignore.case = TRUE, value = TRUE)
+      if (length(m) > 0) return(m[1])
+    }
+    ".none"
+  }
+
   # --- Guide text ---
   output$summarise_guide <- renderUI({
     code_style <- "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;"
@@ -73,16 +83,17 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
               HTML("f\u2080\u2032 = (f\u2080 \u2212 (\u03bc<sub>min</sub> \u2212 \u03c3<sub>min</sub>)) / ((\u03bc<sub>max</sub> + \u03c3<sub>max</sub>) \u2212 (\u03bc<sub>min</sub> \u2212 \u03c3<sub>min</sub>)) \u00d7 5")
             ),
             " Same interval-based conversion, but the range is defined by \u03bc \u00b1 \u03c3 of per-token f0 peaks from the highest-pitched tone (max) and per-token f0 valleys from the lowest-pitched tone (min). ",
-            "Like the other two methods, the mapping is linear in the units of the input, so the input sets the pitch scale: semitones and LZ give a logarithmic scale that matches pitch perception, whereas Hz and z-scores give a linear one. ",
-            tags$em("Works with raw f0 data or normalised f0 data.")
+            "Like the other two methods, the mapping is linear in the units of the input, so the input sets the pitch scale: semitones and LZ give a logarithmic scale, closer to how pitch is perceived, whereas Hz and z-scores give a linear one. ",
+            tags$em("Works with raw f0 (converted to LZ) or normalised f0 data.")
           )
         ),
         tags$p(style = "margin: 4px 0 8px 0; font-size: 0.84rem; color: #777;",
-          HTML("Note: Within a given conversion system, scaled values near integer boundaries can be ambiguous. For example, in the interval-based system a scaled value of 1.1 could reasonably be assigned to digit 1 or 2, depending on the tonal contrasts in the language. Values within the fuzzy boundary threshold (\u00b1<em>t</em>) are highlighted in <span style='color:#d9534f; font-weight:bold;'>red</span>. For more discussion on conversion methods and boundary handling, see Xu &amp; Zhang (2024).")
+          HTML("Note: Within a given conversion system, scaled values near a digit boundary can be ambiguous. In the interval-based and robust systems the boundaries are the integers 1\u20134: a scaled value of 1.1 could reasonably be assigned to digit 1 or 2, depending on the tonal contrasts in the language. In the reference-line system they lie half-way between the lines (1.5, 2.5, 3.5, 4.5), so 2.45 could be 2 or 3. Values within the fuzzy boundary threshold (\u00b1<em>t</em>) are highlighted in <span style='color:#d9534f; font-weight:bold;'>red</span>. For more discussion on conversion methods and boundary handling, see Xu &amp; Zhang (2024).")
         ),
         tags$strong("Data source:"),
         tags$ul(style = "margin-bottom: 0; padding-left: 18px;",
-          tags$li(tags$strong("Raw data mean:"), " Always available. Computes per-tone mean f0 contours from the uploaded or normalised data."),
+          tags$li(tags$strong("Raw or curated f0 (Hz):"), " Each speaker\u2019s f0 is first converted to LZ (log z-score), the normalisation Zhu (1999) found best, so that higher and lower voices are not averaged together in Hz; per-tone mean contours are then taken. Choose the speaker variable, or none to treat the data as one speaker."),
+          tags$li(tags$strong("Normalised f0:"), " Per-tone mean contours of the f0 from the Normalise tab, on the scale chosen there."),
           tags$li(tags$strong("GCA / GAMM predictions:"), " Available after fitting the respective model. Uses the population-level predicted contours (smoother, more representative). Note: Robust FOR is not available for model predictions.")
         )
       )
@@ -121,6 +132,7 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
     raw_f0_default    <- guess_var(raw_vars, c("^f0$", "^f0_", "^pitch", "^F0"), 2)
     raw_time_default  <- guess_var(raw_vars, c("^time", "^t$", "^timepoint", "^measurement"), 3)
     raw_tone_default  <- guess_var(raw_vars, c("^tone", "^category", "^tonecat"), 4)
+    raw_speaker_default <- guess_speaker(raw_vars)
 
     # Column info for normalised data
     norm_data <- normalised_data()
@@ -153,7 +165,11 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
                       selected = raw_time_default),
           selectInput("sum_raw_tone_var", "Tone variable:",
                       choices = setNames(raw_vars, raw_labels),
-                      selected = raw_tone_default)
+                      selected = raw_tone_default),
+          selectInput("sum_raw_speaker_var", "Speaker variable (f0 is converted to LZ by speaker):",
+                      choices = c("(none: one speaker)" = ".none",
+                                  setNames(raw_vars, raw_labels)),
+                      selected = raw_speaker_default)
         ),
 
         # --- Variable selectors for normalised ---
@@ -218,6 +234,7 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
     # --- Step 1: Get contour data + raw column names for robust FOR -------
     raw_data_for_robust <- NULL
     raw_token <- raw_f0 <- raw_tone <- NULL
+    lz_info <- NULL
 
     if (src == "gca") {
       contour_data <- gca_pred_data()
@@ -238,33 +255,65 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
           type = "warning", duration = 10)
         return()
       }
-    } else if (src == "raw_hz") {
-      raw_data_for_robust <- dataset()
-      req(raw_data_for_robust)
-      req(input$sum_raw_token_var, input$sum_raw_f0_var,
-          input$sum_raw_time_var,  input$sum_raw_tone_var)
-      raw_token <- input$sum_raw_token_var
-      raw_f0    <- input$sum_raw_f0_var
-      raw_tone  <- input$sum_raw_tone_var
+    } else if (src %in% c("raw_hz", "curated")) {
+      if (src == "raw_hz") {
+        raw_data_for_robust <- dataset()
+        req(raw_data_for_robust)
+        req(input$sum_raw_token_var, input$sum_raw_f0_var,
+            input$sum_raw_time_var,  input$sum_raw_tone_var)
+        raw_token <- input$sum_raw_token_var
+        raw_f0    <- input$sum_raw_f0_var
+        raw_tone  <- input$sum_raw_tone_var
+        raw_time  <- input$sum_raw_time_var
+        raw_spk   <- input$sum_raw_speaker_var
+      } else {
+        # Curated data is structurally identical to the raw dataset (tone column
+        # holds the relabels, excluded tokens dropped); resolve columns by name.
+        raw_data_for_robust <- curated_data()
+        req(raw_data_for_robust)
+        cv <- names(raw_data_for_robust)
+        raw_token <- guess_var(cv, c("^token", "^item", "^segment", "^id"), 1)
+        raw_f0    <- guess_var(cv, c("^f0$", "^f0_", "^pitch", "^F0"), 2)
+        raw_tone  <- guess_var(cv, c("^tone", "^category", "^tonecat"), 4)
+        raw_time  <- guess_var(cv, c("^time", "^t$", "^timepoint", "^measurement"), 3)
+        raw_spk   <- guess_speaker(cv)
+      }
+
+      # Averaging Hz across speakers mixes higher and lower voices, so first
+      # put each speaker's f0 on one scale: LZ, the log z-score Zhu (1999)
+      # found best for tone. With no speaker variable, the data are one speaker.
+      f0_vals <- suppressWarnings(as.numeric(raw_data_for_robust[[raw_f0]]))
+      if (any(f0_vals < 0, na.rm = TRUE)) {
+        showNotification(paste("The f0 variable has negative values, so it looks",
+                               "normalised already. Choose the f0 column in Hz,",
+                               "or use the Normalised f0 source."),
+                         type = "warning", duration = 8)
+        return()
+      }
+      one_spk <- is.null(raw_spk) || !(raw_spk %in% names(raw_data_for_robust))
+      if (one_spk) {
+        raw_spk <- ".speaker"
+        raw_data_for_robust[[raw_spk]] <- "all"
+      }
+      lz_data <- tryCatch(
+        normalise_f0(raw_data_for_robust, f0 = raw_f0, speaker = raw_spk,
+                     tone = raw_tone, method = "lz"),
+        error = function(e) {
+          showNotification(paste("LZ conversion failed:", conditionMessage(e)),
+                           type = "error", duration = 8)
+          NULL
+        })
+      if (is.null(lz_data)) return()
+      lz_info <- list(f0 = raw_f0, token = raw_token, time = raw_time,
+                      tone = raw_tone,
+                      speaker = if (one_spk) NA_character_ else raw_spk,
+                      n_speakers = length(unique(lz_data[[raw_spk]])))
+      raw_data_for_robust <- lz_data
+      raw_f0 <- "f0_lz"
       contour_data <- compute_mean_contour(
         raw_data_for_robust,
         token = raw_token, f0 = raw_f0,
-        time  = input$sum_raw_time_var, tone = raw_tone
-      )
-    } else if (src == "curated") {
-      # Curated data is structurally identical to the raw dataset (tone column
-      # holds the relabels, excluded tokens dropped); resolve columns by name.
-      raw_data_for_robust <- curated_data()
-      req(raw_data_for_robust)
-      cv <- names(raw_data_for_robust)
-      raw_token <- guess_var(cv, c("^token", "^item", "^segment", "^id"), 1)
-      raw_f0    <- guess_var(cv, c("^f0$", "^f0_", "^pitch", "^F0"), 2)
-      raw_tone  <- guess_var(cv, c("^tone", "^category", "^tonecat"), 4)
-      contour_data <- compute_mean_contour(
-        raw_data_for_robust,
-        token = raw_token, f0 = raw_f0,
-        time  = guess_var(cv, c("^time", "^t$", "^timepoint", "^measurement"), 3),
-        tone  = raw_tone
+        time  = raw_time, tone = raw_tone
       )
     } else if (src == "normalised") {
       raw_data_for_robust <- normalised_data()
@@ -348,7 +397,9 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
       row <- data.frame(
         tone              = r$tone,
         n_digits          = n_digits,
-        ref_scaled_values = format_scaled_values_html(ref_vals, 1:5, boundary_tol),
+        # round() changes digit half-way between the reference lines, so the
+        # ambiguous values are those near 1.5, 2.5, 3.5 and 4.5.
+        ref_scaled_values = format_scaled_values_html(ref_vals, 1:4 + 0.5, boundary_tol),
         refline           = r$refline,
         int_scaled_values = format_scaled_values_html(int_vals, 1:4, boundary_tol),
         interval          = r$interval,
@@ -391,6 +442,8 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
 
     sum_params(list(
       source       = src,
+      lz           = lz_info,
+      boundary_tol = boundary_tol,
       f0_min       = f0_min,
       f0_max       = f0_max,
       has_1b       = has_1b,
@@ -418,9 +471,15 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
       "gca" = "GCA predictions",
       "gamm" = "GAMM predictions"
     )
-    # Only the raw and curated sources are known to be in Hz; normalised f0
+    # Raw and curated f0 are converted to LZ before conversion; normalised f0
     # and model predictions may be in semitones, z-scores or LZ.
-    f0_unit <- if (params$source %in% c("raw_hz", "curated")) " Hz" else ""
+    lz <- params$lz
+    f0_unit <- if (!is.null(lz)) " LZ" else ""
+    lz_note <- if (!is.null(lz)) paste0(
+      "f0 (", lz$f0, ") converted to LZ by speaker before conversion: ",
+      if (is.na(lz$speaker)) "no speaker variable, so one speaker"
+      else paste0(lz$n_speakers, if (lz$n_speakers == 1) " speaker" else " speakers",
+                  " (", lz$speaker, ")"))
     # Shared table styles
     th_style <- "padding: 6px 8px; border-bottom: 2px solid #ddd; text-align: center; font-size: 0.82rem;"
     th_group <- "padding: 6px 8px; border-bottom: 1px solid #ccc; text-align: center; font-size: 0.82rem; font-weight: bold;"
@@ -510,6 +569,7 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
         tags$strong("Conversion parameters:"),
         tags$ul(style = "margin-bottom: 8px; padding-left: 18px;",
           tags$li(paste0("Source: ", src_label)),
+          if (!is.null(lz_note)) tags$li(lz_note),
           tags$li(HTML(paste0("Reference-line & Interval FOR, f0 range (min/max): ", round(params$f0_min, 2), " \u2013 ", round(params$f0_max, 2),
                               f0_unit,
                               " &nbsp;(\u0394 = ", round(params$f0_max - params$f0_min, 2), ")"))),
@@ -518,16 +578,18 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
             round(params$lower_1b, 2), " \u2013 ", round(params$upper_1b, 2),
             f0_unit,
             " &nbsp;(lowest tone: ", params$lowest_tone,
-            ", \u03bc=", round(params$mu_min_1b, 1),
-            ", \u03c3=", round(params$sigma_min_1b, 1),
+            ", \u03bc=", round(params$mu_min_1b, 2),
+            ", \u03c3=", round(params$sigma_min_1b, 2),
             "; highest tone: ", params$highest_tone,
-            ", \u03bc=", round(params$mu_max_1b, 1),
-            ", \u03c3=", round(params$sigma_max_1b, 1), ")"
+            ", \u03bc=", round(params$mu_max_1b, 2),
+            ", \u03c3=", round(params$sigma_max_1b, 2), ")"
           )))
         ),
         tags$strong("Chao tone numeral comparison:"),
         tags$p(style = "font-size: 0.8rem; color: #888; margin: 4px 0 6px 0;",
-          HTML("Values in <span style='color:#d9534f;font-weight:bold;'>red</span> are within \u00b10.1 of a boundary. These are sensitive to the choice of conversion method.")),
+          HTML(paste0("Values in <span style='color:#d9534f;font-weight:bold;'>red</span> are within \u00b1",
+                      params$boundary_tol, " of a digit boundary: half-way between reference lines (1.5, 2.5, 3.5, 4.5), ",
+                      "or the integers 1\u20134 for the interval-based and robust methods. These are sensitive to the choice of conversion method."))),
         tags$table(
           style = "margin-top: 4px; border-collapse: collapse; font-size: 0.84rem; width: 100%;",
           tags$thead(header_row1, header_row2),
@@ -599,9 +661,11 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
 
     # --- Plot 1: Reference-line [1, 5] ---
     ref_breaks <- 1:5
+    ref_edges  <- 1:4 + 0.5   # round() changes digit half-way between lines
+    tol <- if (is.null(params$boundary_tol)) 0.1 else params$boundary_tol
     p_ref <- ggplot(pdat, aes(x = time, y = chao_ref, colour = tone)) +
       annotate("rect", xmin = -Inf, xmax = Inf,
-               ymin = ref_breaks - 0.1, ymax = ref_breaks + 0.1,
+               ymin = ref_edges - tol, ymax = ref_edges + tol,
                fill = "grey90", alpha = 0.5) +
       geom_hline(yintercept = ref_breaks, linetype = "dashed", colour = "grey60", linewidth = 0.3) +
       geom_line(linewidth = 1.1) +
@@ -763,7 +827,7 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
     code_1b_convert <- if (show_1b) paste0(
       '\n  # Method 1b: ceiling on mu+/-sigma (0,5] scale\n',
       '  fn_1b <- approxfun(td$time, td$chao_1b, rule = 2)\n',
-      '  b_vals <- c(fn_1b(0), fn_1b(1))\n',
+      '  b_vals <- fn_1b(sample_times)\n',
       '  numeral_1b <- paste0(pmax(1, pmin(5, ceiling(b_vals))), collapse = "")\n'
     ) else ""
 
@@ -772,10 +836,33 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
       '             numeral_1b = numeral_1b'
     ) else ""
 
-    code_text <- paste0(
-      'library(dplyr)\nlibrary(ggplot2)\n\n',
+    # Raw and curated f0: show the LZ step that builds pred (and raw_data).
+    lz <- params$lz
+    dq <- function(x) deparse(x)
+    code_lz <- if (!is.null(lz)) {
+      spk <- if (is.na(lz$speaker)) ".speaker" else lz$speaker
+      paste0(
+        '# Step 0: Convert each speaker\'s f0 to LZ (log z-score, Zhu 1999), so that\n',
+        '# higher and lower voices are not averaged together in Hz, then take the\n',
+        '# per-tone mean contours\n',
+        '# dat: your f0 data, one row per f0 sample\n',
+        if (is.na(lz$speaker)) 'dat$.speaker <- "all"   # no speaker variable: one speaker\n' else "",
+        'dat <- normalise_f0(dat, f0 = ', dq(lz$f0), ', speaker = ', dq(spk), ',\n',
+        '                    tone = ', dq(lz$tone), ', method = "lz")\n',
+        'pred <- compute_mean_contour(dat, token = ', dq(lz$token), ', f0 = "f0_lz",\n',
+        '                             time = ', dq(lz$time), ', tone = ', dq(lz$tone), ')\n',
+        if (show_1b) paste0(
+          'raw_data <- data.frame(token = dat[[', dq(lz$token), ']], f0 = dat$f0_lz,\n',
+          '                       tone = dat[[', dq(lz$tone), ']])\n') else "",
+        '\n')
+    } else paste0(
       '# pred is a data frame with columns: time, f0_predicted, tone\n',
-      '# (from GCA/GAMM predictions or per-tone mean contours)\n\n',
+      '# (from GCA/GAMM predictions or per-tone mean contours)\n\n')
+
+    code_text <- paste0(
+      if (!is.null(lz)) 'library(shinytone)\n' else "",
+      'library(dplyr)\nlibrary(ggplot2)\n\n',
+      code_lz,
       '# Step 1: Define pitch range\n',
       'f0_min <- min(pred$f0_predicted, na.rm = TRUE)\n',
       'f0_max <- max(pred$f0_predicted, na.rm = TRUE)\n\n',
@@ -785,18 +872,33 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
       'pred$chao_ref <- (pred$f0_predicted - f0_min) / (f0_max - f0_min) * 4 + 1\n',
       'pred$chao_int <- (pred$f0_predicted - f0_min) / (f0_max - f0_min) * 5\n',
       code_1b,
-      '\n# Step 3: Sample onset and offset per tone, convert\n',
+      '\n# Step 3: Per tone, sample the onset, the offset and any turning point, then convert\n',
+      '# A turning point is the lowest (dip) or highest (peak) point between 10% and 90%\n',
+      '# of the time axis on the reference-line scale. It adds a middle digit when it lies\n',
+      '# more than `threshold` Chao units below (dip) or above (peak) both endpoints.\n',
+      'threshold <- 0.5\n',
       'tone_levels <- unique(pred$tone)\n',
       'results <- lapply(tone_levels, function(tone_val) {\n',
-      '  td <- pred[pred$tone == tone_val, ]\n',
+      '  td <- pred[pred$tone == tone_val & !is.na(pred$chao_ref) & !is.na(pred$time), ]\n',
       '  td <- td[order(td$time), ]\n',
+      '  if (nrow(td) < 2) return(NULL)\n',
       '  fn_ref <- approxfun(td$time, td$chao_ref, rule = 2)\n',
       '  fn_int <- approxfun(td$time, td$chao_int, rule = 2)\n\n',
+      '  fine_time <- seq(0, 1, length.out = 200)\n',
+      '  fine_ref  <- fn_ref(fine_time)\n',
+      '  inner <- 20:180   # skip the first and last 10%\n',
+      '  i_min <- inner[which.min(fine_ref[inner])]\n',
+      '  i_max <- inner[which.max(fine_ref[inner])]\n',
+      '  onset <- fine_ref[1]; offset <- fine_ref[200]\n',
+      '  has_dip  <- onset - fine_ref[i_min] > threshold && offset - fine_ref[i_min] > threshold\n',
+      '  has_peak <- fine_ref[i_max] - onset > threshold && fine_ref[i_max] - offset > threshold\n',
+      '  sample_times <- if (has_dip) c(0, fine_time[i_min], 1) else\n',
+      '                  if (has_peak) c(0, fine_time[i_max], 1) else c(0, 1)\n\n',
       '  # Eq. 3 [1,5]: round to nearest integer\n',
-      '  ref_vals <- c(fn_ref(0), fn_ref(1))\n',
+      '  ref_vals <- fn_ref(sample_times)\n',
       '  refline <- paste0(pmax(1, pmin(5, round(ref_vals))), collapse = "")\n\n',
       '  # Eq. 1a (0,5]: ceiling -> Chao digits 1-5\n',
-      '  int_vals <- c(fn_int(0), fn_int(1))\n',
+      '  int_vals <- fn_int(sample_times)\n',
       '  interval <- paste0(pmax(1, pmin(5, ceiling(int_vals))), collapse = "")\n',
       code_1b_convert,
       '\n  data.frame(tone = tone_val,\n',

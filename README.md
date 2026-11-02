@@ -90,14 +90,15 @@ normed <- normalise_f0(sample_f0,
                        tone    = "tone",
                        method  = "semitone")
 
-# Convert mean contours to Chao tone numerals
-mc   <- compute_mean_contour(sample_f0,
-                             token = "token", f0 = "f0_Hz",
+# Convert the normalised mean contours to Chao tone numerals
+# (averaging Hz would mix higher and lower voices)
+mc   <- compute_mean_contour(normed,
+                             token = "token", f0 = "f0_st",
                              time  = "time",  tone = "tone")
 chao <- contour_to_chao(mc,
-                        raw_data  = sample_f0,
+                        raw_data  = normed,
                         raw_token = "token",
-                        raw_f0    = "f0_Hz",
+                        raw_f0    = "f0_st",
                         raw_tone  = "tone")
 chao[, c("tone", "refline", "interval", "robust", "shape")]
 ```
