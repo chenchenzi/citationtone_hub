@@ -36,6 +36,15 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
   # --- Guide text ---
   output$summarise_guide <- renderUI({
     code_style <- "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;"
+    # Digit-scheme diagram in the app's palette: the same colour for digits in
+    # both schemes (the dark green of headings), boundaries in the gold the
+    # app uses for flags and hints, and everything else muted.
+    digit <- function(x) sprintf("<b style='color:#2c5f4f;'>%s</b>", x)
+    edge  <- function(x) sprintf("<b style='color:#e0a800;'>%s</b>", x)
+    title <- function(x) sprintf("<b style='color:#2c5f4f;'>%s</b>", x)
+    # Interval digits are bands: each sits in a light mint box between two
+    # boundaries.
+    band  <- function(x) sprintf("<span style='background:#e8f5f0; border-radius:3px;'>%s</span>", x)
     tagList(
       guide_box("Chao tone numeral guide",
         tags$p(style = "margin-bottom: 8px;",
@@ -77,19 +86,19 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
             ": (0,1]\u21921, (1,2]\u21922, (2,3]\u21923, (3,4]\u21924, (4,5]\u21925."
           )
         ),
-        tags$pre(style = "font-size: 0.76rem; line-height: 1.35; background: #f7f7f7; border: none; padding: 6px 8px; margin: 2px 0 8px 0; overflow-x: auto;",
-          paste(c(
-            "Reference-line, round(): digits are the lines, boundaries half-way",
-            "  line:   1       2       3       4       5",
-            "  digit:  1   |   2   |   3   |   4   |   5",
-            "             1.5     2.5     3.5     4.5",
+        tags$pre(style = "font-size: 0.78rem; line-height: 1.4; color: #6b7d75; background: #fff; border: 1px solid #d6e7df; border-radius: 4px; padding: 8px 10px; margin: 2px 0 8px 0; overflow-x: auto;",
+          HTML(paste(c(
+            paste0(title("Reference-line, round()"), ": digits are the lines, boundaries half-way"),
+            paste0("  line:   ", paste(1:5, collapse = "       ")),
+            paste0("  digit:  ", paste(digit(1:5), collapse = paste0("   ", edge("|"), "   "))),
+            paste0("             ", paste(edge(c("1.5", "2.5", "3.5", "4.5")), collapse = "     ")),
             "",
-            "Interval, ceiling(): digits are the bands, boundaries at integers",
-            "  value:  0       1       2       3       4       5",
-            "  digit:  |   1   |   2   |   3   |   4   |   5   |"
-          ), collapse = "\n")),
+            paste0(title("Interval, ceiling()"), ": digits are the bands, boundaries at integers"),
+            paste0("  value:  ", paste(c(0, edge(1:4), 5), collapse = "       ")),
+            paste0("  digit:  |", paste0(band(paste0("   ", digit(1:5), "   ")), c(rep(edge("|"), 4), "|"), collapse = ""))
+          ), collapse = "\n"))),
         tags$p(style = "margin: 4px 0 8px 0; font-size: 0.84rem; color: #777;",
-          HTML("Note: Scaled values near a digit boundary (| above) can be ambiguous: 2.45 on the reference-line scale could be 2 or 3, and 1.1 on the interval scale could be 1 or 2, depending on the tonal contrasts in the language. Values within the fuzzy boundary threshold (\u00b1<em>t</em>) are highlighted in <span style='color:#d9534f; font-weight:bold;'>red</span>. For more discussion on conversion methods and boundary handling, see Xu &amp; Zhang (2024).")
+          HTML("Note: Scaled values near a digit boundary (<span style='color:#e0a800; font-weight:bold;'>|</span> above) can be ambiguous: 2.45 on the reference-line scale could be 2 or 3, and 1.1 on the interval scale could be 1 or 2, depending on the tonal contrasts in the language. Values within the fuzzy boundary threshold (\u00b1<em>t</em>) are highlighted in <span style='color:#d9534f; font-weight:bold;'>red</span>. For more discussion on conversion methods and boundary handling, see Xu &amp; Zhang (2024).")
         ),
         tags$strong("Data source:"),
         tags$ul(style = "margin-bottom: 0; padding-left: 18px;",
