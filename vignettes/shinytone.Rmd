@@ -237,20 +237,15 @@ above: averaging Hz over speakers would mix higher and lower voices. (The
 app's Chao tab converts raw f0 to LZ by speaker before converting.)
 
 ```{r}
-chao <- contour_to_chao(
-  mean_contour,
-  raw_data  = normed,
-  raw_token = "token", raw_f0 = "f0_st", raw_tone = "tone"
-)
-chao[, c("tone", "refline", "interval", "robust", "shape")]
+chao <- contour_to_chao(mean_contour)
+chao[, c("tone", "refline", "interval", "shape")]
 ```
 
-Three conversion methods in one pass:
+Two conversion methods in one pass, both on the range between the
+lowest and highest points of the mean contours:
 
 * **`refline`** — reference-line FOR, rounded on the `[1, 5]` scale
 * **`interval`** — interval-based FOR, ceiling on the `(0, 5]` scale
-* **`robust`** — robust FOR using μ ± σ of the highest- and lowest-tone
-  extremes (requires `raw_data`)
 
 The `shape` column summarises the contour ("rising", "falling",
 "dipping", etc.) and is derived from the reference-line numeral via

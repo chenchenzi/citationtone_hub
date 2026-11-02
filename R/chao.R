@@ -196,8 +196,8 @@ classify_contour <- function(chao_str) {
 #' letters as separate bars. The characters are the same either way.
 #'
 #' @param x A character (or integer) vector of Chao numerals, e.g.
-#'   `c("55", "35", "214", "51")`, such as the `refline`, `interval` or
-#'   `robust` column of [contour_to_chao()].
+#'   `c("55", "35", "214", "51")`, such as the `refline` or `interval`
+#'   column of [contour_to_chao()].
 #'
 #' @return A character vector the same length as `x`. Elements that are
 #'   `NA`, or that contain anything other than the digits 1 to 5, become
@@ -231,18 +231,19 @@ chao_to_letters <- function(x) {
 #' @description
 #' Summarises per-tone contours as Chao tone numerals (Chao 1930): 5-level
 #' digit strings like `"55"`, `"35"`, or `"214"` that describe each
-#' contour by its endpoints and any interior turning point. Three
-#' conversion methods are computed in one pass so the analyst can
-#' compare them or pick whichever is most appropriate for the corpus
-#' (Xu & Zhang 2024).
+#' contour by its endpoints and any interior turning point. Two
+#' conversion methods are computed in one pass so the user can compare
+#' them (Xu & Zhang 2024).
 #'
 #' @details
-#' ## The three conversion methods
+#' ## The two conversion methods
 #'
-#' All three use Fraction of Range (FOR) normalisation, which maps f0
-#' onto a bounded scale representing the speaker's (or corpus's) pitch
-#' range. They differ in how the range is defined and how scaled values
-#' are mapped to Chao digits.
+#' Both use Fraction of Range (FOR) normalisation, which maps f0 onto a
+#' bounded scale between `f0_min` and `f0_max`, the lowest and highest
+#' points of `contour_data`. With mean contours from
+#' [compute_mean_contour()], each of these points is itself an average
+#' over tokens, not a single f0 measurement. The two methods differ in
+#' how scaled values are mapped to Chao digits.
 #'
 #' * **Reference-line FOR on `[1, 5]`**:
 #'   `f0' = (f0 - f0_min) / (f0_max - f0_min) * 4 + 1`, then rounded.
@@ -252,30 +253,21 @@ chao_to_letters <- function(x) {
 #'   `f0' = (f0 - f0_min) / (f0_max - f0_min) * 5`, then ceilinged.
 #'   Five equal-width intervals; each sampled point is assigned to its
 #'   interval via `ceiling()`.
-#' * **Robust FOR on `(0, 5]`** (only if `raw_data` is supplied):
-#'   `f0' = (f0 - lower) / (upper - lower) * 5`, then ceilinged, the
-#'   interval formula with a different range. `upper` is μ + σ of the
-#'   per-token f0 peaks of the highest-pitched tone and `lower` is μ - σ
-#'   of the per-token f0 valleys of the lowest-pitched tone, following
-#'   Zhu (1999) and the recommendation of Xu & Zhang (2024). More robust
-#'   to outliers than using the corpus-wide min and max.
 #'
 #' ## Input scale
 #'
-#' All three methods are linear in the units of the input, so the input
+#' Both methods are linear in the units of the input, so the input
 #' sets the pitch scale of the numerals. Semitones and LZ from
 #' [normalise_f0()] give a log-frequency scale, on which equal steps are
 #' equal pitch ratios, as pitch is heard; Hz and z-scores give a scale
 #' linear in Hz. Negative values, as in speaker-normalised f0, need no
-#' special handling. `raw_data` and `contour_data` must be on the same
-#' scale; a warning is given if only one of them contains negative
-#' values, which suggests a mix of Hz and normalised f0.
+#' special handling.
 #'
 #' f0 in Hz from several speakers should be normalised by speaker first,
 #' for example to LZ, the log z-score Zhu (1999) found best for tone:
 #' averaging Hz mixes higher and lower voices, which shifts the mean
-#' contours and widens the robust range. The app's Chao tab converts raw
-#' f0 to LZ by speaker automatically.
+#' contours. The app's Chao tab converts raw f0 to LZ by speaker
+#' automatically.
 #'
 #' ## Turning-point detection
 #'
@@ -300,26 +292,26 @@ chao_to_letters <- function(x) {
 #' @param tone_col,time_col,f0_col Column names within `contour_data`.
 #' @param threshold Chao-units threshold for turning-point detection.
 #'   Default `0.5`. See Details.
-#' @param raw_data Optional long-format raw data, used to compute the
-#'   robust FOR. If `NULL`, the `robust` column is left as `NA`.
-#' @param raw_token,raw_f0,raw_tone Column names in `raw_data`.
+#' @param raw_data,raw_token,raw_f0,raw_tone Deprecated and ignored, with
+#'   a warning. They supplied token-level data for a third, "robust"
+#'   method, which has been removed: its range, one SD beyond the mean
+#'   token extremes, squeezed averaged contours towards the middle digits
+#'   and moved more with pitch-tracking errors than the range of the
+#'   contours themselves.
 #'
 #' @return A data frame with one row per tone, containing:
 #' * `tone`: tone label.
 #' * `n_digits`: number of digits in the numeral (`2` or `3`).
 #' * `refline`: reference-line method numeral, e.g. `"55"`.
 #' * `interval`: interval-based numeral, e.g. `"45"`.
-#' * `robust`: robust FOR numeral (or `NA` if `raw_data` is not given).
 #' * `shape`: shape name from [classify_contour()] applied to `refline`.
-#' * `sample_times`, `ref_continuous`, `int_continuous`,
-#'   `rob_continuous`: list columns of the per-sample numeric values
-#'   underlying the digit strings, useful for plotting or further
-#'   analysis.
+#' * `sample_times`, `ref_continuous`, `int_continuous`: list columns of
+#'   the per-sample numeric values underlying the digit strings, useful
+#'   for plotting or further analysis.
 #'
 #' Two attributes are attached to the returned data frame: `f0_min` and
-#' `f0_max` of the input contour, plus a `robust_stats` list containing
-#' the means and standard deviations used for the robust method (or
-#' `NULL` if `raw_data` was not supplied).
+#' `f0_max`, the lowest and highest points of `contour_data`, which set
+#' the range.
 #'
 #' @seealso
 #' * [compute_mean_contour()] for one common upstream step.
@@ -346,9 +338,8 @@ chao_to_letters <- function(x) {
 #'                    tone = "tone", method = "lz")
 #' mc <- compute_mean_contour(lz, token = "token", f0 = "f0_lz",
 #'                            time = "time", tone = "tone")
-#' chao <- contour_to_chao(mc, raw_data = lz, raw_token = "token",
-#'                         raw_f0 = "f0_lz", raw_tone = "tone")
-#' chao[, c("tone", "refline", "interval", "robust", "shape")]
+#' chao <- contour_to_chao(mc)
+#' chao[, c("tone", "refline", "interval", "shape")]
 #'
 #' # Semitones also give numerals on a log-frequency scale, but keep each
 #' # speaker's own pitch range.
@@ -356,9 +347,8 @@ chao_to_letters <- function(x) {
 #'                    tone = "tone", method = "semitone")
 #' mc_st <- compute_mean_contour(st, token = "token", f0 = "f0_st",
 #'                               time = "time", tone = "tone")
-#' chao_st <- contour_to_chao(mc_st, raw_data = st, raw_token = "token",
-#'                            raw_f0 = "f0_st", raw_tone = "tone")
-#' chao_st[, c("tone", "refline", "interval", "robust", "shape")]
+#' chao_st <- contour_to_chao(mc_st)
+#' chao_st[, c("tone", "refline", "interval", "shape")]
 #'
 #' @export
 #' @importFrom dplyr filter group_by summarise
@@ -380,13 +370,11 @@ contour_to_chao <- function(contour_data,
     stop("Column(s) not found in contour_data: ",
          paste(missing_cols, collapse = ", "), call. = FALSE)
   }
-  if (!is.null(raw_data)) {
-    raw_required <- c(raw_token, raw_f0, raw_tone)
-    raw_missing  <- setdiff(raw_required, names(raw_data))
-    if (length(raw_missing) > 0) {
-      stop("Column(s) not found in raw_data: ",
-           paste(raw_missing, collapse = ", "), call. = FALSE)
-    }
+  if (!is.null(raw_data) || !missing(raw_token) || !missing(raw_f0) ||
+      !missing(raw_tone)) {
+    warning("`raw_data`, `raw_token`, `raw_f0` and `raw_tone` are deprecated ",
+            "and ignored: the robust method that used them has been removed.",
+            call. = FALSE)
   }
 
   # Normalise input column names internally.
@@ -408,53 +396,6 @@ contour_to_chao <- function(contour_data,
     cd$chao_int <- (cd$f0_predicted - f0_min) / (f0_max - f0_min) * 5
   }
 
-  # --- Robust FOR (optional) ----------------------------------------------
-  has_robust <- !is.null(raw_data)
-  cd$chao_rob <- NA_real_
-  if (has_robust) {
-    raw <- raw_data
-    raw$.f0 <- suppressWarnings(as.numeric(raw[[raw_f0]]))
-    raw <- raw[!is.na(raw$.f0), , drop = FALSE]
-
-    # The robust range is applied to contour_data, so both must be on one
-    # scale. Hz is never negative and speaker-normalised f0 (semitones,
-    # z-scores, LZ) nearly always is, so a sign mismatch flags a mix.
-    if (any(raw$.f0 < 0) != any(cd$f0_predicted < 0, na.rm = TRUE)) {
-      warning("Only one of `raw_data` and `contour_data` has negative f0 ",
-              "values, so they may be on different scales (Hz versus ",
-              "normalised). Both should use the same scale.", call. = FALSE)
-    }
-
-    tone_means <- raw |>
-      dplyr::group_by(.data[[raw_tone]]) |>
-      dplyr::summarise(.m = mean(.data$.f0, na.rm = TRUE), .groups = "drop")
-    highest <- tone_means[[raw_tone]][which.max(tone_means$.m)]
-    lowest  <- tone_means[[raw_tone]][which.min(tone_means$.m)]
-
-    peaks <- raw[raw[[raw_tone]] == highest, ] |>
-      dplyr::group_by(.data[[raw_token]]) |>
-      dplyr::summarise(.pk = max(.data$.f0, na.rm = TRUE), .groups = "drop")
-    valleys <- raw[raw[[raw_tone]] == lowest, ] |>
-      dplyr::group_by(.data[[raw_token]]) |>
-      dplyr::summarise(.vl = min(.data$.f0, na.rm = TRUE), .groups = "drop")
-
-    mu_max    <- mean(peaks$.pk,   na.rm = TRUE)
-    sigma_max <- stats::sd(peaks$.pk,   na.rm = TRUE)
-    mu_min    <- mean(valleys$.vl, na.rm = TRUE)
-    sigma_min <- stats::sd(valleys$.vl, na.rm = TRUE)
-    upper     <- mu_max + sigma_max
-    lower     <- mu_min - sigma_min
-    # Linear in the input units, like the other two methods: the input sets
-    # the pitch scale (semitones and LZ are log-frequency, Hz is not).
-    rob_range <- upper - lower
-    if (is.finite(rob_range) && rob_range > 0) {
-      cd$chao_rob <- pmax(0, pmin(5,
-        (cd$f0_predicted - lower) / rob_range * 5))
-    } else {
-      has_robust <- FALSE
-    }
-  }
-
   # --- Per-tone numeral extraction ----------------------------------------
   tone_levels <- unique(cd$tone)
   rows <- vector("list", length(tone_levels))
@@ -467,8 +408,6 @@ contour_to_chao <- function(contour_data,
 
     interp_ref <- stats::approxfun(td$time, td$chao_ref, rule = 2)
     interp_int <- stats::approxfun(td$time, td$chao_int, rule = 2)
-    interp_rob <- if (has_robust) stats::approxfun(td$time, td$chao_rob, rule = 2)
-                  else NULL
 
     onset_ref  <- interp_ref(0)
     offset_ref <- interp_ref(1)
@@ -492,21 +431,15 @@ contour_to_chao <- function(contour_data,
 
     ref_vals <- interp_ref(sample_times)
     int_vals <- interp_int(sample_times)
-    rob_vals <- if (has_robust) pmax(0, pmin(5, interp_rob(sample_times)))
-                else rep(NA_real_, n_digits)
 
     refline_str  <- paste0(pmax(1L, pmin(5L, round(ref_vals))),   collapse = "")
     interval_str <- paste0(pmax(1L, pmin(5L, ceiling(int_vals))), collapse = "")
-    robust_str   <- if (has_robust)
-                      paste0(pmax(1L, pmin(5L, ceiling(rob_vals))), collapse = "")
-                    else NA_character_
 
     rows[[i]] <- data.frame(
       tone     = tv,
       n_digits = n_digits,
       refline  = refline_str,
       interval = interval_str,
-      robust   = robust_str,
       shape    = classify_contour(refline_str),
       stringsAsFactors = FALSE
     )
@@ -514,7 +447,6 @@ contour_to_chao <- function(contour_data,
     rows[[i]]$sample_times    <- I(list(sample_times))
     rows[[i]]$ref_continuous  <- I(list(ref_vals))
     rows[[i]]$int_continuous  <- I(list(int_vals))
-    rows[[i]]$rob_continuous  <- I(list(rob_vals))
   }
 
   out <- do.call(rbind, rows[!vapply(rows, is.null, logical(1))])
@@ -524,15 +456,5 @@ contour_to_chao <- function(contour_data,
   # can display them without recomputing.
   attr(out, "f0_min") <- f0_min
   attr(out, "f0_max") <- f0_max
-  if (has_robust) {
-    attr(out, "robust_stats") <- list(
-      highest_tone = highest, lowest_tone = lowest,
-      mu_max = mu_max, sigma_max = sigma_max,
-      mu_min = mu_min, sigma_min = sigma_min,
-      upper  = upper,  lower      = lower
-    )
-  } else {
-    attr(out, "robust_stats") <- NULL
-  }
   out
 }

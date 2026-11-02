@@ -74,8 +74,9 @@ test_that("contour_to_chao returns one row per tone with refline + interval", {
   out <- contour_to_chao(contour)
   expect_equal(nrow(out), 2)
   expect_true(all(c("tone", "n_digits", "refline", "interval",
-                    "robust", "shape") %in% names(out)))
-  expect_true(is.na(out$robust[1]))   # no raw_data given
+                    "shape") %in% names(out)))
+  expect_false(any(c("robust", "rob_continuous") %in% names(out)))
+  expect_null(attr(out, "robust_stats"))
 })
 
 test_that("contour_to_chao detects rising and falling shapes", {
@@ -103,68 +104,44 @@ test_that("contour_to_chao detects a dipping shape with 3 digits", {
   expect_equal(out$n_digits, 3)
 })
 
-test_that("contour_to_chao computes robust FOR when raw_data is supplied", {
+test_that("contour_to_chao takes its range from the contours' lowest and highest points", {
   contour <- data.frame(
-    tone         = rep("T1", 11),
-    time         = seq(0, 1, length.out = 11),
-    f0_predicted = seq(120, 180, length.out = 11)
+    tone         = rep(c("lo", "hi"), each = 11),
+    time         = rep(seq(0, 1, length.out = 11), 2),
+    f0_predicted = c(rep(100, 11), rep(200, 11))
   )
-  raw <- data.frame(
-    token = rep(c("a", "b", "c", "d"), each = 10),
-    f0    = c(rep(120, 10), rep(180, 10), rep(120, 10), rep(180, 10)),
-    tone  = rep(c("T_low", "T_high", "T_low", "T_high"), each = 10)
-  )
-  out <- contour_to_chao(contour, raw_data = raw,
-                         raw_token = "token", raw_f0 = "f0",
-                         raw_tone  = "tone")
-  expect_false(is.na(out$robust))
-  expect_true(nchar(out$robust) >= 2)
+  out <- contour_to_chao(contour)
+  expect_equal(attr(out, "f0_min"), 100)
+  expect_equal(attr(out, "f0_max"), 200)
+  expect_equal(out$refline,  c("11", "55"))
+  expect_equal(out$interval, c("11", "55"))
 })
 
-test_that("contour_to_chao robust FOR is linear in Hz, with no log step", {
-  contour <- data.frame(tone = rep("T1", 11),
-                        time = seq(0, 1, length.out = 11),
-                        f0_predicted = rep(140, 11))
-  raw <- data.frame(
-    token = rep(c("a", "b", "c", "d"), each = 10),
-    f0    = c(rep(120, 10), rep(180, 10), rep(120, 10), rep(180, 10)),
-    tone  = rep(c("T_low", "T_high", "T_low", "T_high"), each = 10)
+test_that("contour_to_chao is linear in the units of the input", {
+  contour <- data.frame(
+    tone         = rep(c("lo", "mid", "hi"), each = 11),
+    time         = rep(seq(0, 1, length.out = 11), 3),
+    f0_predicted = rep(c(120, 140, 180), each = 11)
   )
-  out <- contour_to_chao(contour, raw_data = raw,
-                         raw_token = "token", raw_f0 = "f0",
-                         raw_tone  = "tone")
-  # Range 120-180 Hz: 140 Hz is a third of the way up, 5/3 on (0, 5].
-  # A log mapping would give (log 140 - log 120) / (log 180 - log 120) * 5.
-  expect_equal(out$rob_continuous[[1]][1], (140 - 120) / (180 - 120) * 5)
-  expect_equal(out$robust, "22")
+  out <- contour_to_chao(contour)
+  mid <- which(out$tone == "mid")
+  # 140 Hz is a third of the way up 120-180 Hz; a log scale would put it lower.
+  expect_equal(out$int_continuous[[mid]][1], (140 - 120) / (180 - 120) * 5)
+  expect_equal(out$interval[mid], "22")
 })
 
-test_that("contour_to_chao robust FOR handles negative (normalised) f0", {
+test_that("contour_to_chao handles negative (normalised) f0", {
   contour <- data.frame(
-    tone         = rep(c("T_low", "T_high"), each = 11),
+    tone         = rep(c("lo", "hi"), each = 11),
     time         = rep(seq(0, 1, length.out = 11), 2),
     f0_predicted = c(rep(-4, 11), rep(4, 11))
   )
-  raw <- data.frame(
-    token = rep(c("a", "b", "c", "d"), each = 10),
-    f0    = c(rep(-5, 10), rep(5, 10), rep(-3, 10), rep(3, 10)),
-    tone  = rep(c("T_low", "T_high", "T_low", "T_high"), each = 10)
-  )
-  out <- contour_to_chao(contour, raw_data = raw,
-                         raw_token = "token", raw_f0 = "f0",
-                         raw_tone  = "tone")
-  rs <- attr(out, "robust_stats")
-  # Valleys -5 and -3, peaks 5 and 3: mean -/+4, SD sqrt(2) each.
-  expect_equal(rs$lower, -4 - sqrt(2))
-  expect_equal(rs$upper,  4 + sqrt(2))
-  low <- which(out$tone == "T_low")
-  expect_equal(out$rob_continuous[[low]][1],
-               sqrt(2) / (8 + 2 * sqrt(2)) * 5)
-  expect_equal(out$robust[low], "11")
-  expect_equal(out$robust[out$tone == "T_high"], "55")
+  out <- contour_to_chao(contour)
+  expect_equal(out$refline,  c("11", "55"))
+  expect_equal(out$interval, c("11", "55"))
 })
 
-test_that("contour_to_chao robust FOR runs on normalise_f0() output", {
+test_that("contour_to_chao runs on normalise_f0() output", {
   data(sample_f0, package = "shinytone", envir = environment())
   for (m in c("semitone", "zscore", "lz")) {
     n   <- normalise_f0(sample_f0, f0 = "f0_Hz", speaker = "speaker",
@@ -172,21 +149,18 @@ test_that("contour_to_chao robust FOR runs on normalise_f0() output", {
     col <- c(semitone = "f0_st", zscore = "f0_zscore", lz = "f0_lz")[[m]]
     mc  <- compute_mean_contour(n, token = "token", f0 = col,
                                 time = "time", tone = "tone")
-    out <- contour_to_chao(mc, raw_data = n, raw_token = "token",
-                           raw_f0 = col, raw_tone = "tone")
-    expect_false(anyNA(out$robust))
-    expect_true(all(grepl("^[1-5]{2,3}$", out$robust)))
+    out <- contour_to_chao(mc)
+    expect_true(all(grepl("^[1-5]{2,3}$", c(out$refline, out$interval))))
   }
 })
 
-test_that("contour_to_chao warns when only one input looks normalised", {
+test_that("contour_to_chao warns that the raw_* arguments are deprecated", {
   contour <- data.frame(tone = rep("T1", 11), time = seq(0, 1, length.out = 11),
                         f0_predicted = seq(120, 180, length.out = 11))
-  raw <- data.frame(token = rep(c("a", "b"), each = 5),
-                    f0 = c(rep(-2, 5), rep(2, 5)),
-                    tone = rep(c("T_low", "T_high"), each = 5))
-  expect_warning(contour_to_chao(contour, raw_data = raw, raw_f0 = "f0"),
-                 "different scales")
+  raw <- data.frame(token = "a", f0 = 150, tone = "T1")
+  expect_warning(out <- contour_to_chao(contour, raw_data = raw), "deprecated")
+  expect_identical(out, contour_to_chao(contour))
+  expect_warning(contour_to_chao(contour, raw_f0 = "f0"), "deprecated")
 })
 
 test_that("contour_to_chao errors on missing columns", {

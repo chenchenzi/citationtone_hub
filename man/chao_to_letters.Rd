@@ -8,8 +8,8 @@ chao_to_letters(x)
 }
 \arguments{
 \item{x}{A character (or integer) vector of Chao numerals, e.g.
-\code{c("55", "35", "214", "51")}, such as the \code{refline}, \code{interval} or
-\code{robust} column of \code{\link[=contour_to_chao]{contour_to_chao()}}.}
+\code{c("55", "35", "214", "51")}, such as the \code{refline} or \code{interval}
+column of \code{\link[=contour_to_chao]{contour_to_chao()}}.}
 }
 \value{
 A character vector the same length as \code{x}. Elements that are
