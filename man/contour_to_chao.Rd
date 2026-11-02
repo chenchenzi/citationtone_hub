@@ -77,12 +77,25 @@ to the nearest integer.
 Five equal-width intervals; each sampled point is assigned to its
 interval via \code{ceiling()}.
 \item \strong{Robust FOR on \verb{(0, 5]}} (only if \code{raw_data} is supplied):
-same interval formula, but the range is defined by μ ± σ of
-per-token f0 peaks from the highest-pitched tone (max) and
-per-token f0 valleys from the lowest-pitched tone (min), following
-Zhu (1999) and the recommendation of Xu & Zhang (2024). More
-robust to outliers than using the corpus-wide min and max.
+\verb{f0' = (f0 - lower) / (upper - lower) * 5}, then ceilinged, the
+interval formula with a different range. \code{upper} is μ + σ of the
+per-token f0 peaks of the highest-pitched tone and \code{lower} is μ - σ
+of the per-token f0 valleys of the lowest-pitched tone, following
+Zhu (1999) and the recommendation of Xu & Zhang (2024). More robust
+to outliers than using the corpus-wide min and max.
 }
+}
+
+\subsection{Input scale}{
+
+All three methods are linear in the units of the input, so the input
+sets the pitch scale of the numerals. Semitones and LZ from
+\code{\link[=normalise_f0]{normalise_f0()}} give a log-frequency scale, on which equal steps are
+equal pitch ratios, as pitch is heard; Hz and z-scores give a scale
+linear in Hz. Negative values, as in speaker-normalised f0, need no
+special handling. \code{raw_data} and \code{contour_data} must be on the same
+scale; a warning is given if only one of them contains negative
+values, which suggests a mix of Hz and normalised f0.
 }
 
 \subsection{Turning-point detection}{
@@ -114,6 +127,16 @@ chao <- contour_to_chao(mc,
                         raw_f0    = "f0_Hz",
                         raw_tone  = "tone")
 chao[, c("tone", "refline", "interval", "robust", "shape")]
+
+# On semitones, which are often negative, the numerals are on a
+# log-frequency scale and between-speaker level differences are removed.
+st <- normalise_f0(sample_f0, f0 = "f0_Hz", speaker = "speaker",
+                   tone = "tone", method = "semitone")
+mc_st <- compute_mean_contour(st, token = "token", f0 = "f0_st",
+                              time = "time", tone = "tone")
+chao_st <- contour_to_chao(mc_st, raw_data = st, raw_token = "token",
+                           raw_f0 = "f0_st", raw_tone = "tone")
+chao_st[, c("tone", "refline", "interval", "robust", "shape")]
 
 }
 \references{

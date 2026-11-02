@@ -3,6 +3,7 @@
 export(apply_relabels)
 export(assign_tier_landmarks)
 export(attach_landmarks)
+export(chao_to_letters)
 export(choose_k_f0)
 export(classify_contour)
 export(cluster_agreement)

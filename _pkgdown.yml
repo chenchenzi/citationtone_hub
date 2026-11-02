@@ -123,11 +123,12 @@ reference:
   - title: Chao tone numerals
     desc: >
       Convert mean or predicted contours into Chao tone numerals
-      (reference-line, interval-based, robust FOR methods).
+      (reference-line, interval-based, robust FOR methods) and tone letters.
     contents:
       - compute_mean_contour
       - contour_to_chao
       - classify_contour
+      - chao_to_letters
 
   - title: Bundled data
     desc: A small citation-tone corpus that ships with the package for

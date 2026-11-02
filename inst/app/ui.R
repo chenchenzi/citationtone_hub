@@ -72,6 +72,16 @@ ui <- fluidPage(
     tags$style("
       #plot_button, #show_code_button { display: block; }
       #save_plot_button { display: block; margin-top: 4px; width: fit-content; }
+      /* IPA tone letters (Summarise): a tone-letter subset of Charis SIL,
+         renamed under its OFL licence (www/fonts/OFL.txt), joins a run of
+         letters (e.g. 3 then 5) into one contour line. */
+      @font-face {
+        font-family: 'Shinytone Tone Letters';
+        src: url('fonts/shinytone-tone-letters.woff2') format('woff2');
+        unicode-range: U+02E5-02E9; font-display: swap;
+      }
+      .tone-letters { font-family: 'Shinytone Tone Letters', 'Charis SIL', 'Doulos SIL', 'Gentium Plus', serif; font-weight: 400; white-space: nowrap; }
+      span.tone-letters { font-size: 1.35em; line-height: 0; }
       #visualise_guide strong, #normalise_guide strong, #view_guide strong, #inspect_guide strong, #model_guide strong, #gca_guide strong, #gamm_guide strong, #summarise_guide strong { font-weight: 900; color: #3a3a3a; }
       /* Foldable guide boxes (native <details>, open by default) */
       details.guide-box {

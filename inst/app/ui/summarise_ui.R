@@ -37,6 +37,13 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
           " (high falling)."
         ),
         tags$p(style = "margin-bottom: 8px;",
+          "Each numeral is also written in IPA tone letters, one per digit from ",
+          tags$span(class = "tone-letters", "\u02e9"), " (1) to ",
+          tags$span(class = "tone-letters", "\u02e5"), " (5): ",
+          tags$code(style = code_style, "35"), " = ", tags$span(class = "tone-letters", "\u02e7\u02e5"), ", ",
+          tags$code(style = code_style, "214"), " = ", tags$span(class = "tone-letters", "\u02e8\u02e9\u02e6"), "."
+        ),
+        tags$p(style = "margin-bottom: 8px;",
           "All three methods use ",
           tags$strong("Fraction of Range (FOR)"),
           " normalisation, which maps f0 onto a bounded scale representing the speaker\u2019s pitch range (min/max). They differ in how Tone Numerals (i.e. 1\u20135) are mapped and how pitch range is defined."
@@ -66,6 +73,7 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
               HTML("f\u2080\u2032 = (f\u2080 \u2212 (\u03bc<sub>min</sub> \u2212 \u03c3<sub>min</sub>)) / ((\u03bc<sub>max</sub> + \u03c3<sub>max</sub>) \u2212 (\u03bc<sub>min</sub> \u2212 \u03c3<sub>min</sub>)) \u00d7 5")
             ),
             " Same interval-based conversion, but the range is defined by \u03bc \u00b1 \u03c3 of per-token f0 peaks from the highest-pitched tone (max) and per-token f0 valleys from the lowest-pitched tone (min). ",
+            "Like the other two methods, the mapping is linear in the units of the input, so the input sets the pitch scale: semitones and LZ give a logarithmic scale that matches pitch perception, whereas Hz and z-scores give a linear one. ",
             tags$em("Works with raw f0 data or normalised f0 data.")
           )
         ),
@@ -309,9 +317,10 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
     }
     contour_data$chao_continuous <- contour_data$chao_ref
     if (has_1b) {
-      lr <- log(rstats$upper) - log(rstats$lower)
+      # Same linear scaling as contour_to_chao(), on the robust range.
+      lr <- rstats$upper - rstats$lower
       contour_data$chao_1b <- pmax(0, pmin(5,
-        (log(contour_data$f0_predicted) - log(rstats$lower)) / lr * 5))
+        (contour_data$f0_predicted - rstats$lower) / lr * 5))
     } else {
       contour_data$chao_1b <- NA_real_
     }
@@ -347,6 +356,9 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
                               format_scaled_values_html(rob_vals, 1:4, boundary_tol)
                             else NA_character_,
         numeral_1b        = r$robust,
+        ref_letters       = chao_to_letters(r$refline),
+        int_letters       = chao_to_letters(r$interval),
+        b_letters         = chao_to_letters(r$robust),
         contour_shape     = r$shape,
         stringsAsFactors  = FALSE
       )
@@ -406,41 +418,48 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
       "gca" = "GCA predictions",
       "gamm" = "GAMM predictions"
     )
+    # Only the raw and curated sources are known to be in Hz; normalised f0
+    # and model predictions may be in semitones, z-scores or LZ.
+    f0_unit <- if (params$source %in% c("raw_hz", "curated")) " Hz" else ""
     # Shared table styles
     th_style <- "padding: 6px 8px; border-bottom: 2px solid #ddd; text-align: center; font-size: 0.82rem;"
     th_group <- "padding: 6px 8px; border-bottom: 1px solid #ccc; text-align: center; font-size: 0.82rem; font-weight: bold;"
     td_style <- "padding: 5px 8px; text-align: center; font-size: 0.82rem;"
     td_style_mono <- "padding: 5px 8px; text-align: left; font-family: monospace; font-size: 0.82rem;"
     td_style_bold <- "padding: 5px 8px; text-align: center; font-size: 1rem; font-weight: bold; font-family: monospace;"
+    td_style_letters <- "padding: 2px 8px; text-align: center; font-size: 1.6rem; line-height: 1;"
 
     # Build side-by-side comparison table with two-row header
     show_1b <- isTRUE(params$has_1b)
 
     header_row1_cells <- list(
       tags$th(style = paste0(th_style, " border-right: 1px solid #ddd;"), rowspan = 2, "Tone"),
-      tags$th(style = paste0(th_group, " background-color: #f0f7ff; border-right: 1px solid #ddd;"), colspan = 2,
+      tags$th(style = paste0(th_group, " background-color: #f0f7ff; border-right: 1px solid #ddd;"), colspan = 3,
               HTML("Reference-line FOR [1, 5]<br><span style='font-weight:normal; font-size:0.72rem; color:#888;'>\u00d7 4 + 1, round()</span>")),
-      tags$th(style = paste0(th_group, " background-color: #fff8f0; border-right: 1px solid #ddd;"), colspan = 2,
+      tags$th(style = paste0(th_group, " background-color: #fff8f0; border-right: 1px solid #ddd;"), colspan = 3,
               HTML("Interval-based FOR (0, 5]<br><span style='font-weight:normal; font-size:0.72rem; color:#888;'>\u00d7 5, ceiling()</span>"))
     )
     header_row2_cells <- list(
       tags$th(style = paste0(th_style, " font-size: 0.76rem; background-color: #f0f7ff;"), "Scaled"),
-      tags$th(style = paste0(th_style, " font-size: 0.76rem; background-color: #f0f7ff; border-right: 1px solid #ddd;"),
+      tags$th(style = paste0(th_style, " font-size: 0.76rem; background-color: #f0f7ff;"),
               HTML("round()")),
+      tags$th(style = paste0(th_style, " font-size: 0.76rem; background-color: #f0f7ff; border-right: 1px solid #ddd;"), "Letters"),
       tags$th(style = paste0(th_style, " font-size: 0.76rem; background-color: #fff8f0;"), "Scaled"),
-      tags$th(style = paste0(th_style, " font-size: 0.76rem; background-color: #fff8f0; border-right: 1px solid #ddd;"),
-              HTML("ceiling()"))
+      tags$th(style = paste0(th_style, " font-size: 0.76rem; background-color: #fff8f0;"),
+              HTML("ceiling()")),
+      tags$th(style = paste0(th_style, " font-size: 0.76rem; background-color: #fff8f0; border-right: 1px solid #ddd;"), "Letters")
     )
 
     if (show_1b) {
       header_row1_cells <- c(header_row1_cells, list(
-        tags$th(style = paste0(th_group, " background-color: #f0fff0; border-right: 1px solid #ddd;"), colspan = 2,
+        tags$th(style = paste0(th_group, " background-color: #f0fff0; border-right: 1px solid #ddd;"), colspan = 3,
                 HTML("Robust FOR (0, 5]<br><span style='font-weight:normal; font-size:0.72rem; color:#888;'>\u03bc\u00b1\u03c3 range, ceiling()</span>"))
       ))
       header_row2_cells <- c(header_row2_cells, list(
         tags$th(style = paste0(th_style, " font-size: 0.76rem; background-color: #f0fff0;"), "Scaled"),
-        tags$th(style = paste0(th_style, " font-size: 0.76rem; background-color: #f0fff0; border-right: 1px solid #ddd;"),
-                HTML("ceiling()"))
+        tags$th(style = paste0(th_style, " font-size: 0.76rem; background-color: #f0fff0;"),
+                HTML("ceiling()")),
+        tags$th(style = paste0(th_style, " font-size: 0.76rem; background-color: #f0fff0; border-right: 1px solid #ddd;"), "Letters")
       ))
     }
 
@@ -463,15 +482,18 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
       cells <- list(
         tags$td(style = paste0(td_style, " font-weight: bold; border-right: 1px solid #ddd;"), result$tone[i]),
         tags$td(style = paste0(td_style_mono, " background-color: #f8fbff;"), HTML(result$ref_scaled_values[i])),
-        tags$td(style = paste0(td_style_bold, " background-color: #f8fbff; border-right: 1px solid #ddd; ", hl_ref), result$refline[i]),
+        tags$td(style = paste0(td_style_bold, " background-color: #f8fbff; ", hl_ref), result$refline[i]),
+        tags$td(class = "tone-letters", style = paste0(td_style_letters, " background-color: #f8fbff; border-right: 1px solid #ddd; ", hl_ref), result$ref_letters[i]),
         tags$td(style = paste0(td_style_mono, " background-color: #fffcf8;"), HTML(result$int_scaled_values[i])),
-        tags$td(style = paste0(td_style_bold, " background-color: #fffcf8; border-right: 1px solid #ddd; ", hl_int), result$interval[i])
+        tags$td(style = paste0(td_style_bold, " background-color: #fffcf8; ", hl_int), result$interval[i]),
+        tags$td(class = "tone-letters", style = paste0(td_style_letters, " background-color: #fffcf8; border-right: 1px solid #ddd; ", hl_int), result$int_letters[i])
       )
 
       if (show_1b) {
         cells <- c(cells, list(
           tags$td(style = paste0(td_style_mono, " background-color: #f8fff8;"), HTML(result$b_scaled_values[i])),
-          tags$td(style = paste0(td_style_bold, " background-color: #f8fff8; border-right: 1px solid #ddd; ", hl_1b), result$numeral_1b[i])
+          tags$td(style = paste0(td_style_bold, " background-color: #f8fff8; ", hl_1b), result$numeral_1b[i]),
+          tags$td(class = "tone-letters", style = paste0(td_style_letters, " background-color: #f8fff8; border-right: 1px solid #ddd; ", hl_1b), result$b_letters[i])
         ))
       }
 
@@ -489,11 +511,13 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
         tags$ul(style = "margin-bottom: 8px; padding-left: 18px;",
           tags$li(paste0("Source: ", src_label)),
           tags$li(HTML(paste0("Reference-line & Interval FOR, f0 range (min/max): ", round(params$f0_min, 2), " \u2013 ", round(params$f0_max, 2),
-                              " Hz &nbsp;(\u0394 = ", round(params$f0_max - params$f0_min, 2), ")"))),
+                              f0_unit,
+                              " &nbsp;(\u0394 = ", round(params$f0_max - params$f0_min, 2), ")"))),
           if (show_1b) tags$li(HTML(paste0(
             "Robust FOR, f0 range (\u03bc\u00b1\u03c3): ",
             round(params$lower_1b, 2), " \u2013 ", round(params$upper_1b, 2),
-            " Hz &nbsp;(lowest tone: ", params$lowest_tone,
+            f0_unit,
+            " &nbsp;(lowest tone: ", params$lowest_tone,
             ", \u03bc=", round(params$mu_min_1b, 1),
             ", \u03c3=", round(params$sigma_min_1b, 1),
             "; highest tone: ", params$highest_tone,
@@ -665,14 +689,17 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
         Tone = result$tone,
         `Ref Scaled [1,5]` = clean_ref_scaled,
         `Ref Numeral` = result$refline,
+        `Ref Letters` = result$ref_letters,
         `Int Scaled (0,5]` = clean_int_scaled,
         `Int Numeral` = result$interval,
+        `Int Letters` = result$int_letters,
         check.names = FALSE, stringsAsFactors = FALSE
       )
       if (show_1b) {
         clean_1b_scaled <- gsub("<[^>]+>", "", result$b_scaled_values)
         export$`1b Scaled (0,5]` <- clean_1b_scaled
         export$`1b Numeral` <- result$numeral_1b
+        export$`1b Letters` <- result$b_letters
       }
       export$Shape <- result$contour_shape
       write.csv(export, file, row.names = FALSE)
@@ -709,33 +736,28 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
     params <- sum_params()
     show_1b <- isTRUE(params$has_1b)
 
+    # Mirrors contour_to_chao(): range from per-token peaks of the
+    # highest-mean tone and per-token valleys of the lowest-mean tone,
+    # mapped linearly like the other two methods.
     code_1b <- if (show_1b) paste0(
-      '\n# --- Method 1b: mu +/- sigma range (requires raw token data) ---\n',
-      '# raw_data: data frame with columns: token, f0, time, tone\n',
-      '# Normalise time per token to [0, 1]\n',
-      'raw_data <- raw_data %>%\n',
-      '  filter(!is.na(f0) & f0 > 0) %>%\n',
-      '  group_by(token) %>%\n',
-      '  mutate(time_norm = (time - min(time)) / (max(time) - min(time))) %>%\n',
-      '  ungroup()\n',
-      'raw_data$time_bin <- round(raw_data$time_norm * 49) / 49\n\n',
-      '# Find time bins with highest/lowest mean f0\n',
-      'bin_means <- raw_data %>%\n',
-      '  group_by(time_bin) %>%\n',
-      '  summarise(mean_f0 = mean(f0, na.rm = TRUE))\n',
-      'max_bin <- bin_means$time_bin[which.max(bin_means$mean_f0)]\n',
-      'min_bin <- bin_means$time_bin[which.min(bin_means$mean_f0)]\n\n',
-      '# Compute mu and sigma at extreme time bins\n',
-      'mu_max  <- mean(raw_data$f0[raw_data$time_bin == max_bin])\n',
-      'sigma_max <- sd(raw_data$f0[raw_data$time_bin == max_bin])\n',
-      'mu_min  <- mean(raw_data$f0[raw_data$time_bin == min_bin])\n',
-      'sigma_min <- sd(raw_data$f0[raw_data$time_bin == min_bin])\n\n',
-      '# Eq. 1b: f0\' = (log(f0) - log(mu_min - sigma_min)) /\n',
-      '#                (log(mu_max + sigma_max) - log(mu_min - sigma_min)) * 5\n',
-      'upper_1b <- mu_max + sigma_max\n',
-      'lower_1b <- max(mu_min - sigma_min, 1)\n',
-      'pred$chao_1b <- (log(pred$f0_predicted) - log(lower_1b)) /\n',
-      '               (log(upper_1b) - log(lower_1b)) * 5\n'
+      '\n# --- Method 1b: robust FOR, mu +/- sigma range (requires token-level data) ---\n',
+      '# raw_data: data frame with columns: token, f0, tone\n',
+      'raw_data <- raw_data %>% filter(!is.na(f0))\n\n',
+      '# Highest- and lowest-pitched tones, by mean f0\n',
+      'tone_means <- raw_data %>% group_by(tone) %>% summarise(m = mean(f0))\n',
+      'highest <- tone_means$tone[which.max(tone_means$m)]\n',
+      'lowest  <- tone_means$tone[which.min(tone_means$m)]\n\n',
+      '# Per-token peaks of the highest tone, valleys of the lowest tone\n',
+      'peaks   <- raw_data %>% filter(tone == highest) %>%\n',
+      '  group_by(token) %>% summarise(pk = max(f0))\n',
+      'valleys <- raw_data %>% filter(tone == lowest) %>%\n',
+      '  group_by(token) %>% summarise(vl = min(f0))\n',
+      'upper_1b <- mean(peaks$pk) + sd(peaks$pk)\n',
+      'lower_1b <- mean(valleys$vl) - sd(valleys$vl)\n\n',
+      '# Eq. 1b: f0\' = (f0 - lower) / (upper - lower) * 5, clamped to [0, 5]\n',
+      '# Linear in the units of f0: semitones or LZ give a log-frequency scale\n',
+      'pred$chao_1b <- pmax(0, pmin(5,\n',
+      '  (pred$f0_predicted - lower_1b) / (upper_1b - lower_1b) * 5))\n'
     ) else ""
 
     code_1b_convert <- if (show_1b) paste0(
@@ -758,8 +780,8 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
       'f0_min <- min(pred$f0_predicted, na.rm = TRUE)\n',
       'f0_max <- max(pred$f0_predicted, na.rm = TRUE)\n\n',
       '# Step 2: Fraction of Range normalisation\n',
-      '# Eq. 3 (reference-line): f0\' = (log(f0) - log(f0_min)) / (log(f0_max) - log(f0_min)) * 4 + 1\n',
-      '# Eq. 1a (interval):      f0\' = (log(f0) - log(f0_min)) / (log(f0_max) - log(f0_min)) * 5\n',
+      '# Eq. 3 (reference-line): f0\' = (f0 - f0_min) / (f0_max - f0_min) * 4 + 1\n',
+      '# Eq. 1a (interval):      f0\' = (f0 - f0_min) / (f0_max - f0_min) * 5\n',
       'pred$chao_ref <- (pred$f0_predicted - f0_min) / (f0_max - f0_min) * 4 + 1\n',
       'pred$chao_int <- (pred$f0_predicted - f0_min) / (f0_max - f0_min) * 5\n',
       code_1b,
@@ -784,7 +806,11 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
       '             interval = interval',
       code_1b_df, ')\n',
       '})\n',
-      'chao_summary <- do.call(rbind, results)\n',
+      'chao_summary <- do.call(rbind, results)\n\n',
+      '# Step 4: IPA tone letters, one per digit (1 = \u02e9 ... 5 = \u02e5)\n',
+      'chao_summary$refline_letters <- chartr("12345", "\u02e9\u02e8\u02e7\u02e6\u02e5", chao_summary$refline)\n',
+      'chao_summary$interval_letters <- chartr("12345", "\u02e9\u02e8\u02e7\u02e6\u02e5", chao_summary$interval)\n',
+      if (show_1b) 'chao_summary$letters_1b <- chartr("12345", "\u02e9\u02e8\u02e7\u02e6\u02e5", chao_summary$numeral_1b)\n' else "",
       'print(chao_summary)\n'
     )
 

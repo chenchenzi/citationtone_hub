@@ -1,9 +1,10 @@
 # =============================================================================
 # Chao tone numeral summarisation.
 #
-# Three exported functions:
+# Four exported functions:
 #   * compute_mean_contour()  long-format f0 -> per-tone mean contour
 #   * classify_contour()      Chao digit string -> shape name
+#   * chao_to_letters()       Chao digit string -> IPA tone letters
 #   * contour_to_chao()       per-tone contour -> Chao numerals (all 3 methods)
 # =============================================================================
 
@@ -177,6 +178,54 @@ classify_contour <- function(chao_str) {
 }
 
 
+#' Write Chao tone numerals as IPA tone letters
+#'
+#' @description
+#' Converts Chao tone numerals to the IPA tone letters that Chao (1930)
+#' designed them for, one letter per digit: 1 = ˩ (extra low),
+#' 2 = ˨, 3 = ˧, 4 = ˦, 5 = ˥ (extra high). For example
+#' `"35"` becomes ˧˥ and `"214"` becomes ˨˩˦.
+#'
+#' @details
+#' Each digit becomes one letter, so a level tone keeps both of its digits:
+#' `"55"` becomes ˥˥. Some descriptions write a level tone with a
+#' single letter; `substr(x, 1, 1)` gives that form.
+#'
+#' Fonts with tone-letter support (Charis SIL, Doulos SIL, Gentium) join a
+#' sequence of letters into a single contour line; other fonts show the
+#' letters as separate bars. The characters are the same either way.
+#'
+#' @param x A character (or integer) vector of Chao numerals, e.g.
+#'   `c("55", "35", "214", "51")`, such as the `refline`, `interval` or
+#'   `robust` column of [contour_to_chao()].
+#'
+#' @return A character vector the same length as `x`. Elements that are
+#'   `NA`, or that contain anything other than the digits 1 to 5, become
+#'   `NA` (the latter with a warning).
+#'
+#' @seealso [contour_to_chao()], whose numeral columns this converts, and
+#'   [classify_contour()] for a shape name.
+#'
+#' @references
+#' Chao, Y. R. (1930). A system of tone-letters. \emph{Le Maître
+#' Phonétique}, 30, 24–27.
+#'
+#' @examples
+#' chao_to_letters(c("55", "35", "214", "51"))
+#'
+#' @export
+chao_to_letters <- function(x) {
+  x <- as.character(x)
+  bad <- !is.na(x) & !grepl("^[1-5]+$", x)
+  if (any(bad)) {
+    warning("Not a Chao numeral (digits 1 to 5 only): ",
+            paste(unique(x[bad]), collapse = ", "), call. = FALSE)
+    x[bad] <- NA_character_
+  }
+  chartr("12345", "\u02e9\u02e8\u02e7\u02e6\u02e5", x)
+}
+
+
 #' Convert per-tone contours to Chao tone numerals
 #'
 #' @description
@@ -204,11 +253,23 @@ classify_contour <- function(chao_str) {
 #'   Five equal-width intervals; each sampled point is assigned to its
 #'   interval via `ceiling()`.
 #' * **Robust FOR on `(0, 5]`** (only if `raw_data` is supplied):
-#'   same interval formula, but the range is defined by μ ± σ of
-#'   per-token f0 peaks from the highest-pitched tone (max) and
-#'   per-token f0 valleys from the lowest-pitched tone (min), following
-#'   Zhu (1999) and the recommendation of Xu & Zhang (2024). More
-#'   robust to outliers than using the corpus-wide min and max.
+#'   `f0' = (f0 - lower) / (upper - lower) * 5`, then ceilinged, the
+#'   interval formula with a different range. `upper` is μ + σ of the
+#'   per-token f0 peaks of the highest-pitched tone and `lower` is μ - σ
+#'   of the per-token f0 valleys of the lowest-pitched tone, following
+#'   Zhu (1999) and the recommendation of Xu & Zhang (2024). More robust
+#'   to outliers than using the corpus-wide min and max.
+#'
+#' ## Input scale
+#'
+#' All three methods are linear in the units of the input, so the input
+#' sets the pitch scale of the numerals. Semitones and LZ from
+#' [normalise_f0()] give a log-frequency scale, on which equal steps are
+#' equal pitch ratios, as pitch is heard; Hz and z-scores give a scale
+#' linear in Hz. Negative values, as in speaker-normalised f0, need no
+#' special handling. `raw_data` and `contour_data` must be on the same
+#' scale; a warning is given if only one of them contains negative
+#' values, which suggests a mix of Hz and normalised f0.
 #'
 #' ## Turning-point detection
 #'
@@ -283,6 +344,16 @@ classify_contour <- function(chao_str) {
 #'                         raw_tone  = "tone")
 #' chao[, c("tone", "refline", "interval", "robust", "shape")]
 #'
+#' # On semitones, which are often negative, the numerals are on a
+#' # log-frequency scale and between-speaker level differences are removed.
+#' st <- normalise_f0(sample_f0, f0 = "f0_Hz", speaker = "speaker",
+#'                    tone = "tone", method = "semitone")
+#' mc_st <- compute_mean_contour(st, token = "token", f0 = "f0_st",
+#'                               time = "time", tone = "tone")
+#' chao_st <- contour_to_chao(mc_st, raw_data = st, raw_token = "token",
+#'                            raw_f0 = "f0_st", raw_tone = "tone")
+#' chao_st[, c("tone", "refline", "interval", "robust", "shape")]
+#'
 #' @export
 #' @importFrom dplyr filter group_by summarise
 #' @importFrom rlang .data
@@ -337,7 +408,16 @@ contour_to_chao <- function(contour_data,
   if (has_robust) {
     raw <- raw_data
     raw$.f0 <- suppressWarnings(as.numeric(raw[[raw_f0]]))
-    raw <- raw[!is.na(raw$.f0) & raw$.f0 > 0, , drop = FALSE]
+    raw <- raw[!is.na(raw$.f0), , drop = FALSE]
+
+    # The robust range is applied to contour_data, so both must be on one
+    # scale. Hz is never negative and speaker-normalised f0 (semitones,
+    # z-scores, LZ) nearly always is, so a sign mismatch flags a mix.
+    if (any(raw$.f0 < 0) != any(cd$f0_predicted < 0, na.rm = TRUE)) {
+      warning("Only one of `raw_data` and `contour_data` has negative f0 ",
+              "values, so they may be on different scales (Hz versus ",
+              "normalised). Both should use the same scale.", call. = FALSE)
+    }
 
     tone_means <- raw |>
       dplyr::group_by(.data[[raw_tone]]) |>
@@ -357,11 +437,13 @@ contour_to_chao <- function(contour_data,
     mu_min    <- mean(valleys$.vl, na.rm = TRUE)
     sigma_min <- stats::sd(valleys$.vl, na.rm = TRUE)
     upper     <- mu_max + sigma_max
-    lower     <- max(mu_min - sigma_min, 1)  # floor at 1 Hz to avoid log(0)
-    log_range <- log(upper) - log(lower)
-    if (log_range > 0) {
+    lower     <- mu_min - sigma_min
+    # Linear in the input units, like the other two methods: the input sets
+    # the pitch scale (semitones and LZ are log-frequency, Hz is not).
+    rob_range <- upper - lower
+    if (is.finite(rob_range) && rob_range > 0) {
       cd$chao_rob <- pmax(0, pmin(5,
-        (log(cd$f0_predicted) - log(lower)) / log_range * 5))
+        (cd$f0_predicted - lower) / rob_range * 5))
     } else {
       has_robust <- FALSE
     }
