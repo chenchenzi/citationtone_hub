@@ -64,8 +64,9 @@ normalised dataset as the input.</p>
 <span>  f0 <span class="op">=</span> <span class="st">"f0"</span>,</span>
 <span>  time <span class="op">=</span> <span class="st">"time"</span>,</span>
 <span>  tone <span class="op">=</span> <span class="st">"tone"</span>,</span>
-<span>  n_bins <span class="op">=</span> <span class="fl">50</span>,</span>
-<span>  time_normalised <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"auto"</span>, <span class="st">"no"</span>, <span class="st">"yes"</span><span class="op">)</span></span>
+<span>  n_points <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  time_normalised <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"auto"</span>, <span class="st">"no"</span>, <span class="st">"yes"</span><span class="op">)</span>,</span>
+<span>  n_bins <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -81,10 +82,13 @@ normalised dataset as the input.</p>
 <dd><p>Column names.</p></dd>
 
 
-<dt id="arg-n-bins">n_bins<a class="anchor" aria-label="anchor" href="#arg-n-bins"></a></dt>
-<dd><p>Number of evenly-spaced time bins across <code>[0, 1]</code>.
-Default <code>50</code>. Larger values give a smoother contour at the cost
-of noisier per-bin estimates if some bins are sparsely populated.</p></dd>
+<dt id="arg-n-points">n_points<a class="anchor" aria-label="anchor" href="#arg-n-points"></a></dt>
+<dd><p>Number of equally spaced time points across <code>[0, 1]</code>
+at which every token is resampled. The default, <code>NULL</code>, uses the
+tokens' own number of points when they all have the same number, so
+equally spaced measurements come back unchanged, and otherwise <code>21</code>,
+one point every 5% of the duration, as in the app's f0 extraction and
+clustering.</p></dd>
 
 
 <dt id="arg-time-normalised">time_normalised<a class="anchor" aria-label="anchor" href="#arg-time-normalised"></a></dt>
@@ -93,11 +97,17 @@ already-normalised <code>[0, 1]</code> time column and use it as-is), <code>"no"
 (always rescale to <code>[0, 1]</code> within each token), or <code>"yes"</code> (declare
 the column already normalised). See <code><a href="resolve_time_norm.html">resolve_time_norm()</a></code>.</p></dd>
 
+
+<dt id="arg-n-bins">n_bins<a class="anchor" aria-label="anchor" href="#arg-n-bins"></a></dt>
+<dd><p>Deprecated; use <code>n_points</code>. Samples used to be assigned
+to <code>n_bins</code> time bins; a value given here is used as <code>n_points</code>, with
+a warning.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A data frame with columns <code>tone</code>, <code>time</code>, <code>f0_predicted</code>,
-one row per (tone, time-bin).</p>
+one row per (tone, time point).</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -106,10 +116,14 @@ of different durations can be averaged across the same grid. A
 time column that is <em>already</em> normalised is detected with
 <code><a href="time_already_normalised.html">time_already_normalised()</a></code> and used as-is (override with
 <code>time_normalised</code>), matching what <code><a href="fit_gca.html">fit_gca()</a></code> and <code><a href="fit_gamm.html">fit_gamm()</a></code> do.</p></li>
-<li><p>Round each sample's normalised time onto one of <code>n_bins</code>
-equally-spaced bins.</p></li>
-<li><p>For each (tone, time-bin) cell, compute the mean of <code>f0</code> across
-all tokens of that tone with samples in the bin.</p></li>
+<li><p>Resample every token, by linear interpolation, at the same
+<code>n_points</code> equally spaced time points, so each token counts once at
+every point however many f0 samples it has. Missing f0 values are
+skipped, points outside a token's measured span are left out rather
+than extrapolated, and tokens with fewer than two f0 values are
+dropped, with a message.</p></li>
+<li><p>At each time point, take the mean of <code>f0</code> across the tokens of each
+tone.</p></li>
 <li><p>Return the long-format mean contour with columns <code>tone</code>, <code>time</code>,
 <code>f0_predicted</code> (the column name <code>f0_predicted</code> matches the
 convention used by <code><a href="predict_gca.html">predict_gca()</a></code> and <code><a href="predict_gamm.html">predict_gamm()</a></code> so the
@@ -137,13 +151,13 @@ alternatives that produce the same column structure.</p></div>
 <span class="r-in"><span>                           token <span class="op">=</span> <span class="st">"token"</span>, f0 <span class="op">=</span> <span class="st">"f0_Hz"</span>,</span></span>
 <span class="r-in"><span>                           time  <span class="op">=</span> <span class="st">"time"</span>,  tone <span class="op">=</span> <span class="st">"tone"</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">mc</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   tone       time f0_predicted</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1    1 0.00000000     202.3695</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2    1 0.04081633     197.7551</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3    1 0.10204082     196.7470</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 4    1 0.14285714     196.2067</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5    1 0.20408163     195.8127</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 6    1 0.24489796     195.5778</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   tone time f0_predicted</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1    1 0.00     202.3695</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2    1 0.05     197.7551</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3    1 0.10     196.7470</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4    1 0.15     196.2067</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5    1 0.20     195.8127</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6    1 0.25     195.5778</span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>

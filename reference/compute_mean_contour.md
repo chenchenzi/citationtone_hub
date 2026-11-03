@@ -15,8 +15,9 @@ compute_mean_contour(
   f0 = "f0",
   time = "time",
   tone = "tone",
-  n_bins = 50,
-  time_normalised = c("auto", "no", "yes")
+  n_points = NULL,
+  time_normalised = c("auto", "no", "yes"),
+  n_bins = NULL
 )
 ```
 
@@ -30,11 +31,13 @@ compute_mean_contour(
 
   Column names.
 
-- n_bins:
+- n_points:
 
-  Number of evenly-spaced time bins across `[0, 1]`. Default `50`.
-  Larger values give a smoother contour at the cost of noisier per-bin
-  estimates if some bins are sparsely populated.
+  Number of equally spaced time points across `[0, 1]` at which every
+  token is resampled. The default, `NULL`, uses the tokens' own number
+  of points when they all have the same number, so equally spaced
+  measurements come back unchanged, and otherwise `21`, one point every
+  5% of the duration, as in the app's f0 extraction and clustering.
 
 - time_normalised:
 
@@ -43,10 +46,15 @@ compute_mean_contour(
   each token), or `"yes"` (declare the column already normalised). See
   [`resolve_time_norm()`](https://chenchenzi.github.io/citationtone_hub/reference/resolve_time_norm.md).
 
+- n_bins:
+
+  Deprecated; use `n_points`. Samples used to be assigned to `n_bins`
+  time bins; a value given here is used as `n_points`, with a warning.
+
 ## Value
 
 A data frame with columns `tone`, `time`, `f0_predicted`, one row per
-(tone, time-bin).
+(tone, time point).
 
 ## Details
 
@@ -62,11 +70,15 @@ Internally:
     [`fit_gamm()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_gamm.md)
     do.
 
-2.  Round each sample's normalised time onto one of `n_bins`
-    equally-spaced bins.
+2.  Resample every token, by linear interpolation, at the same
+    `n_points` equally spaced time points, so each token counts once at
+    every point however many f0 samples it has. Missing f0 values are
+    skipped, points outside a token's measured span are left out rather
+    than extrapolated, and tokens with fewer than two f0 values are
+    dropped, with a message.
 
-3.  For each (tone, time-bin) cell, compute the mean of `f0` across all
-    tokens of that tone with samples in the bin.
+3.  At each time point, take the mean of `f0` across the tokens of each
+    tone.
 
 4.  Return the long-format mean contour with columns `tone`, `time`,
     `f0_predicted` (the column name `f0_predicted` matches the
@@ -101,11 +113,11 @@ mc <- compute_mean_contour(sample_f0,
                            token = "token", f0 = "f0_Hz",
                            time  = "time",  tone = "tone")
 head(mc)
-#>   tone       time f0_predicted
-#> 1    1 0.00000000     202.3695
-#> 2    1 0.04081633     197.7551
-#> 3    1 0.10204082     196.7470
-#> 4    1 0.14285714     196.2067
-#> 5    1 0.20408163     195.8127
-#> 6    1 0.24489796     195.5778
+#>   tone time f0_predicted
+#> 1    1 0.00     202.3695
+#> 2    1 0.05     197.7551
+#> 3    1 0.10     196.7470
+#> 4    1 0.15     196.2067
+#> 5    1 0.20     195.8127
+#> 6    1 0.25     195.5778
 ```

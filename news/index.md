@@ -2,6 +2,18 @@
 
 ## shinytone (development version)
 
+- **[`compute_mean_contour()`](https://chenchenzi.github.io/citationtone_hub/reference/compute_mean_contour.md)
+  resamples tokens instead of binning their samples.** It used to assign
+  each sample to the nearest of 50 time bins and average the samples in
+  each bin, so with unequal numbers of f0 points per token each bin
+  averaged a different subset of tokens, and a token with more than 50
+  points counted more than once in some bins. Every token is now
+  interpolated at the same time points and counts once at each: by
+  default its own points when all tokens have the same number, so
+  equally spaced measurements come back unchanged, and otherwise 21, one
+  every 5% of the duration. `n_bins` is deprecated in favour of
+  `n_points`. The mean contours of the Chao tab and the GCA tab’s
+  observed overlay use the new method.
 - **Summarise: the robust Chao method is removed.** Its range, one SD
   beyond the mean peak of the highest tone and the mean valley of the
   lowest, suited single tokens but not the averaged contours the
