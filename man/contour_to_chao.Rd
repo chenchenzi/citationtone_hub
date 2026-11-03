@@ -89,10 +89,9 @@ linear in Hz. Negative values, as in speaker-normalised f0, need no
 special handling.
 
 f0 in Hz from several speakers should be normalised by speaker first,
-for example to LZ, the log z-score Zhu (1999) found best for tone:
-averaging Hz mixes higher and lower voices, which shifts the mean
-contours. The app's Chao tab converts raw f0 to LZ by speaker
-automatically.
+for example to LZ, the log z-score of Zhu (1999): averaging Hz mixes
+higher and lower voices, which shifts the mean contours. The app's Chao
+tab converts raw f0 to LZ by speaker automatically.
 }
 
 \subsection{Turning-point detection}{
@@ -116,7 +115,7 @@ scale) is a conservative choice. Lower thresholds produce more
 \examples{
 data(sample_f0)
 # Normalise by speaker first (here LZ), so that higher and lower voices
-# are not averaged together in Hz.
+# are averaged on a common scale.
 lz <- normalise_f0(sample_f0, f0 = "f0_Hz", speaker = "speaker",
                    tone = "tone", method = "lz")
 mc <- compute_mean_contour(lz, token = "token", f0 = "f0_lz",

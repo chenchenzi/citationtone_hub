@@ -102,8 +102,8 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
         ),
         tags$strong("Data source:"),
         tags$ul(style = "margin-bottom: 0; padding-left: 18px;",
-          tags$li(tags$strong("Raw or curated f0 (Hz):"), " Each speaker\u2019s f0 is first converted to LZ (log z-score), the normalisation Zhu (1999) found best, so that higher and lower voices are not averaged together in Hz; per-tone mean contours are then taken. Choose the speaker variable, or none to treat the data as one speaker."),
-          tags$li(tags$strong("Normalised f0:"), " Per-tone mean contours of the f0 from the Normalise tab, on the scale chosen there."),
+          tags$li(tags$strong("Raw or curated f0 (Hz):"), " Each speaker\u2019s f0 is first converted to LZ (log z-score, Zhu 1999), so that higher and lower voices are averaged on a common scale. Per-tone mean contours are then taken, with every token resampled at the same time points so that tokens with more f0 samples do not count more. Choose the speaker variable, or none to treat the data as one speaker."),
+          tags$li(tags$strong("Normalised f0:"), " Per-tone mean contours of the f0 from the Normalise tab, on the scale chosen there, with tokens resampled in the same way."),
           tags$li(tags$strong("GCA / GAMM predictions:"), " Available after fitting the respective model. Uses the population-level predicted contours (smoother, more representative).")
         )
       )
@@ -290,8 +290,8 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
       }
 
       # Averaging Hz across speakers mixes higher and lower voices, so first
-      # put each speaker's f0 on one scale: LZ, the log z-score Zhu (1999)
-      # found best for tone. With no speaker variable, the data are one speaker.
+      # put each speaker's f0 on one scale: LZ (log z-score, Zhu 1999).
+      # With no speaker variable, the data are one speaker.
       f0_vals <- suppressWarnings(as.numeric(src_data[[raw_f0]]))
       if (any(f0_vals < 0, na.rm = TRUE)) {
         showNotification(paste("The f0 variable has negative values, so it looks",
@@ -693,7 +693,7 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
       spk <- if (is.na(lz$speaker)) ".speaker" else lz$speaker
       paste0(
         '# Step 0: Convert each speaker\'s f0 to LZ (log z-score, Zhu 1999), so that\n',
-        '# higher and lower voices are not averaged together in Hz, then take the\n',
+        '# higher and lower voices are averaged on a common scale, then take the\n',
         '# per-tone mean contours\n',
         '# dat: your f0 data, one row per f0 sample\n',
         if (is.na(lz$speaker)) 'dat$.speaker <- "all"   # no speaker variable: one speaker\n' else "",

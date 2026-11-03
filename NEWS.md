@@ -26,9 +26,8 @@
 * **Summarise: raw f0 is converted to LZ by speaker before Chao
   conversion.** The Raw f0 and Curated f0 sources averaged Hz over all
   speakers, so higher and lower voices were mixed in the mean contours.
-  Each speaker's f0 is now converted to LZ, the log
-  z-score Zhu (1999) found best for tone, before the mean contours are
-  taken. The Raw f0 source has a speaker selector (or none, for one
+  Each speaker's f0 is now converted to LZ (log z-score, Zhu 1999)
+  before the mean contours are taken. The Raw f0 source has a speaker selector (or none, for one
   speaker), and curated data find the speaker column by name. The summary
   says how many speakers were normalised and gives the ranges in LZ, the
   generated R code includes the step, and a raw source whose f0 has
