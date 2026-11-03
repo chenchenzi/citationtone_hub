@@ -152,14 +152,14 @@ test_that("compute_mean_contour keeps proportional positions under auto", {
     f0    = rep(c(100, 100, 100, 200), each = 11),
     tone  = "T1", stringsAsFactors = FALSE)
 
-  mc_auto <- suppressMessages(compute_mean_contour(df, n_bins = 3))
-  # Token b's samples stay within [0, 0.5]: the final bin holds only the
-  # full-span tokens.
+  mc_auto <- suppressMessages(compute_mean_contour(df, n_points = 3))
+  # Token b's samples stay within [0, 0.5], so it has no value at the final
+  # time point, which averages only the full-span tokens.
   expect_equal(mc_auto$f0_predicted[mc_auto$time == 1], 100)
 
-  mc_no <- compute_mean_contour(df, n_bins = 3, time_normalised = "no")
-  # Rescaled per token, b reaches the final bin too: 9 samples at 100 plus 3
-  # at 200.
+  mc_no <- compute_mean_contour(df, n_points = 3, time_normalised = "no")
+  # Rescaled per token, b reaches the final time point too: three tokens at
+  # 100 plus one at 200.
   expect_equal(mc_no$f0_predicted[mc_no$time == 1], 125)
 })
 

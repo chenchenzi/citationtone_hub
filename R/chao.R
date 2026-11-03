@@ -26,10 +26,14 @@
 #'    time column that is *already* normalised is detected with
 #'    [time_already_normalised()] and used as-is (override with
 #'    `time_normalised`), matching what [fit_gca()] and [fit_gamm()] do.
-#' 2. Round each sample's normalised time onto one of `n_bins`
-#'    equally-spaced bins.
-#' 3. For each (tone, time-bin) cell, compute the mean of `f0` across
-#'    all tokens of that tone with samples in the bin.
+#' 2. Resample every token, by linear interpolation, at the same
+#'    `n_points` equally spaced time points, so each token counts once at
+#'    every point however many f0 samples it has. Missing f0 values are
+#'    skipped, points outside a token's measured span are left out rather
+#'    than extrapolated, and tokens with fewer than two f0 values are
+#'    dropped, with a message.
+#' 3. At each time point, take the mean of `f0` across the tokens of each
+#'    tone.
 #' 4. Return the long-format mean contour with columns `tone`, `time`,
 #'    `f0_predicted` (the column name `f0_predicted` matches the
 #'    convention used by [predict_gca()] and [predict_gamm()] so the
@@ -38,16 +42,22 @@
 #'
 #' @param data A long-format data frame with one row per f0 sample.
 #' @param token,f0,time,tone Column names.
-#' @param n_bins Number of evenly-spaced time bins across `[0, 1]`.
-#'   Default `50`. Larger values give a smoother contour at the cost
-#'   of noisier per-bin estimates if some bins are sparsely populated.
+#' @param n_points Number of equally spaced time points across `[0, 1]`
+#'   at which every token is resampled. The default, `NULL`, uses the
+#'   tokens' own number of points when they all have the same number, so
+#'   equally spaced measurements come back unchanged, and otherwise `21`,
+#'   one point every 5% of the duration, as in the app's f0 extraction and
+#'   clustering.
 #' @param time_normalised One of `"auto"` (default: detect an
 #'   already-normalised `[0, 1]` time column and use it as-is), `"no"`
 #'   (always rescale to `[0, 1]` within each token), or `"yes"` (declare
 #'   the column already normalised). See [resolve_time_norm()].
+#' @param n_bins Deprecated; use `n_points`. Samples used to be assigned
+#'   to `n_bins` time bins; a value given here is used as `n_points`, with
+#'   a warning.
 #'
 #' @return A data frame with columns `tone`, `time`, `f0_predicted`,
-#'   one row per (tone, time-bin).
+#'   one row per (tone, time point).
 #'
 #' @seealso [contour_to_chao()] for converting mean contours to Chao
 #'   numerals. [predict_gca()] and [predict_gamm()] for model-based
@@ -74,8 +84,9 @@ compute_mean_contour <- function(data,
                                  f0    = "f0",
                                  time  = "time",
                                  tone  = "tone",
-                                 n_bins = 50,
-                                 time_normalised = c("auto", "no", "yes")) {
+                                 n_points = NULL,
+                                 time_normalised = c("auto", "no", "yes"),
+                                 n_bins = NULL) {
   time_normalised <- match.arg(time_normalised)
   required <- c(token, f0, time, tone)
   missing_cols <- setdiff(required, names(data))
@@ -84,23 +95,59 @@ compute_mean_contour <- function(data,
          paste(missing_cols, collapse = ", "), call. = FALSE)
   }
 
+  if (!is.null(n_bins)) {
+    warning("`n_bins` is deprecated: use `n_points`. Tokens are now ",
+            "resampled at equally spaced time points rather than binned.",
+            call. = FALSE)
+    if (is.null(n_points)) n_points <- n_bins
+  }
+
   # Same time handling as the model fits (see resolve_time_norm), so the
   # observed mean contours share the fitted models' time axis: per-token
   # min-max rescale, unless the column is already normalised to [0, 1].
-  ts  <- resolve_time_norm(data, time, token, time_normalised)
-  dat <- data
-  dat$.time_norm <- ts$time_norm
+  tn <- resolve_time_norm(data, time, token, time_normalised)$time_norm
+  y  <- suppressWarnings(as.numeric(data[[f0]]))
+  ok <- is.finite(tn) & is.finite(y)
+  by_token <- split(which(ok), token_group_key(data[[token]])[ok])
+  usable   <- vapply(by_token, function(i) length(unique(tn[i])) >= 2, logical(1))
+  if (any(!usable)) {
+    message("Dropped ", sum(!usable), " token(s) with fewer than two f0 values.")
+  }
+  by_token <- by_token[usable]
+  if (length(by_token) == 0) {
+    stop("No token has two or more f0 values to average.", call. = FALSE)
+  }
 
-  dat$.time_bin <- round(dat$.time_norm * (n_bins - 1)) / (n_bins - 1)
-  dat$.f0       <- as.numeric(dat[[f0]])
-  dat$.tone     <- as.character(dat[[tone]])
+  # Resample every token at the same time points, so each counts once at
+  # every point however many f0 samples it has. By default that is the
+  # tokens' own number of points when they all have the same number (equally
+  # spaced points then come back unchanged), and otherwise 21, one every 5%.
+  if (is.null(n_points)) {
+    n_each   <- lengths(by_token)
+    n_points <- if (length(unique(n_each)) == 1) n_each[[1]] else 21L
+  }
+  n_points <- suppressWarnings(as.integer(n_points))
+  if (length(n_points) != 1 || is.na(n_points) || n_points < 2) {
+    stop("`n_points` must be a single number of at least 2.", call. = FALSE)
+  }
+  grid <- seq(0, 1, length.out = n_points)
+  vals <- vapply(by_token, function(i)
+    stats::approx(tn[i], y[i], xout = grid, ties = mean)$y, numeric(n_points))
+  vals <- matrix(vals, nrow = n_points)   # time points x tokens
+  tok_tone <- vapply(by_token, function(i) as.character(data[[tone]][i[1]]),
+                     character(1))
 
-  dat |>
-    dplyr::group_by(tone = .data$.tone, time = .data$.time_bin) |>
-    dplyr::summarise(f0_predicted = mean(.data$.f0, na.rm = TRUE),
-                     .groups = "drop") |>
-    dplyr::arrange(.data$tone, .data$time) |>
-    as.data.frame()
+  # Mean across each tone's tokens at every time point; points no token
+  # covers are dropped. Tones in C-locale order, as dplyr::arrange() gives.
+  out <- do.call(rbind, lapply(sort(unique(tok_tone), method = "radix"), function(tv) {
+    data.frame(tone = tv, time = grid,
+               f0_predicted = rowMeans(vals[, tok_tone == tv, drop = FALSE],
+                                       na.rm = TRUE),
+               stringsAsFactors = FALSE)
+  }))
+  out <- out[is.finite(out$f0_predicted), , drop = FALSE]
+  rownames(out) <- NULL
+  out
 }
 
 

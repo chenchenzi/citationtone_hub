@@ -65,8 +65,8 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
         tags$p(style = "margin-bottom: 8px;",
           "Both methods use ",
           tags$strong("Fraction of Range (FOR)"),
-          " normalisation, which places f0 on a scale between min and max: the lowest and highest values across all tones\u2019 contours. For raw, curated or normalised f0, each tone\u2019s contour is its mean contour: its tokens are put on a 0\u20131 time axis and averaged at each time point. So min is the lowest point of any tone\u2019s mean contour (for example, the bottom of a low tone\u2019s average dip), not the lowest single f0 sample in the data. For GCA and GAMM predictions, min and max are the lowest and highest predicted values. The two methods differ in how Tone Numerals (i.e. 1\u20135) are assigned. ",
-          "The mapping is linear in the units of the input, so the input sets the pitch scale: semitones and LZ give a logarithmic scale, closer to how pitch is perceived, whereas Hz and z-scores give a linear one."
+          " normalisation: f0 is placed between min and max, the lowest and highest points of the tones\u2019 mean contours (for GCA and GAMM, the predicted contours), not the lowest and highest f0 samples. ",
+          "The two methods differ only in how Tone Numerals (i.e. 1\u20135) are assigned. Both are linear in the input\u2019s units: semitones and LZ give a log scale, closer to perceived pitch; Hz and z-scores a linear one."
         ),
         tags$strong("Conversion methods:"),
         tags$ul(style = "margin-bottom: 8px; padding-left: 18px;",

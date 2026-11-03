@@ -19,7 +19,7 @@ test_that("classify_contour names dipping and peaking shapes", {
 
 # ---------- compute_mean_contour --------------------------------------------
 
-test_that("compute_mean_contour returns tone × time-bin grid", {
+test_that("compute_mean_contour returns tone × time-point grid", {
   df <- data.frame(
     token = rep(c("t1", "t2"), each = 5),
     time  = rep(seq(0, 1, length.out = 5), 2),
@@ -39,10 +39,50 @@ test_that("compute_mean_contour averages per tone", {
     f0    = c(100, 200, 200, 300),
     tone  = c("T1", "T1", "T2", "T2")
   )
-  out <- compute_mean_contour(df, n_bins = 2)
+  out <- compute_mean_contour(df, n_points = 2)
   # T1 mean at time=0 should be 100, at time=1 should be 200
   expect_equal(out$f0_predicted[out$tone == "T1" & out$time == 0], 100)
   expect_equal(out$f0_predicted[out$tone == "T2" & out$time == 1], 300)
+})
+
+test_that("compute_mean_contour counts every token once at each time point", {
+  # Two rising tokens of one tone, with 3 and 5 f0 samples: unequal counts,
+  # so both are resampled at 21 points and both count at every point.
+  df <- data.frame(
+    token = c(rep("a", 3), rep("b", 5)),
+    time  = c(seq(0, 1, length.out = 3), seq(0, 1, length.out = 5)),
+    f0    = c(seq(100, 200, length.out = 3), seq(200, 300, length.out = 5)),
+    tone  = "T1"
+  )
+  out <- suppressMessages(compute_mean_contour(df))
+  expect_equal(nrow(out), 21)
+  expect_equal(out$f0_predicted, seq(150, 250, length.out = 21))
+})
+
+test_that("compute_mean_contour keeps equally spaced points unchanged", {
+  df <- data.frame(token = rep(c("a", "b"), each = 4),
+                   time  = rep(c(0, 1/3, 2/3, 1), 2),
+                   f0    = c(100, 130, 120, 160, 110, 140, 130, 170),
+                   tone  = "T1")
+  out <- suppressMessages(compute_mean_contour(df))
+  expect_equal(out$time, c(0, 1/3, 2/3, 1))
+  expect_equal(out$f0_predicted, c(105, 135, 125, 165))
+})
+
+test_that("compute_mean_contour drops tokens with fewer than two f0 values", {
+  df <- data.frame(token = c("a", "a", "b"), time = c(0, 1, 0.5),
+                   f0 = c(100, 200, 150), tone = "T1")
+  expect_message(out <- compute_mean_contour(df, time_normalised = "no"),
+                 "Dropped 1 token")
+  expect_equal(out$f0_predicted, c(100, 200))
+})
+
+test_that("compute_mean_contour warns that n_bins is deprecated", {
+  df <- data.frame(token = "a", time = c(0, 0.5, 1), f0 = c(100, 150, 200),
+                   tone = "T1")
+  expect_warning(out <- suppressMessages(compute_mean_contour(df, n_bins = 5)),
+                 "deprecated")
+  expect_equal(nrow(out), 5)
 })
 
 

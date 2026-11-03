@@ -10,8 +10,9 @@ compute_mean_contour(
   f0 = "f0",
   time = "time",
   tone = "tone",
-  n_bins = 50,
-  time_normalised = c("auto", "no", "yes")
+  n_points = NULL,
+  time_normalised = c("auto", "no", "yes"),
+  n_bins = NULL
 )
 }
 \arguments{
@@ -19,18 +20,25 @@ compute_mean_contour(
 
 \item{token, f0, time, tone}{Column names.}
 
-\item{n_bins}{Number of evenly-spaced time bins across \verb{[0, 1]}.
-Default \code{50}. Larger values give a smoother contour at the cost
-of noisier per-bin estimates if some bins are sparsely populated.}
+\item{n_points}{Number of equally spaced time points across \verb{[0, 1]}
+at which every token is resampled. The default, \code{NULL}, uses the
+tokens' own number of points when they all have the same number, so
+equally spaced measurements come back unchanged, and otherwise \code{21},
+one point every 5\% of the duration, as in the app's f0 extraction and
+clustering.}
 
 \item{time_normalised}{One of \code{"auto"} (default: detect an
 already-normalised \verb{[0, 1]} time column and use it as-is), \code{"no"}
 (always rescale to \verb{[0, 1]} within each token), or \code{"yes"} (declare
 the column already normalised). See \code{\link[=resolve_time_norm]{resolve_time_norm()}}.}
+
+\item{n_bins}{Deprecated; use \code{n_points}. Samples used to be assigned
+to \code{n_bins} time bins; a value given here is used as \code{n_points}, with
+a warning.}
 }
 \value{
 A data frame with columns \code{tone}, \code{time}, \code{f0_predicted},
-one row per (tone, time-bin).
+one row per (tone, time point).
 }
 \description{
 Aggregates a long-format f0 dataset into a per-tone mean contour
@@ -47,10 +55,14 @@ of different durations can be averaged across the same grid. A
 time column that is \emph{already} normalised is detected with
 \code{\link[=time_already_normalised]{time_already_normalised()}} and used as-is (override with
 \code{time_normalised}), matching what \code{\link[=fit_gca]{fit_gca()}} and \code{\link[=fit_gamm]{fit_gamm()}} do.
-\item Round each sample's normalised time onto one of \code{n_bins}
-equally-spaced bins.
-\item For each (tone, time-bin) cell, compute the mean of \code{f0} across
-all tokens of that tone with samples in the bin.
+\item Resample every token, by linear interpolation, at the same
+\code{n_points} equally spaced time points, so each token counts once at
+every point however many f0 samples it has. Missing f0 values are
+skipped, points outside a token's measured span are left out rather
+than extrapolated, and tokens with fewer than two f0 values are
+dropped, with a message.
+\item At each time point, take the mean of \code{f0} across the tokens of each
+tone.
 \item Return the long-format mean contour with columns \code{tone}, \code{time},
 \code{f0_predicted} (the column name \code{f0_predicted} matches the
 convention used by \code{\link[=predict_gca]{predict_gca()}} and \code{\link[=predict_gamm]{predict_gamm()}} so the
