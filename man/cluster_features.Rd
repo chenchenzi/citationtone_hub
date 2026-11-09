@@ -11,7 +11,7 @@ cluster_features(
   time = "time",
   speaker = NULL,
   tone = NULL,
-  n_points = 20L,
+  n_points = 21L,
   features = c("points", "legendre", "dct", "derivative"),
   degree = 4L,
   register = c("level", "shape")
@@ -26,7 +26,9 @@ cluster_features(
 
 \item{tone}{Optional tone column, carried through for later validation.}
 
-\item{n_points}{Number of points to resample each contour to. Default 20.}
+\item{n_points}{Number of points to resample each contour to, spread
+evenly from its first to its last f0 value. Default 21 (one point every
+5\%), as in \code{\link[=resample_f0_equal]{resample_f0_equal()}} and the app's Cluster tab.}
 
 \item{features}{Feature representation: \code{"points"} (the resampled contour),
 \code{"legendre"} (orthogonal-polynomial coefficients of \code{degree}), \code{"dct"}
@@ -41,8 +43,10 @@ shape only).}
 }
 \value{
 A list with \code{features} (token x p matrix used for clustering),
-\code{contours} (token x n_points resampled f0, for plotting cluster means),
-\code{tokens}, and \code{meta} (token / speaker / tone).
+\code{contours} (token x n_points resampled f0, centred per token when
+\code{register = "shape"}, for plotting cluster means),
+\code{tokens}, \code{meta} (token / speaker / tone), and the settings used:
+\code{n_points}, \code{register} and \code{feature_type}.
 }
 \description{
 Resamples every token's f0 contour to a common length and turns it into a

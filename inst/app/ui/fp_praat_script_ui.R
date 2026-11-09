@@ -52,10 +52,10 @@ fp_praat_script_ui <- function(input, output, session) {
 #   Time_step. A .Pitch file IS a fixed-step frame object, and resampling it
 #   here would discard the per-frame candidate lists that Shinytone\'s F0
 #   Correction tab needs. Do the resampling in the app instead: F0 Processing >
-#   F0 Extraction > F0 Data Export, where you pick a Region (whole file /
-#   voiced region / TextGrid interval such as the vowel or rhyme) and a
-#   Sampling (native frames / N equal points across that region). One
-#   implementation, and the correction workflow stays intact.
+#   F0 Extraction > F0 Data Export, where you pick a Region (Whole token,
+#   i.e. the voiced region, or a TextGrid interval such as the vowel or
+#   rhyme) and a Sampling (native frames / N equidistant points across that
+#   region). One implementation, and the correction workflow stays intact.
 ###############################################################
 
 # ============================================================

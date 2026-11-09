@@ -29,9 +29,11 @@
 #' 2. Resample every token, by linear interpolation, at the same
 #'    `n_points` equally spaced time points, so each token counts once at
 #'    every point however many f0 samples it has. Missing f0 values are
-#'    skipped, points outside a token's measured span are left out rather
-#'    than extrapolated, and tokens with fewer than two f0 values are
-#'    dropped, with a message.
+#'    skipped. A token is left out at points beyond its first or last f0
+#'    value rather than extrapolated; a point within a tenth of a grid step
+#'    of that value takes it, so rounded times do not drop a measured end
+#'    point. Tokens with f0 at fewer than two time points are dropped, with
+#'    a message.
 #' 3. At each time point, take the mean of `f0` across the tokens of each
 #'    tone.
 #' 4. Return the long-format mean contour with columns `tone`, `time`,
@@ -43,11 +45,10 @@
 #' @param data A long-format data frame with one row per f0 sample.
 #' @param token,f0,time,tone Column names.
 #' @param n_points Number of equally spaced time points across `[0, 1]`
-#'   at which every token is resampled. The default, `NULL`, uses the
-#'   tokens' own number of points when they all have the same number, so
-#'   equally spaced measurements come back unchanged, and otherwise `21`,
-#'   one point every 5% of the duration, as in the app's f0 extraction and
-#'   clustering.
+#'   at which every token is resampled. Default 21, one point every 5%, as
+#'   in [resample_f0_equal()] and [cluster_features()]. Measured points
+#'   that fall on this grid, such as 11 or 21 equally spaced points per
+#'   token, keep their values; for denser data, raise `n_points`.
 #' @param time_normalised One of `"auto"` (default: detect an
 #'   already-normalised `[0, 1]` time column and use it as-is), `"no"`
 #'   (always rescale to `[0, 1]` within each token), or `"yes"` (declare
@@ -84,7 +85,7 @@ compute_mean_contour <- function(data,
                                  f0    = "f0",
                                  time  = "time",
                                  tone  = "tone",
-                                 n_points = NULL,
+                                 n_points = 21L,
                                  time_normalised = c("auto", "no", "yes"),
                                  n_bins = NULL) {
   time_normalised <- match.arg(time_normalised)
@@ -99,40 +100,44 @@ compute_mean_contour <- function(data,
     warning("`n_bins` is deprecated: use `n_points`. Tokens are now ",
             "resampled at equally spaced time points rather than binned.",
             call. = FALSE)
-    if (is.null(n_points)) n_points <- n_bins
+    if (missing(n_points)) n_points <- n_bins
   }
 
   # Same time handling as the model fits (see resolve_time_norm), so the
   # observed mean contours share the fitted models' time axis: per-token
   # min-max rescale, unless the column is already normalised to [0, 1].
-  tn <- resolve_time_norm(data, time, token, time_normalised)$time_norm
-  y  <- suppressWarnings(as.numeric(data[[f0]]))
-  ok <- is.finite(tn) & is.finite(y)
-  by_token <- split(which(ok), token_group_key(data[[token]])[ok])
+  tn  <- resolve_time_norm(data, time, token, time_normalised)$time_norm
+  y   <- suppressWarnings(as.numeric(data[[f0]]))
+  key <- token_group_key(data[[token]])
+  ok  <- is.finite(tn) & is.finite(y)
+  by_token <- split(which(ok), key[ok])
   usable   <- vapply(by_token, function(i) length(unique(tn[i])) >= 2, logical(1))
-  if (any(!usable)) {
-    message("Dropped ", sum(!usable), " token(s) with fewer than two f0 values.")
+  n_drop   <- length(unique(key)) - sum(usable)
+  if (n_drop > 0) {
+    message("Dropped ", n_drop, " token(s) with f0 at fewer than two time points.")
   }
   by_token <- by_token[usable]
   if (length(by_token) == 0) {
-    stop("No token has two or more f0 values to average.", call. = FALSE)
+    stop("No token has f0 at two or more time points to average.", call. = FALSE)
   }
 
-  # Resample every token at the same time points, so each counts once at
-  # every point however many f0 samples it has. By default that is the
-  # tokens' own number of points when they all have the same number (equally
-  # spaced points then come back unchanged), and otherwise 21, one every 5%.
-  if (is.null(n_points)) {
-    n_each   <- lengths(by_token)
-    n_points <- if (length(unique(n_each)) == 1) n_each[[1]] else 21L
-  }
+  if (is.null(n_points)) n_points <- 21L
   n_points <- suppressWarnings(as.integer(n_points))
   if (length(n_points) != 1 || is.na(n_points) || n_points < 2) {
     stop("`n_points` must be a single number of at least 2.", call. = FALSE)
   }
+  # Resample every token at the same time points, so each counts once at
+  # every point however many f0 samples it has. Nothing is extrapolated past
+  # a token's first or last f0 value, but a grid point within a tenth of a
+  # step of it takes that value, so times rounded to the millisecond (or
+  # floating-point error) do not drop a measured end point.
   grid <- seq(0, 1, length.out = n_points)
-  vals <- vapply(by_token, function(i)
-    stats::approx(tn[i], y[i], xout = grid, ties = mean)$y, numeric(n_points))
+  tol  <- 0.1 / (n_points - 1)
+  vals <- vapply(by_token, function(i) {
+    v <- stats::approx(tn[i], y[i], xout = grid, ties = mean, rule = 2)$y
+    v[grid < min(tn[i]) - tol | grid > max(tn[i]) + tol] <- NA
+    v
+  }, numeric(n_points))
   vals <- matrix(vals, nrow = n_points)   # time points x tokens
   tok_tone <- vapply(by_token, function(i) as.character(data[[tone]][i[1]]),
                      character(1))

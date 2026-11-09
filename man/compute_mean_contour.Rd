@@ -10,7 +10,7 @@ compute_mean_contour(
   f0 = "f0",
   time = "time",
   tone = "tone",
-  n_points = NULL,
+  n_points = 21L,
   time_normalised = c("auto", "no", "yes"),
   n_bins = NULL
 )
@@ -21,11 +21,10 @@ compute_mean_contour(
 \item{token, f0, time, tone}{Column names.}
 
 \item{n_points}{Number of equally spaced time points across \verb{[0, 1]}
-at which every token is resampled. The default, \code{NULL}, uses the
-tokens' own number of points when they all have the same number, so
-equally spaced measurements come back unchanged, and otherwise \code{21},
-one point every 5\% of the duration, as in the app's f0 extraction and
-clustering.}
+at which every token is resampled. Default 21, one point every 5\%, as
+in \code{\link[=resample_f0_equal]{resample_f0_equal()}} and \code{\link[=cluster_features]{cluster_features()}}. Measured points
+that fall on this grid, such as 11 or 21 equally spaced points per
+token, keep their values; for denser data, raise \code{n_points}.}
 
 \item{time_normalised}{One of \code{"auto"} (default: detect an
 already-normalised \verb{[0, 1]} time column and use it as-is), \code{"no"}
@@ -58,9 +57,11 @@ time column that is \emph{already} normalised is detected with
 \item Resample every token, by linear interpolation, at the same
 \code{n_points} equally spaced time points, so each token counts once at
 every point however many f0 samples it has. Missing f0 values are
-skipped, points outside a token's measured span are left out rather
-than extrapolated, and tokens with fewer than two f0 values are
-dropped, with a message.
+skipped. A token is left out at points beyond its first or last f0
+value rather than extrapolated; a point within a tenth of a grid step
+of that value takes it, so rounded times do not drop a measured end
+point. Tokens with f0 at fewer than two time points are dropped, with
+a message.
 \item At each time point, take the mean of \code{f0} across the tokens of each
 tone.
 \item Return the long-format mean contour with columns \code{tone}, \code{time},

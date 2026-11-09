@@ -36,6 +36,14 @@ test_that("cluster_features returns the expected shapes", {
   expect_true(all(c("token", "speaker", "tone") %in% names(f$meta)))
 })
 
+test_that("cluster_features resamples to 21 points by default", {
+  # 13 frames per token, resampled to the default 21 (one every 5%).
+  d <- make_synth(n_per = 4, np = 13)
+  f <- cluster_features(d, f0 = "f0", features = "points")
+  expect_equal(ncol(f$contours), 21)
+  expect_equal(f$n_points, 21L)
+})
+
 test_that("legendre / dct feature spaces have the right width", {
   d <- make_synth(n_per = 8)
   fl <- cluster_features(d, f0 = "f0", n_points = 20, features = "legendre", degree = 4)

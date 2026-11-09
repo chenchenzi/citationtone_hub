@@ -59,14 +59,64 @@ test_that("compute_mean_contour counts every token once at each time point", {
   expect_equal(out$f0_predicted, seq(150, 250, length.out = 21))
 })
 
-test_that("compute_mean_contour keeps equally spaced points unchanged", {
-  df <- data.frame(token = rep(c("a", "b"), each = 4),
-                   time  = rep(c(0, 1/3, 2/3, 1), 2),
-                   f0    = c(100, 130, 120, 160, 110, 140, 130, 170),
-                   tone  = "T1")
+test_that("compute_mean_contour keeps measured points on its grid", {
+  # 11 points per token (every 10%) lie on the default 21-point grid.
+  tt <- seq(0, 1, by = 0.1)
+  df <- data.frame(token = rep(c("a", "b"), each = 11), time = rep(tt, 2),
+                   f0 = c(100 + 50 * sin(pi * tt), 110 + 50 * sin(pi * tt)),
+                   tone = "T1")
   out <- suppressMessages(compute_mean_contour(df))
-  expect_equal(out$time, c(0, 1/3, 2/3, 1))
-  expect_equal(out$f0_predicted, c(105, 135, 125, 165))
+  expect_equal(nrow(out), 21)
+  at  <- match(round(tt, 9), round(out$time, 9))
+  expect_false(anyNA(at))
+  expect_equal(out$f0_predicted[at], 105 + 50 * sin(pi * tt))
+})
+
+test_that("compute_mean_contour keeps measured points on a partial span", {
+  # Vowel-only subset on an already-normalised axis: 9 points at 30-70%.
+  v  <- seq(0.3, 0.7, by = 0.05)
+  df <- rbind(data.frame(token = "a", time = v, f0 = 150 + 100 * v, tone = "T1"),
+              data.frame(token = "b", time = v, f0 = 170 + 100 * v, tone = "T1"))
+  out <- compute_mean_contour(df, time_normalised = "yes")
+  expect_equal(out$time, v)
+  expect_equal(out$f0_predicted, 160 + 100 * v)
+})
+
+test_that("compute_mean_contour keeps the measured grid when f0 is missing at the start", {
+  # Equally spaced 21-point tokens of different durations, none with f0 at
+  # 0%: the default grid stays at the measured 5% positions.
+  mk <- function(tok, dur) data.frame(
+    token = tok, time = seq(0, dur, length.out = 21),
+    f0 = c(NA, 100 + 100 * seq(0.05, 1, by = 0.05)), tone = "T1")
+  df  <- rbind(mk("a", 300), mk("b", 220), mk("c", 410))
+  out <- compute_mean_contour(df)
+  expect_equal(out$time, seq(0.05, 1, by = 0.05))
+  expect_equal(out$f0_predicted, 100 + 100 * seq(0.05, 1, by = 0.05))
+})
+
+test_that("compute_mean_contour keeps an end point missed only by rounding", {
+  # No f0 at 100% in any token: grid point 20 of 21 is a hair above the
+  # tokens' last time, 19/20, but the measured 95% point must stay.
+  mk <- function(tok, dur) data.frame(
+    token = tok, time = seq(0, dur, length.out = 21),
+    f0 = c(100 + 100 * seq(0, 0.95, by = 0.05), NA), tone = "T1")
+  df  <- rbind(mk("a", 300), mk("b", 220), mk("c", 410))
+  out <- compute_mean_contour(df)
+  expect_equal(nrow(out), 20)
+  expect_equal(max(out$time), 0.95)
+  expect_equal(out$f0_predicted[20], 195)
+})
+
+test_that("compute_mean_contour keeps an end point when times are rounded", {
+  # Times stored to the millisecond, no f0 at 0%: every token's measured 5%
+  # point lands a hair off the grid, but all of them must count there.
+  mk <- function(tok, dur, base) data.frame(
+    token = tok, time = round(seq(0, dur, length.out = 21), 3),
+    f0 = c(NA, base + 1:20), tone = "T1")
+  df  <- rbind(mk("a", 0.287, 100), mk("b", 0.293, 200), mk("c", 0.311, 300))
+  out <- suppressMessages(compute_mean_contour(df, time_normalised = "no"))
+  expect_equal(out$time[1], 0.05)
+  expect_lt(abs(out$f0_predicted[1] - 201), 0.1)
 })
 
 test_that("compute_mean_contour drops tokens with fewer than two f0 values", {
@@ -74,7 +124,7 @@ test_that("compute_mean_contour drops tokens with fewer than two f0 values", {
                    f0 = c(100, 200, 150), tone = "T1")
   expect_message(out <- compute_mean_contour(df, time_normalised = "no"),
                  "Dropped 1 token")
-  expect_equal(out$f0_predicted, c(100, 200))
+  expect_equal(out$f0_predicted, seq(100, 200, length.out = 21))
 })
 
 test_that("compute_mean_contour warns that n_bins is deprecated", {
