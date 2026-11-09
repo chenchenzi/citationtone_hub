@@ -1073,6 +1073,7 @@ ui <- fluidPage(
                           padding: 0 2px;
                         }
                         .wf-arrow { color: #aaa; font-size: 1.2rem; margin: 0 2px; display: inline-flex; align-items: center; }
+                        .wf-tail { display: inline-flex; align-items: center; gap: 6px; }
                         .wf-legend {
                           display: flex; flex-wrap: wrap; gap: 16px;
                           margin-top: 18px; font-size: 0.78rem; color: #777;
@@ -1103,7 +1104,7 @@ ui <- fluidPage(
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
                             tags$span(class = "wf-step wf-external", HTML("&#128202; .Pitch (Praat)")),
                             tags$span(class = "wf-or", "or"),
-                            tags$span(class = "wf-step wf-optional", HTML("&#128202; pre-extracted f0 .csv (optional)")),
+                            tags$span(class = "wf-step wf-optional", HTML("&#128202; pre-extracted f0 .csv")),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
                             tags$span(class = "wf-step wf-app", "F0 Extraction (+ metadata)"),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
@@ -1123,7 +1124,7 @@ ui <- fluidPage(
                           tags$div(class = "workflow-flow",
                             tags$span(class = "wf-step wf-data", `data-flow-in` = "extracted-f0", HTML("&#128202; f0 .csv")),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
-                            tags$span(class = "wf-step wf-app wf-opt", "Normalise (optional)"),
+                            tags$span(class = "wf-step wf-app wf-opt", "Normalise"),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
                             tags$span(class = "wf-step wf-app", "Visualise"),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
@@ -1184,19 +1185,21 @@ ui <- fluidPage(
                             tags$span(class = "tab-ref-chip", "F0 Analysis tab")
                           ),
                           tags$div(class = "workflow-desc",
-                            "Normalise the contours, optionally relabel tone-category variants or exclude tokens (Curate) on the normalised scale, then fit polynomial / GCA / GAMM models and convert contours into Chao tone numerals. Takes your known tone labels, or the clustered labels from step 4."),
+                            "Optionally relabel tone-category variants or exclude tokens (Curate), then normalise, so speaker means come from the tokens and labels you keep. Normalising in step 2 as well lets Curate show the contours on a normalised scale. Then fit polynomial / GCA / GAMM models and convert contours into Chao tone numerals. Takes your known tone labels, or the clustered labels from step 4."),
                           tags$div(class = "workflow-flow",
                             tags$span(class = "wf-step wf-data", `data-flow-in` = "cleaned-f0 clustered-labels", HTML("&#128202; clean f0 .csv")),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
-                            tags$span(class = "wf-step wf-app", "Normalise"),
+                            tags$span(class = "wf-step wf-app wf-opt", "Curate"),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
-                            tags$span(class = "wf-step wf-app wf-opt", "Curate (optional)"),
+                            tags$span(class = "wf-step wf-app", "Normalise"),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
                             tags$span(class = "wf-step wf-app", "Model"),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
                             tags$span(class = "wf-step wf-app", "Summarise"),
-                            tags$span(class = "wf-arrow", HTML("&#10132;")),
-                            tags$span(class = "wf-step wf-result", HTML("&#128203; coefficients / Chao numerals"))
+                            # Arrow and output wrap together on narrow screens.
+                            tags$span(class = "wf-tail",
+                              tags$span(class = "wf-arrow", HTML("&#10132;")),
+                              tags$span(class = "wf-step wf-result", HTML("&#128203; coefficients / Chao numerals")))
                           )
                         ),
 

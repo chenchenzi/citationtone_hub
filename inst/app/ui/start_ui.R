@@ -154,6 +154,9 @@ output$instruction_text <- renderUI({
     tags$div(style = "margin: 12px 0;",
       actionButton("try_sample", "Try with our sample data", icon = icon("flask"))
     ),
+    tags$p(style = "color: #777; font-size: 0.82rem; margin-top: -4px;",
+      "Uploading a file (or the sample) starts afresh: results from the previous file, ",
+      "such as normalised data, curation and fitted models, are cleared."),
     tags$hr(),
     h4("What each tab does"),
     tags$ul(

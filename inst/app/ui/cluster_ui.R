@@ -289,7 +289,12 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
   })
 
   # --- run clustering on demand ---
-  cl_run <- eventReactive(input$cluster_run, {
+  # The Run button sets a trigger; a new upload sets it to NULL, which blanks
+  # the old file's results (eventReactive gives a silent req() on NULL).
+  cl_trigger <- reactiveVal(NULL)
+  observeEvent(input$cluster_run, cl_trigger(input$cluster_run))
+  observeEvent(input$uploadfile, cl_trigger(NULL), ignoreInit = TRUE)
+  cl_run <- eventReactive(cl_trigger(), {
     d <- active_data(); req(d)
     tok <- input$cluster_token_var; tm <- input$cluster_time_var; f0 <- input$cluster_f0_var
     spk <- input$cluster_speaker_var; tn <- input$cluster_tone_var

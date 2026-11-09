@@ -1,10 +1,38 @@
-normalised_ui <- function(input, output, session, dataset, normalised_data) {
+normalised_ui <- function(input, output, session, dataset, normalised_data,
+                          curated_data = NULL, curated_norm_data = NULL) {
+
+  # Data source: the upload, or (after Curate) the curated data. Normalising
+  # the curated data writes curated_norm_data and leaves normalised_data alone:
+  # Curate reads normalised_data, so writing curated data there would make
+  # Curate apply its relabels a second time.
+  # has_curated is a reactiveVal, which only invalidates when its value
+  # changes, so a curation click does not re-render this panel.
+  has_curated <- reactiveVal(FALSE)
+  observe(has_curated(!is.null(curated_data) && !is.null(curated_data())))
+  # Once curated data exists, the source starts on it (About page, path 5:
+  # Curate, then Normalise). The user's switch to Uploaded data is kept until
+  # the curation is reset.
+  src_choice <- reactiveVal(NULL)
+  observeEvent(input$norm_source, src_choice(input$norm_source))
+  observeEvent(has_curated(), if (!has_curated()) src_choice(NULL))
+  norm_source <- reactive(
+    if (!has_curated()) "uploaded" else if (is.null(src_choice())) "curated" else src_choice())
+  norm_input  <- reactive(if (norm_source() == "curated") curated_data() else dataset())
+  # Columns this tab writes: never offered as the f0 (Hz) default, and refused
+  # as the f0 to normalise.
+  norm_cols <- c("f0_st", "f0_zscore", "f0_lz", "speaker_mean")
+  # Source and dataset the panel was last drawn for: while they are unchanged,
+  # a re-render (e.g. after a curation change) keeps the user's choices.
+  drawn_for <- NULL
 
   # Guide text for the Normalise tab
   output$normalise_guide <- renderUI({
     tagList(
       guide_box("Normalisation guide",
         tags$ul(style = "margin-bottom: 8px; padding-left: 18px;",
+          tags$li(nows(tags$strong("Data source:"), " The uploaded data, or, after Curate, the ",
+                  tags$strong("Curated data"), ". Normalising that again recomputes each speaker\u2019s mean (and SD) on the kept tokens and your new tone labels, and creates ",
+                  tags$strong("Curated + normalised data"), " for Visualise, the modelling tabs and Summarise. The curated data itself is not changed.")),
           tags$li(tags$strong("f0 (Hz):"), " The raw fundamental frequency column in Hertz."),
           tags$li(tags$strong("Speaker:"), " A speaker ID column for by-speaker normalisation."),
           tags$li(tags$strong("Tone category:"), " The column labelling tone types.")
@@ -71,41 +99,70 @@ normalised_ui <- function(input, output, session, dataset, normalised_data) {
 
   # Render UI for selecting f0, speaker, and tone variables
   output$ui_normalise <- renderUI({
-    ds   <- dataset()
+    ds   <- norm_input()
+    src  <- norm_source()
     vars <- if (!is.null(ds)) names(ds) else c("No dataset available")
     data_types <- if (!is.null(ds)) sapply(ds, class) else rep("NA", length(vars))
     var_types  <- paste0(vars, " {", data_types, "}")
+    key <- paste(src, input$dataset_name)
+    same <- identical(drawn_for, key); drawn_for <<- key
+    # Re-renders keep the method choices, and the variables and filename while
+    # the source and dataset are unchanged.
+    keep <- function(id, default) { v <- isolate(input[[id]]); if (is.null(v)) default else v }
+    keep_var <- function(id, default) {
+      v <- isolate(input[[id]]); if (same && !is.null(v) && v %in% vars) v else default }
+    # On curated data, default to the speaker and tone variables used in Curate,
+    # so the tone weighting follows the curated labels (e.g. `cluster`).
+    cv <- if (src == "curated") attr(ds, "curate_vars") else NULL
+    pick <- function(v, patterns, idx) if (!is.null(v) && v %in% vars) v else guess_var(vars, patterns, idx)
+    hz_vars <- setdiff(vars, norm_cols); if (length(hz_vars) == 0) hz_vars <- vars
+    fname <- paste0(if (!is.null(input$dataset_name) && nzchar(input$dataset_name))
+                      input$dataset_name else "data",
+                    if (src == "curated") "_curated_normalised" else "_normalised")
 
     tagList(
       wellPanel(
         h5("Dataset",
            tags$small(style = "color: #777; margin-left: 6px; font-weight: 400;",
                       input$dataset_name)),
-        selectInput("f0_var", "Select f0 (Hz) variable:",
+        if (has_curated())
+          selectInput("norm_source", "Data source:",
+                      choices = c("Uploaded data" = "uploaded", "Curated data" = "curated"),
+                      selected = src),
+        if (src == "curated")
+          tags$div(style = "font-size: 0.75rem; color: #2a7a5a; margin: -4px 0 8px 0;",
+                   icon("rotate"), " Normalising again on the kept tokens and new labels. ",
+                   "Creates Curated + normalised data; the curated data stays as it is."),
+        # IDs prefixed norm_: Visualise has its own tone_var / speaker_var.
+        selectInput("norm_f0_var", "Select f0 (Hz) variable:",
                     choices = setNames(vars, var_types),
                     # Hz first: a re-uploaded normalised file also has f0_st / f0_lz.
-                    selected = guess_var(vars, c("^f0_hz$", "^f0$", var_patterns$f0), 1),
+                    selected = keep_var("norm_f0_var",
+                                        guess_var(hz_vars, c("^f0_hz$", "^f0$", var_patterns$f0), 1)),
                     multiple = FALSE),
-        selectInput("speaker_var", "Select Speaker variable:",
+        selectInput("norm_speaker_var", "Select Speaker variable:",
                     choices = setNames(vars, var_types),
-                    selected = guess_var(vars, var_patterns$speaker, 2), multiple = FALSE),
-        selectInput("tone_var", "Select Tone category variable:",
+                    selected = keep_var("norm_speaker_var", pick(cv$speaker, var_patterns$speaker, 2)),
+                    multiple = FALSE),
+        selectInput("norm_tone_var", "Select Tone category variable:",
                     choices = setNames(vars, var_types),
-                    selected = guess_var(vars, var_patterns$tone, 3), multiple = FALSE),
+                    selected = keep_var("norm_tone_var", pick(cv$tone, var_patterns$tone, 3)),
+                    multiple = FALSE),
         tags$hr(),
         radioButtons("mean_calc_method", "Speaker Mean f0 Options",
                      choices = list("Simple average" = "simple",
                                     "Equally weighted by each tone" = "weighted"),
-                     selected = "weighted"),
+                     selected = keep("mean_calc_method", "weighted")),
         tags$hr(),
         radioButtons("normalisation_method", "F0 Normalisation Options",
                      choices = list("Semitone referenced on speaker mean" = "semitone",
                                     "By-speaker Z-score" = "zscore",
                                     "By-speaker log Z-score (LZ)" = "lz"),
-                     selected = "semitone"),
+                     selected = keep("normalisation_method", "semitone")),
         # Semitones use no SD, so the correction only shows for the z-scores.
         conditionalPanel("input.normalisation_method != 'semitone'",
-          checkboxInput("sd_correction", "Bessel\u2019s correction for the SD (n \u2212 1)", value = TRUE)),
+          checkboxInput("sd_correction", "Bessel\u2019s correction for the SD (n \u2212 1)",
+                        value = keep("sd_correction", TRUE))),
         tags$hr(),
         # Pointer to the illustrated time-normalisation guide on the right.
         tags$div(style = "color:#888; font-size:0.72rem; margin:0 0 4px;",
@@ -118,9 +175,7 @@ normalised_ui <- function(input, output, session, dataset, normalised_data) {
         tags$hr(),
         h5("Download"),
         textInput("output_filename", "Enter filename (without extension):",
-                  value = if (!is.null(input$dataset_name) && nzchar(input$dataset_name))
-                            paste0(input$dataset_name, "_normalised")
-                          else "normalised_data"),
+                  value = if (same) keep("output_filename", fname) else fname),
         downloadButton("download_data", "Download Normalised Data")
       )
     )
@@ -130,7 +185,7 @@ normalised_ui <- function(input, output, session, dataset, normalised_data) {
   # stands in when the dataset carries no landmark columns), so it reads as an
   # optional step alongside the f0 options.
   output$norm_time_landmark_ui <- renderUI({
-    ds   <- dataset()
+    ds   <- norm_input()
     vars <- if (!is.null(ds)) names(ds) else character(0)
     sets <- landmark_sets(vars)
     tok  <- vis_token_col(vars)   # token column enables the whole-token 0-1 option
@@ -144,19 +199,22 @@ normalised_ui <- function(input, output, session, dataset, normalised_data) {
         "No token or landmark columns detected. Add landmark columns in F0 Extraction (choose TextGrid tiers) to normalise time within segments."))
     }
     var_types <- paste0(vars, " {", sapply(ds, class), "}")
+    # Keep a choice across re-renders (e.g. a curation change) while valid.
+    keep_in <- function(id, valid, default) {
+      v <- isolate(input[[id]]); if (!is.null(v) && v %in% valid) v else default }
     tagList(
       selectInput("norm_time_set", "Normalise time by:",
-                  choices = choices, selected = "__none__"),
+                  choices = choices, selected = keep_in("norm_time_set", choices, "__none__")),
       conditionalPanel(
         "input.norm_time_set && input.norm_time_set != '__none__'",
         selectInput("norm_time_var", "Time variable:",
                     choices = stats::setNames(vars, var_types),
-                    selected = guess_var(vars, var_patterns$time, 1))),
+                    selected = keep_in("norm_time_var", vars, guess_var(vars, var_patterns$time, 1)))),
       conditionalPanel(
         "input.norm_time_set == '__token__'",
         selectInput("norm_time_token_var", "Token ID variable:",
                     choices = stats::setNames(vars, var_types),
-                    selected = if (!is.null(tok)) tok else vars[1])),
+                    selected = keep_in("norm_time_token_var", vars, if (!is.null(tok)) tok else vars[1]))),
       # Tiers are listed only when the data carries their landmark columns;
       # say why none are, rather than leave a tier-less menu unexplained.
       if (length(sets) == 0)
@@ -174,21 +232,31 @@ normalised_ui <- function(input, output, session, dataset, normalised_data) {
 
   # Compute normalisation on button click
   observeEvent(input$normalise_button, {
-    req(dataset())
-    data <- dataset()
+    req(norm_input())
+    src  <- norm_source()
+    data <- norm_input()
+    src_obj  <- data
+    src_vars <- attr(data, "curate_vars")
+    if (isTRUE(input$norm_f0_var %in% norm_cols)) {
+      showNotification(sprintf(paste("%s is a normalised column. Choose the f0 column in Hz",
+                                     "(normalising is always done from Hz)."), input$norm_f0_var),
+                       type = "error", duration = 8)
+      if (src == "curated") norm_display(NULL)
+      return()
+    }
 
     # --- f0 normalisation (R/normalise.R; scriptable + unit-tested) ----------
     # Wrapped so a failure (e.g. no usable speaker/tone column on raw extracted
     # data) still lets the optional time normalisation below run.
     f0_ok <- FALSE
-    if (!is.null(input$f0_var) && !is.null(input$speaker_var) &&
-        all(c(input$f0_var, input$speaker_var) %in% names(data))) {
+    if (!is.null(input$norm_f0_var) && !is.null(input$norm_speaker_var) &&
+        all(c(input$norm_f0_var, input$norm_speaker_var) %in% names(data))) {
       data <- tryCatch({
         d <- normalise_f0(
           data,
-          f0          = input$f0_var,
-          speaker     = input$speaker_var,
-          tone        = input$tone_var,
+          f0          = input$norm_f0_var,
+          speaker     = input$norm_speaker_var,
+          tone        = input$norm_tone_var,
           method      = input$normalisation_method,
           mean_method = input$mean_calc_method,
           sd_correction = !isFALSE(input$sd_correction)
@@ -224,18 +292,59 @@ normalised_ui <- function(input, output, session, dataset, normalised_data) {
                          type = "message", duration = 5)
     }
 
-    # Store the full dataset with normalised columns (for other tabs)
-    normalised_data(data)
-
-    # Display subset: f0 columns (when produced) + any time-normalisation columns.
     norm_col <- switch(input$normalisation_method,
                        zscore = "f0_zscore", lz = "f0_lz", "f0_st")
-    keep <- c(input$f0_var, input$speaker_var, input$tone_var,
+
+    # Store the full dataset with normalised columns (for other tabs)
+    if (src == "curated") {
+      if (!f0_ok) {
+        showNotification(paste("The curated data was not normalised, so no curated +",
+                               "normalised data was made. Check the f0, speaker and tone variables."),
+                         type = "error", duration = 8)
+        norm_display(NULL)
+        return()
+      }
+      # Normalised columns carried over from the first run (all tokens, the
+      # original labels) are out of date: keep only the one this run produced.
+      stale <- setdiff(c("f0_st", "f0_zscore", "f0_lz"), norm_col)
+      data  <- data[, setdiff(names(data), stale), drop = FALSE]
+      # The variables this run used (downstream menus default to them), the
+      # run (source_picker() selects each new run once), and a fingerprint of
+      # the curated data it came from (server.R clears this data when it changes).
+      used <- c(src_vars, list(tone = input$norm_tone_var, speaker = input$norm_speaker_var))
+      attr(data, "curate_vars") <- used[!duplicated(names(used), fromLast = TRUE)]
+      attr(data, "run") <- input$normalise_button
+      key_cols <- unique(c(src_vars$token, input$norm_f0_var, input$norm_speaker_var, input$norm_tone_var))
+      attr(data, "curated_key_cols") <- key_cols
+      attr(data, "curated_key") <- curated_key(src_obj, key_cols)
+      curated_norm_data(data)
+      tok <- vis_token_col(names(data))
+      showNotification(sprintf(paste("Curated + normalised data ready%s. Model, GCA and GAMM",
+                                     "switch to it; Visualise and Summarise list it."),
+                               if (!is.null(tok)) sprintf(": %d tokens", length(unique(data[[tok]]))) else ""),
+                       type = "message", duration = 6)
+    } else {
+      normalised_data(data)
+    }
+
+    # Display subset: f0 columns (when produced) + any time-normalisation columns.
+    keep <- c(input$norm_f0_var, input$norm_speaker_var, input$norm_tone_var,
               if (f0_ok) c("speaker_mean", norm_col),
               if (length(time_cols) > 0) c(time_ctx, time_cols))
     keep <- unique(intersect(keep, names(data)))
     norm_display(if (length(keep) > 0) data[, keep, drop = FALSE] else data)
+    norm_route(src)
   })
+
+  # The table and download show the last result: drop it when the source is
+  # switched, or when the curated + normalised data it showed is cleared.
+  norm_route <- reactiveVal(NULL)
+  observeEvent(input$uploadfile, norm_display(NULL), ignoreInit = TRUE)
+  observeEvent(norm_source(), norm_display(NULL), ignoreInit = TRUE)
+  if (!is.null(curated_norm_data))
+    observeEvent(curated_norm_data(), {
+      if (is.null(curated_norm_data()) && identical(norm_route(), "curated")) norm_display(NULL)
+    }, ignoreNULL = FALSE, ignoreInit = TRUE)
 
   # Display the normalised dataset
   output$normalised_data <- DT::renderDataTable({

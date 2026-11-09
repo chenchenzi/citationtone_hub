@@ -208,6 +208,32 @@ server <- function(input, output, session) {
   # source in the modelling and summarise tabs). NULL until the user curates.
   curated_data <- reactiveVal(NULL)
 
+  # Shared storage for curated + normalised data (written by the Normalise tab
+  # when its source is the curated data: normalised columns recomputed on the
+  # kept tokens and the new tone labels). Curate never reads it, so nothing
+  # loops; the modelling, Visualise and Summarise tabs offer it as a source.
+  # It records a fingerprint of the curated tokens, labels, speakers and Hz
+  # values it came from (curated_key() in global.R), and is cleared when those
+  # change, so a stale copy is never modelled.
+  curated_norm_data <- reactiveVal(NULL)
+  observeEvent(curated_data(), {
+    cn <- curated_norm_data()
+    if (is.null(cn)) return()
+    cd <- curated_data()
+    if (is.null(cd)) {
+      curated_norm_data(NULL)
+      showNotification("Curation was reset, so the curated + normalised data was cleared.",
+                       type = "warning", duration = 6, id = "curated_norm_cleared")
+    } else if (!identical(curated_key(cd, attr(cn, "curated_key_cols")),
+                          attr(cn, "curated_key"))) {
+      curated_norm_data(NULL)
+      showNotification(paste("The curated tokens or labels changed, so the curated +",
+                             "normalised data was cleared. Normalise the curated data",
+                             "again (Normalise tab, data source: Curated data)."),
+                       type = "warning", duration = 8, id = "curated_norm_cleared")
+    }
+  }, ignoreNULL = FALSE, ignoreInit = TRUE)
+
   # Shared inspection result (written by Inspect tab, read by Curate tab so the
   # actual Inspect flags can seed re-label candidates). NULL until Inspect runs.
   inspect_result <- reactiveVal(NULL)
@@ -221,6 +247,22 @@ server <- function(input, output, session) {
   gca_pred_data <- reactiveVal(NULL)
   gamm_pred_data <- reactiveVal(NULL)
 
+  # A new upload starts afresh: everything computed from the previous file is
+  # cleared, so no tab offers (or selects by default) the old file's
+  # normalised, clustered or model data. Each tab also clears its own shown
+  # results, and Curate its relabels and exclusions.
+  observeEvent(input$uploadfile, {
+    derived <- list(normalised_data, cluster_data, curated_norm_data,
+                    inspect_result, gca_pred_data, gamm_pred_data)
+    had <- any(vapply(derived, function(rv) !is.null(rv()), logical(1))) ||
+           !is.null(curated_data())
+    for (rv in derived) rv(NULL)
+    if (had)
+      showNotification(paste("New file: normalised, inspected, clustered, curated and",
+                             "model results from the previous file were cleared."),
+                       type = "message", duration = 6, id = "upload_cleared")
+  }, priority = 100)
+
   # Shared storage for f0 processing tab
   fp_audio_data       <- reactiveVal(NULL)   # data.frame: basename, wav_path, tg_path, pitch_path, sr, bit, dur, channels
   fp_f0_data          <- reactiveVal(NULL)   # extracted/parsed f0 contours (long format)
@@ -232,18 +274,18 @@ server <- function(input, output, session) {
   about_usage_ui(input, output, session)
   start_ui(input, output, session, dataset, raw_dataset, attached_metadata, duration_specs)
   view_ui(input, output, session, dataset)
-  normalised_ui(input, output, session, dataset, normalised_data)
-  visualise_ui(input, output, session, dataset, normalised_data)
+  normalised_ui(input, output, session, dataset, normalised_data, curated_data, curated_norm_data)
+  visualise_ui(input, output, session, dataset, normalised_data, curated_norm_data)
   inspect_ui(input, output, session, dataset, inspect_result)
   cluster_ui(input, output, session, dataset, normalised_data, curated_data, cluster_data)
-  curate_ui(input, output, session, dataset, normalised_data, curated_data, inspect_result, cluster_data)
-  model_ui(input, output, session, dataset, normalised_data, curated_data, cluster_data)
-  gca_ui(input, output, session, dataset, normalised_data, gca_pred_data, curated_data, cluster_data)
-  gamm_ui(input, output, session, dataset, normalised_data, gamm_pred_data, curated_data, cluster_data)
+  curate_ui(input, output, session, dataset, normalised_data, curated_data, inspect_result, cluster_data, curated_norm_data)
+  model_ui(input, output, session, dataset, normalised_data, curated_data, cluster_data, curated_norm_data)
+  gca_ui(input, output, session, dataset, normalised_data, gca_pred_data, curated_data, cluster_data, curated_norm_data)
+  gamm_ui(input, output, session, dataset, normalised_data, gamm_pred_data, curated_data, cluster_data, curated_norm_data)
   checklist_ui(input, output, session)
   filename_guide_ui(input, output, session)
   waveform_guide_ui(input, output, session)
-  summarise_ui(input, output, session, dataset, normalised_data, gca_pred_data, gamm_pred_data, curated_data)
+  summarise_ui(input, output, session, dataset, normalised_data, gca_pred_data, gamm_pred_data, curated_data, curated_norm_data)
 
   # f0 processing tab modules
   fp_start_ui(input, output, session, fp_audio_data)

@@ -17,7 +17,8 @@
 ###############################################
 
 curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL,
-                      curated_data, inspect_result = NULL, cluster_data = NULL) {
+                      curated_data, inspect_result = NULL, cluster_data = NULL,
+                      curated_norm_data = NULL) {
 
   # ---- curation state ----
   rv_relabel   <- reactiveVal(stats::setNames(character(0), character(0)))
@@ -121,7 +122,11 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
           tags$em("subset"), ", not the whole dataset."),
         tags$li("The original tone is never overwritten; every action is logged. Downstream ",
           "tabs gain a ", tags$strong("Curated data"), " source (tone = your relabels, excluded ",
-          "tokens dropped; original kept as ", tags$code("<tone>_original"), ").")
+          "tokens dropped; original kept as ", tags$code("<tone>_original"), ")."),
+        tags$li("Then normalise again: in ", tags$strong("Normalise"), ", choose ",
+          tags$strong("Curated data"), " as the source. Speaker means (and SDs) are recomputed ",
+          "on the kept tokens and your new labels, giving ", tags$strong("Curated + normalised data"),
+          " for Visualise, Model, GCA, GAMM and Summarise.")
       )
     )
   })
@@ -133,6 +138,7 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
   output$curate_prep <- renderUI({
     norm_done <- !is.null(.nd())
     insp_done <- !is.null(if (!is.null(inspect_result)) inspect_result() else NULL)
+    renorm_done <- !is.null(curated_norm_data) && !is.null(curated_norm_data())
     clustered <- {
       d <- dataset()
       identical(active_source(), "clustered") || (!is.null(d) && "cluster" %in% names(d))
@@ -172,7 +178,9 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
         arrow,
         step(2, "Inspect", "Inspect tab", "Flag outliers and artefacts as ready-made candidates to review.", insp_done),
         arrow,
-        step(3, "Curate", NULL, "You are here. Select tokens, then relabel or exclude.", FALSE, here = TRUE)),
+        step(3, "Curate", NULL, "You are here. Select tokens, then relabel or exclude.", FALSE, here = TRUE),
+        arrow,
+        step(4, "Normalise again", "Normalise tab", "Data source: Curated data, so speaker means use the kept tokens and new labels.", renorm_done)),
       taskstrip("layer-group", "Variant readings / forms",
         list(chip("eye", "View one tone"), chip("draw-polygon", "Select the variant"), chip("tag", "Relabel new")),
         "split", "s"))
@@ -185,7 +193,9 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
         arrow,
         step(2, "Cluster", "Cluster tab", "Group contour shapes and publish candidate tone labels.", clustered),
         arrow,
-        step(3, "Curate", NULL, "You are here. Verify the clusters, then merge or exclude.", FALSE, here = TRUE)),
+        step(3, "Curate", NULL, "You are here. Verify the clusters, then merge or exclude.", FALSE, here = TRUE),
+        arrow,
+        step(4, "Normalise again", "Normalise tab", "Data source: Curated data, so speaker means use the kept tokens and merged labels.", renorm_done)),
       taskstrip("object-group", "Over-split clusters",
         list(chip("table-cells", "All-tones view"), chip("tag", "Relabel to an existing tone")),
         "merge", "m"),
@@ -655,12 +665,19 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
     showNotification(sprintf("Excluded all %d relabelled token(s).", length(toks)),
                      type = "message", duration = 3)
   })
-  observeEvent(input$curate_reset, {
+  reset_curation <- function() {
     rv_relabel(stats::setNames(character(0), character(0)))
     rv_exclude(character(0)); rv_note(stats::setNames(character(0), character(0)))
     rv_selection(character(0)); rv_log(rv_log()[0, , drop = FALSE])
+  }
+  observeEvent(input$curate_reset, {
+    reset_curation()
     showNotification("All curation reset.", type = "message", duration = 3)
   })
+  # A new upload starts a new curation: relabels and exclusions are keyed by
+  # token, so carrying them over would re-apply them to a re-uploaded file
+  # (e.g. a curated CSV) and overwrite its <tone>_original column.
+  observeEvent(input$uploadfile, reset_curation(), ignoreInit = TRUE)
 
   # ---- publish analysis-ready curated data (keeps curate_note) ----
   observe({
@@ -673,6 +690,9 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
     ar[[paste0(v$tone, "_original")]] <- ar[[v$tone]]
     ar[[v$tone]] <- ar$tone_relabelled
     ar$tone_relabelled <- NULL; ar$excluded <- NULL
+    # The variables used here, so Normalise can weight by the curated tone
+    # labels (e.g. `cluster`) when it normalises this data again.
+    attr(ar, "curate_vars") <- list(token = v$token, tone = v$tone, speaker = v$speaker)
     curated_data(ar)
   })
 
@@ -731,6 +751,7 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
   output$curate_summary <- renderUI({
     d <- dataset(); if (is.null(d)) return(NULL)
     rel <- rv_relabel(); exc <- rv_exclude(); v <- cvar()
+    req(isTRUE(v$token %in% names(d)))   # menus not drawn yet on first visit
     n_tok <- length(unique(as.character(d[[v$token]])))
     tags$div(style = "background-color: #fff8e1; border-left: 4px solid #ffc107; padding: 8px 14px; margin-bottom: 10px; border-radius: 4px; font-size: 0.88rem;",
       tags$strong("Curation so far: "),

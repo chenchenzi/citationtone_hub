@@ -1,5 +1,46 @@
 # shinytone (development version)
 
+* **Normalise again after Curate.** The Normalise tab can now read the
+  Curated data (new "Data source" menu, shown once you have curated). This
+  recomputes each speaker's mean (and SD) on the kept tokens and the new tone
+  labels, and creates a new **Curated + normalised data** set. Visualise,
+  Model, GCA, GAMM and Summarise list it; Model, GCA and GAMM switch to it
+  after each such run, and Summarise picks it unless model predictions
+  exist. The curated data itself is not changed. Normalised columns left
+  over from the first run are dropped, so only the column this run made
+  remains (e.g. `f0_st`, not a stale `f0_lz`). The set is cleared if the
+  curated tokens or labels change afterwards (or the curation is reset),
+  with a note to normalise again; re-normalising the uploaded data does not
+  clear it. Downstream tone and speaker menus default to the variables used
+  in Curate and Normalise (e.g. `cluster`). Normalise's variable menus now
+  have their own input IDs; they shared `tone_var` and `speaker_var` with
+  Visualise, so one tab's choice could silently change the other's. Once
+  curated data exists, the Normalise tab starts on it; Curate's route boxes
+  add a step 4, "Normalise again", and Model, GCA and GAMM show a reminder
+  while "Curated data" is chosen. Path 5 of the About page workflow (and
+  the paper's copy, `paper/figures/workflow_overview`) now reads Curate,
+  Normalise, Model, Summarise: the normalisation used for analysis comes
+  after curation, and normalising in path 2 only helps Curate's display.
+  Figure boxes drop "(optional)"; the dashed border and legend say it.
+* **A new upload starts afresh.** Uploading a file (including "Try with
+  our sample data") now clears everything computed from the previous file:
+  normalised, inspected, clustered, curated and curated + normalised data,
+  GCA/GAMM predictions, and each tab's shown results (Normalise table,
+  polynomial, GCA and GAMM fits, clustering, Chao conversion), with a note
+  saying so (and a line under the Start tab's sample-data button says it
+  up front). Before, the previous file's normalised data stayed in the
+  menus, and Model, GCA and GAMM selected it by default, so trying the
+  sample data and then uploading your own could model the sample. Curate's
+  relabels and exclusions are reset too; they used to carry over and, on a
+  re-uploaded curated CSV, overwrote `<tone>_original`.
+* **Summarise: normalise first.** The data source menu lists Normalised f0
+  (and Curated + normalised f0) first. The Hz routes are now labelled
+  "Uploaded f0 (converted to LZ here)" and "Curated f0 (converted to LZ
+  here)", with a tip to normalise first so Chao numerals and models share
+  one scale. Picking a z-score column shows a note that z-scores are linear
+  in Hz; on the sample data, Hz or z-score against semitones or LZ changed
+  4 of 6 tones' numerals. The curated route now uses the tone variable
+  chosen in Curate (e.g. `cluster`).
 * **`cluster_features()` resamples to 21 points by default (was 20)**, one
   every 5% of the stretch from each contour's first to its last f0 value.
   This is the same default as the app's Cluster tab, `resample_f0_equal()`

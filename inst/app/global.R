@@ -29,6 +29,68 @@ guess_var <- function(vars, patterns, fallback_idx = 1) {
 }
 
 # ---------------------------------------------------------------------------
+# source_picker(): the selected entry of a tab's "Select dataset" menu. Keeps
+# the user's current choice while it is still offered, but selects `prefer`
+# (the curated + normalised data, the furthest-processed dataset) once per
+# Normalise run that made it: `stamp` identifies the run (attr "run"), so a
+# new run is picked up even if the user had switched away from an older one.
+# Create one per menu, in the module body:
+#   pick_dataset <- source_picker()
+#   selected = pick_dataset(input$model_dataset, ds_choices, "normalised",
+#                           stamp = attr(curated_norm_data(), "run"))
+# ---------------------------------------------------------------------------
+source_picker <- function(prefer = "curated_norm") {
+  seen <- NULL
+  function(current, choices, fallback, stamp = NULL) {
+    has   <- prefer %in% choices
+    fresh <- has && !identical(stamp, seen)
+    if (has) seen <<- stamp
+    if (fresh) prefer
+    else if (!is.null(current) && current %in% choices) current
+    else fallback
+  }
+}
+
+# ---------------------------------------------------------------------------
+# curated_reminder(): a note under a modelling tab's "Select dataset" menu
+# while "Curated data" is chosen. Any normalised columns in it were computed
+# before curation, so point to normalising the curated data (About page,
+# path 5: Curate, then Normalise).
+# ---------------------------------------------------------------------------
+curated_reminder <- function(input_id) {
+  conditionalPanel(sprintf("input.%s == 'curated'", input_id),
+    tags$div(style = paste("font-size: 0.75rem; color: #6b5a1e; background: #fff8e1;",
+                           "border-radius: 4px; padding: 5px 8px; margin: -6px 0 10px 0;"),
+      icon("lightbulb"),
+      HTML(paste(" Any normalised columns here were computed before curation. For analysis,",
+                 "normalise the curated data (<strong>Normalise</strong> tab, data source",
+                 "<strong>Curated data</strong>) and choose <strong>Curated + normalised data</strong>."))))
+}
+
+# ---------------------------------------------------------------------------
+# role_var(): the default column for a role ("tone" or "speaker") in a tab's
+# variable menus. Data from Curate carries the variables used there (attr
+# "curate_vars"; the Normalise tab updates it for the curated + normalised
+# data), e.g. a `cluster` tone, so curated data is analysed with the labels
+# that were curated. Otherwise guess as usual.
+# ---------------------------------------------------------------------------
+role_var <- function(d, role, vars, patterns, fallback_idx = 1) {
+  v <- attr(d, "curate_vars")[[role]]
+  if (!is.null(v) && v %in% vars) v else guess_var(vars, patterns, fallback_idx)
+}
+
+# ---------------------------------------------------------------------------
+# curated_key(): a fingerprint of the curated data that curated + normalised
+# data depends on: which tokens are kept, their tone labels, speakers and Hz
+# values (`cols`). Columns added by a later Normalise run on the base data do
+# not change it. Character values, so the "convert to factor" option does not.
+# ---------------------------------------------------------------------------
+curated_key <- function(d, cols) {
+  cols <- intersect(cols, names(d))
+  rlang::hash(lapply(d[cols], as.character))
+}
+
+# ---------------------------------------------------------------------------
 # nows(): render inline children with NO whitespace between them.
 # htmltools writes each child of a tag on its own line, and the browser
 # renders that newline as a space. So

@@ -2,7 +2,8 @@
 # Model: Polynomials tab — Legendre polynomial fitting per token
 ###############################################
 
-model_ui <- function(input, output, session, dataset, normalised_data, curated_data = NULL, cluster_data = NULL) {
+model_ui <- function(input, output, session, dataset, normalised_data, curated_data = NULL, cluster_data = NULL,
+                     curated_norm_data = NULL) {
 
   # On a landmark (multisyllabic) time axis, per-token Legendre coefficients stop
   # being interpretable, so just nudge to GAMM. The _t01-vs-_tseq distinction is
@@ -55,7 +56,7 @@ model_ui <- function(input, output, session, dataset, normalised_data, curated_d
           tags$li(tags$strong("Token ID:"), " A unique identifier for each token/syllable. One polynomial fit per token."),
           tags$li(tags$strong("f0:"), " An f0-related variable. Normalised f0 (e.g. semitone, z-score or log z-score) is recommended for more interpretable and comparable coefficients across speakers.",
             " Use the ", tags$strong("Normalise"), " tab first, then select ", tags$em("Normalised data"),
-            " from the dataset dropdown to access ", tags$code(style = code_style, "f0_st"), ", ", tags$code(style = code_style, "f0_zscore"), " or ", tags$code(style = code_style, "f0_lz"), "."),
+            " (or, after Curate, ", tags$em("Curated + normalised data"), ") from the dataset dropdown to access ", tags$code(style = code_style, "f0_st"), ", ", tags$code(style = code_style, "f0_zscore"), " or ", tags$code(style = code_style, "f0_lz"), "."),
           tags$li(tags$strong("Time:"),
             " The time variable that orders f0 samples within each token. Each token's time is rescaled to ",
             tags$strong("[-1, 1]"),
@@ -84,14 +85,19 @@ model_ui <- function(input, output, session, dataset, normalised_data, curated_d
     )
   })
 
+  pick_dataset <- source_picker()   # selects Curated + normalised data once, when it appears
+
   # --- Helper: get active dataset based on selector ---
   active_data <- reactive({
     has_norm <- !is.null(normalised_data())
     has_cur  <- !is.null(curated_data) && !is.null(curated_data())
     has_clu  <- !is.null(cluster_data) && !is.null(cluster_data())
+    has_cn   <- !is.null(curated_norm_data) && !is.null(curated_norm_data())
     sel <- input$model_dataset
     if (!is.null(sel) && sel == "clustered" && has_clu) {
       cluster_data()
+    } else if (!is.null(sel) && sel == "curated_norm" && has_cn) {
+      curated_norm_data()
     } else if (!is.null(sel) && sel == "curated" && has_cur) {
       curated_data()
     } else if (!is.null(sel) && sel == "normalised" && has_norm) {
@@ -106,6 +112,7 @@ model_ui <- function(input, output, session, dataset, normalised_data, curated_d
     has_norm <- !is.null(normalised_data())
     has_cur  <- !is.null(curated_data) && !is.null(curated_data())
     has_clu  <- !is.null(cluster_data) && !is.null(cluster_data())
+    has_cn   <- !is.null(curated_norm_data) && !is.null(curated_norm_data())
 
     # Dataset choices
     ds_choices <- c("Uploaded data" = "uploaded")
@@ -115,17 +122,16 @@ model_ui <- function(input, output, session, dataset, normalised_data, curated_d
     if (has_cur) {
       ds_choices <- c(ds_choices, "Curated data" = "curated")
     }
+    if (has_cn) {
+      ds_choices <- c(ds_choices, "Curated + normalised data" = "curated_norm")
+    }
     if (has_clu) {
       ds_choices <- c(ds_choices, "Clustered data" = "clustered")
     }
-    # Preserve current selection
-    ds_selected <- if (!is.null(input$model_dataset) && input$model_dataset %in% ds_choices) {
-      input$model_dataset
-    } else if (has_norm) {
-      "normalised"
-    } else {
-      "uploaded"
-    }
+    # Keep the user's choice (see source_picker() in global.R)
+    ds_selected <- pick_dataset(input$model_dataset, ds_choices,
+                                if (has_norm) "normalised" else "uploaded",
+                                stamp = if (has_cn) attr(curated_norm_data(), "run"))
 
     # Get variable names from the active dataset
     active <- active_data()
@@ -137,6 +143,7 @@ model_ui <- function(input, output, session, dataset, normalised_data, curated_d
       wellPanel(
         selectInput("model_dataset", "Select dataset:",
                     choices = ds_choices, selected = ds_selected),
+        curated_reminder("model_dataset"),
         selectInput("model_token_var", "Select Token ID variable:",
                     choices = setNames(vars, var_types),
                     selected = guess_var(vars, var_patterns$token, 1)),
@@ -148,10 +155,10 @@ model_ui <- function(input, output, session, dataset, normalised_data, curated_d
                     selected = guess_time_var(vars, 3)),
         selectInput("model_speaker_var", "Select Speaker variable:",
                     choices = setNames(vars, var_types),
-                    selected = guess_var(vars, var_patterns$speaker, 4)),
+                    selected = role_var(active, "speaker", vars, var_patterns$speaker, 4)),
         selectInput("model_tone_var", "Select Tone category variable:",
                     choices = setNames(vars, var_types),
-                    selected = guess_var(vars, var_patterns$tone, 5)),
+                    selected = role_var(active, "tone", vars, var_patterns$tone, 5)),
         tags$hr(),
         radioButtons("model_degree", "Polynomial degree:",
                      choices = list("1 (linear)" = 1,
@@ -175,6 +182,7 @@ model_ui <- function(input, output, session, dataset, normalised_data, curated_d
 
   # --- Result storage ---
   model_result <- reactiveVal(NULL)
+  observeEvent(input$uploadfile, model_result(NULL), ignoreInit = TRUE)   # new file: clear old fit
 
   # --- Core computation ---
   # All Legendre fitting lives in fit_polynomial() (R/polynomial.R), which

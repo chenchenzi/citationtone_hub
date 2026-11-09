@@ -2,7 +2,8 @@
 # Summarise tab — Chao Tone Digit Conversion
 ###############################################
 
-summarise_ui <- function(input, output, session, dataset, normalised_data, gca_pred_data, gamm_pred_data, curated_data = NULL) {
+summarise_ui <- function(input, output, session, dataset, normalised_data, gca_pred_data, gamm_pred_data, curated_data = NULL,
+                         curated_norm_data = NULL) {
 
   # classify_contour() and compute_mean_contour() are now package-level
   # functions (R/chao.R), available in the global namespace via global.R.
@@ -102,8 +103,8 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
         ),
         tags$strong("Data source:"),
         tags$ul(style = "margin-bottom: 0; padding-left: 18px;",
-          tags$li(tags$strong("Raw or curated f0 (Hz):"), " Each speaker\u2019s f0 is first converted to LZ (log z-score, Zhu 1999), so that higher and lower voices are averaged on a common scale. Per-tone mean contours are then taken, with every token resampled at the same time points so that tokens with more f0 samples do not count more. Choose the speaker variable, or none to treat the data as one speaker."),
-          tags$li(tags$strong("Normalised f0:"), " Per-tone mean contours of the f0 from the Normalise tab, on the scale chosen there, with tokens resampled in the same way."),
+          tags$li(tags$strong("Normalised f0 (recommended), or Curated + normalised f0:"), " Per-tone mean contours of the f0 from the Normalise tab, on the scale chosen there, with every token resampled at the same time points so that tokens with more f0 samples do not count more. Normalising first keeps Chao numerals and your models on one scale. A log scale (semitones or LZ) suits Chao numerals; z-scores are linear in Hz, which can move a digit near a boundary."),
+          tags$li(tags$strong("Uploaded or curated f0, converted to LZ here:"), " A quick route without the Normalise tab. Each speaker\u2019s f0 in Hz is first converted to LZ (log z-score, Zhu 1999), so that higher and lower voices are averaged on a common scale, and then averaged as above. Choose the speaker variable, or none to treat the data as one speaker."),
           tags$li(tags$strong("GCA / GAMM predictions:"), " Available after fitting the respective model. Uses the population-level predicted contours (smoother, more representative).")
         )
       )
@@ -117,18 +118,21 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
     has_data <- !is.null(dataset())
     has_norm <- !is.null(normalised_data())
     has_cur  <- !is.null(curated_data) && !is.null(curated_data())
+    has_cn   <- !is.null(curated_norm_data) && !is.null(curated_norm_data())
 
-    # Build source choices dynamically
+    # Build source choices dynamically: normalised data first (recommended),
+    # then model predictions, then the Hz routes that convert to LZ here.
     src_choices <- c()
-    if (has_data) src_choices <- c(src_choices, "Raw f0 (Hz)" = "raw_hz")
-    if (has_cur)  src_choices <- c(src_choices, "Curated f0" = "curated")
     if (has_norm) src_choices <- c(src_choices, "Normalised f0" = "normalised")
+    if (has_cn)   src_choices <- c(src_choices, "Curated + normalised f0" = "curated_norm")
     if (has_gca)  src_choices <- c(src_choices, "GCA predictions" = "gca")
     if (has_gamm) src_choices <- c(src_choices, "GAMM predictions" = "gamm")
+    if (has_data) src_choices <- c(src_choices, "Uploaded f0 (converted to LZ here)" = "raw_hz")
+    if (has_cur)  src_choices <- c(src_choices, "Curated f0 (converted to LZ here)" = "curated")
     if (length(src_choices) == 0) src_choices <- c("No data available" = "none")
 
     # Default: best available
-    default_src <- if (has_gamm) "gamm" else if (has_gca) "gca" else if (has_norm) "normalised" else if (has_data) "raw_hz" else "none"
+    default_src <- if (has_gamm) "gamm" else if (has_gca) "gca" else if (has_cn) "curated_norm" else if (has_norm) "normalised" else if (has_data) "raw_hz" else "none"
 
     # Column info for raw data
     # (guess_var() helper is defined globally in server.R)
@@ -144,23 +148,47 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
     raw_tone_default  <- guess_var(raw_vars, c("^tone", "^category", "^tonecat"), 4)
     raw_speaker_default <- guess_speaker(raw_vars)
 
-    # Column info for normalised data
-    norm_data <- normalised_data()
-    norm_vars <- if (!is.null(norm_data)) names(norm_data) else c("No dataset available")
-    norm_types <- if (!is.null(norm_data)) sapply(norm_data, class) else rep("NA", length(norm_vars))
-    norm_labels <- paste0(norm_vars, " {", norm_types, "}")
-
-    # Smart defaults for normalised data
-    norm_token_default <- guess_var(norm_vars, c("^token", "^item", "^segment", "^id"), 1)
-    norm_f0_default    <- guess_var(norm_vars, c("^f0_st$", "^f0_zscore$", "^f0_lz$", "^f0_normalised$", "^f0_norm", "^f0$", "^f0_"), 2)
-    norm_time_default  <- guess_var(norm_vars, c("^time", "^t$", "^timepoint"), 3)
-    norm_tone_default  <- guess_var(norm_vars, c("^tone", "^category", "^tonecat"), 4)
+    # Variable selectors for normalised data (from the Normalise tab, or the
+    # curated + normalised data): one set per source, shown by its condition.
+    # A z-score column gets a note, as it is linear in Hz.
+    norm_panel <- function(source, prefix, d) {
+      vars <- if (!is.null(d)) names(d) else c("No dataset available")
+      ch   <- setNames(vars, paste0(vars, " {", if (!is.null(d)) sapply(d, class) else "NA", "}"))
+      cv   <- attr(d, "curate_vars")   # curated + normalised: the tone used in Curate
+      tone_default <- if (!is.null(cv$tone) && cv$tone %in% vars) cv$tone
+                      else guess_var(vars, c("^tone", "^category", "^tonecat"), 4)
+      conditionalPanel(sprintf("input.sum_source == '%s'", source),
+        selectInput(paste0(prefix, "_token_var"), "Token ID variable:", choices = ch,
+                    selected = guess_var(vars, c("^token", "^item", "^segment", "^id"), 1)),
+        selectInput(paste0(prefix, "_f0_var"), "f0 variable:", choices = ch,
+                    selected = guess_var(vars, c("^f0_st$", "^f0_zscore$", "^f0_lz$", "^f0_normalised$", "^f0_norm", "^f0$", "^f0_"), 2)),
+        conditionalPanel(sprintf("/zscore/i.test(input.%s_f0_var || '')", prefix),
+          tags$div(style = sum_note_style, icon("circle-info"),
+                   " z-scores are linear in Hz. Chao numerals are usually read on a log scale (semitones or LZ), and the scale can move a digit near a boundary.")),
+        selectInput(paste0(prefix, "_time_var"), "Time variable:", choices = ch,
+                    selected = guess_var(vars, c("^time", "^t$", "^timepoint"), 3)),
+        selectInput(paste0(prefix, "_tone_var"), "Tone variable:", choices = ch,
+                    selected = tone_default)
+      )
+    }
+    sum_note_style <- "font-size: 0.75rem; color: #6b5a1e; background: #fff8e1; border-radius: 4px; padding: 5px 8px; margin: -6px 0 10px 0;"
 
     tagList(
       wellPanel(
         # --- Data source ---
         selectInput("sum_source", "Data source:",
                     choices = src_choices, selected = default_src),
+        conditionalPanel("input.sum_source == 'raw_hz'",
+          tags$div(style = sum_note_style, icon("lightbulb"),
+                   HTML(paste(" Converted to LZ by speaker here. Recommended: normalise first",
+                              "(<strong>Normalise</strong> tab), then choose <strong>Normalised f0</strong>,",
+                              "so Chao numerals and your models share one scale.")))),
+        conditionalPanel("input.sum_source == 'curated'",
+          tags$div(style = sum_note_style, icon("lightbulb"),
+                   HTML(paste(" Converted to LZ by speaker here. Recommended: normalise the curated data",
+                              "(<strong>Normalise</strong> tab, data source <strong>Curated data</strong>),",
+                              "then choose <strong>Curated + normalised f0</strong>, so Chao numerals and",
+                              "your models share one scale.")))),
 
         # --- Variable selectors for raw Hz ---
         conditionalPanel("input.sum_source == 'raw_hz'",
@@ -182,21 +210,9 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
                       selected = raw_speaker_default)
         ),
 
-        # --- Variable selectors for normalised ---
-        conditionalPanel("input.sum_source == 'normalised'",
-          selectInput("sum_norm_token_var", "Token ID variable:",
-                      choices = setNames(norm_vars, norm_labels),
-                      selected = norm_token_default),
-          selectInput("sum_norm_f0_var", "f0 variable:",
-                      choices = setNames(norm_vars, norm_labels),
-                      selected = norm_f0_default),
-          selectInput("sum_norm_time_var", "Time variable:",
-                      choices = setNames(norm_vars, norm_labels),
-                      selected = norm_time_default),
-          selectInput("sum_norm_tone_var", "Tone variable:",
-                      choices = setNames(norm_vars, norm_labels),
-                      selected = norm_tone_default)
-        ),
+        # --- Variable selectors for normalised / curated + normalised ---
+        norm_panel("normalised", "sum_norm", normalised_data()),
+        if (has_cn) norm_panel("curated_norm", "sum_cn", curated_norm_data()),
         tags$hr(),
 
         # --- Fuzzy boundary threshold ---
@@ -228,6 +244,9 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
   sum_result <- reactiveVal(NULL)
   sum_norm_contours <- reactiveVal(NULL)
   sum_params <- reactiveVal(NULL)
+  observeEvent(input$uploadfile, {   # new file: clear the old conversion
+    sum_result(NULL); sum_norm_contours(NULL); sum_params(NULL)
+  }, ignoreInit = TRUE)
 
   # compute_mean_contour() is now in R/chao.R (package-level).
 
@@ -282,11 +301,13 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
         src_data <- curated_data()
         req(src_data)
         cv <- names(src_data)
+        used <- attr(src_data, "curate_vars")   # tone used in Curate, e.g. `cluster`
         raw_token <- guess_var(cv, c("^token", "^item", "^segment", "^id"), 1)
         raw_f0    <- guess_var(cv, c("^f0$", "^f0_", "^pitch", "^F0"), 2)
-        raw_tone  <- guess_var(cv, c("^tone", "^category", "^tonecat"), 4)
+        raw_tone  <- if (!is.null(used$tone) && used$tone %in% cv) used$tone
+                     else guess_var(cv, c("^tone", "^category", "^tonecat"), 4)
         raw_time  <- guess_var(cv, c("^time", "^t$", "^timepoint", "^measurement"), 3)
-        raw_spk   <- guess_speaker(cv)
+        raw_spk   <- guess_speaker(cv)   # ".none" (one speaker) if no speaker column
       }
 
       # Averaging Hz across speakers mixes higher and lower voices, so first
@@ -325,18 +346,20 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
         token = raw_token, f0 = raw_f0,
         time  = raw_time, tone = raw_tone
       )
-    } else if (src == "normalised") {
-      src_data <- normalised_data()
+    } else if (src %in% c("normalised", "curated_norm")) {
+      src_data <- if (src == "normalised") normalised_data()
+                  else if (!is.null(curated_norm_data)) curated_norm_data()
       req(src_data)
-      req(input$sum_norm_token_var, input$sum_norm_f0_var,
-          input$sum_norm_time_var,  input$sum_norm_tone_var)
-      raw_token <- input$sum_norm_token_var
-      raw_f0    <- input$sum_norm_f0_var
-      raw_tone  <- input$sum_norm_tone_var
+      pre <- if (src == "normalised") "sum_norm" else "sum_cn"
+      sel <- function(x) input[[paste0(pre, "_", x, "_var")]]
+      req(sel("token"), sel("f0"), sel("time"), sel("tone"))
+      raw_token <- sel("token")
+      raw_f0    <- sel("f0")
+      raw_tone  <- sel("tone")
       contour_data <- compute_mean_contour(
         src_data,
         token = raw_token, f0 = raw_f0,
-        time  = input$sum_norm_time_var, tone = raw_tone
+        time  = sel("time"), tone = raw_tone
       )
     } else {
       contour_data <- NULL
@@ -440,9 +463,10 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
     params <- sum_params()
 
     src_label <- switch(params$source,
-      "raw_hz" = "Raw f0 (Hz)",
-      "curated" = "Curated f0",
+      "raw_hz" = "Uploaded f0 (Hz), converted to LZ",
+      "curated" = "Curated f0 (Hz), converted to LZ",
       "normalised" = "Normalised f0",
+      "curated_norm" = "Curated + normalised f0",
       "gca" = "GCA predictions",
       "gamm" = "GAMM predictions"
     )

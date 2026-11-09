@@ -2,7 +2,8 @@
 # Model: GAMM tab — Generalised Additive Mixed Model using mgcv
 ###############################################
 
-gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_data = NULL, curated_data = NULL, cluster_data = NULL) {
+gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_data = NULL, curated_data = NULL, cluster_data = NULL,
+                    curated_norm_data = NULL) {
 
   # GAMM is the right tab for multisyllabic words, so the only thing to catch
   # here is picking the wrong landmark column: the within-segment 0-1 axis
@@ -67,7 +68,7 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
           tags$li(tags$strong("Token ID:"), " A unique identifier for each token/syllable."),
           tags$li(tags$strong("f0:"), " An f0-related variable. Normalised f0 (e.g. semitone, z-score or log z-score) is recommended for more interpretable results.",
             " Use the ", tags$strong("Normalise"), " tab first, then select ", tags$em("Normalised data"),
-            " from the dataset dropdown to access ", tags$code(style = code_style, "f0_st"), ", ", tags$code(style = code_style, "f0_zscore"), " or ", tags$code(style = code_style, "f0_lz"), "."),
+            " (or, after Curate, ", tags$em("Curated + normalised data"), ") from the dataset dropdown to access ", tags$code(style = code_style, "f0_st"), ", ", tags$code(style = code_style, "f0_zscore"), " or ", tags$code(style = code_style, "f0_lz"), "."),
           tags$li(tags$strong("Time:"), " The time variable that orders f0 samples within each token. Will be normalised to [0, 1] per token before fitting. A column that is already normalised (e.g. ",
             tags$code(style = code_style, "token_t01"), " from the Normalise tab, or ",
             tags$code(style = code_style, "time_prop"), " from equal-point extraction) is detected and used as-is, so partial-span tokens are not stretched."),
@@ -193,14 +194,19 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
     )
   })
 
+  pick_dataset <- source_picker()   # selects Curated + normalised data once, when it appears
+
   # --- Helper: get active dataset based on selector ---
   active_data <- reactive({
     has_norm <- !is.null(normalised_data())
     has_cur  <- !is.null(curated_data) && !is.null(curated_data())
     has_clu  <- !is.null(cluster_data) && !is.null(cluster_data())
+    has_cn   <- !is.null(curated_norm_data) && !is.null(curated_norm_data())
     sel <- input$gamm_dataset
     if (!is.null(sel) && sel == "clustered" && has_clu) {
       cluster_data()
+    } else if (!is.null(sel) && sel == "curated_norm" && has_cn) {
+      curated_norm_data()
     } else if (!is.null(sel) && sel == "curated" && has_cur) {
       curated_data()
     } else if (!is.null(sel) && sel == "normalised" && has_norm) {
@@ -215,6 +221,7 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
     has_norm <- !is.null(normalised_data())
     has_cur  <- !is.null(curated_data) && !is.null(curated_data())
     has_clu  <- !is.null(cluster_data) && !is.null(cluster_data())
+    has_cn   <- !is.null(curated_norm_data) && !is.null(curated_norm_data())
 
     # Dataset choices
     ds_choices <- c("Uploaded data" = "uploaded")
@@ -224,16 +231,15 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
     if (has_cur) {
       ds_choices <- c(ds_choices, "Curated data" = "curated")
     }
+    if (has_cn) {
+      ds_choices <- c(ds_choices, "Curated + normalised data" = "curated_norm")
+    }
     if (has_clu) {
       ds_choices <- c(ds_choices, "Clustered data" = "clustered")
     }
-    ds_selected <- if (!is.null(input$gamm_dataset) && input$gamm_dataset %in% ds_choices) {
-      input$gamm_dataset
-    } else if (has_norm) {
-      "normalised"
-    } else {
-      "uploaded"
-    }
+    ds_selected <- pick_dataset(input$gamm_dataset, ds_choices,
+                                if (has_norm) "normalised" else "uploaded",
+                                stamp = if (has_cn) attr(curated_norm_data(), "run"))
 
     # Get variable names from active dataset
     active <- active_data()
@@ -248,6 +254,7 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
       wellPanel(
         selectInput("gamm_dataset", "Select dataset:",
                     choices = ds_choices, selected = ds_selected),
+        curated_reminder("gamm_dataset"),
         selectInput("gamm_token_var", "Select Token ID variable:",
                     choices = setNames(vars, var_types),
                     selected = guess_var(vars, var_patterns$token, 1)),
@@ -259,10 +266,10 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
                     selected = guess_time_var(vars, 3)),
         selectInput("gamm_speaker_var", "Select Speaker variable:",
                     choices = setNames(vars, var_types),
-                    selected = guess_var(vars, var_patterns$speaker, 4)),
+                    selected = role_var(active, "speaker", vars, var_patterns$speaker, 4)),
         selectInput("gamm_tone_var", "Select Tone category variable:",
                     choices = setNames(vars, var_types),
-                    selected = guess_var(vars, var_patterns$tone, 5)),
+                    selected = role_var(active, "tone", vars, var_patterns$tone, 5)),
         selectInput("gamm_item_var", "Select Item variable (word/syllable type):",
                     choices = setNames(vars, var_types),
                     selected = guess_var(vars, var_patterns$item, 6)),
@@ -378,6 +385,10 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
   gamm_rho_val <- reactiveVal(NULL)
   gamm_fitting <- reactiveVal(FALSE)
   gamm_diag_data <- reactiveVal(NULL)  # NULL until the user clicks "Run model diagnostics"
+  observeEvent(input$uploadfile, {   # new file: clear the old fit
+    for (rv in list(gamm_model, gamm_fit_obj, gamm_summary_data, gamm_convergence_warning,
+                    gamm_plot_data, gamm_formula_str, gamm_rho_val, gamm_diag_data)) rv(NULL)
+  }, ignoreInit = TRUE)
 
   # --- Core computation ---
   observeEvent(input$gamm_button, {

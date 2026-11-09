@@ -1,4 +1,4 @@
-visualise_ui <- function(input, output, session, dataset, normalised_data) {
+visualise_ui <- function(input, output, session, dataset, normalised_data, curated_norm_data = NULL) {
 
   # Tone colour palette: a 12-colour qualitative set matched to the app's minty
   # theme. It leads with the brand pine-green (#3B8A6E) and coral accent
@@ -17,6 +17,9 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
   vis_dataset <- reactive({
     if (!is.null(input$vis_data_source) && input$vis_data_source == "normalised" && !is.null(normalised_data())) {
       normalised_data()
+    } else if (identical(input$vis_data_source, "curated_norm") &&
+               !is.null(curated_norm_data) && !is.null(curated_norm_data())) {
+      curated_norm_data()
     } else {
       dataset()
     }
@@ -27,7 +30,7 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
     tagList(
       guide_box("Plotting guide",
         tags$ul(style = "margin-bottom: 0; padding-left: 18px;",
-          tags$li(tags$strong("Data source:"), " Use the uploaded (raw) dataset or the normalised dataset (available after using the Normalise tab)."),
+          tags$li(tags$strong("Data source:"), " Use the uploaded (raw) dataset, the normalised dataset (available after using the Normalise tab), or the curated + normalised dataset (after normalising the curated data)."),
           tags$li(tags$strong("X (time):"), " A time-related or index variable, e.g., normalised time points within a syllable."),
           tags$li(tags$strong("Y (f0):"), " An f0-related variable, e.g., raw Hz or normalised (semitone, z-score, log z-score)."),
           tags$li(tags$strong("Tone category:"), " The column labelling tone types (e.g., T1, T2, T3, T4)."),
@@ -51,6 +54,9 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
     data_choices <- c("Uploaded data" = "uploaded")
     if (has_norm) {
       data_choices <- c(data_choices, "Normalised data" = "normalised")
+    }
+    if (!is.null(curated_norm_data) && !is.null(curated_norm_data())) {
+      data_choices <- c(data_choices, "Curated + normalised data" = "curated_norm")
     }
     ds_selected <- if (!is.null(input$vis_data_source) && input$vis_data_source %in% data_choices) {
       input$vis_data_source
@@ -77,11 +83,11 @@ visualise_ui <- function(input, output, session, dataset, normalised_data) {
         tags$hr(),
         selectInput("tone_var", "Select Tone category variable:",
                     choices = setNames(vars, var_types),
-                    selected = guess_var(vars, var_patterns$tone, 3), multiple = FALSE),
+                    selected = role_var(active_data, "tone", vars, var_patterns$tone, 3), multiple = FALSE),
         checkboxInput("convert_tone_to_factor", "Convert Tone category as factors", TRUE),
         selectInput("speaker_var", "Select Speaker variable:",
                     choices = setNames(vars, var_types),
-                    selected = guess_var(vars, var_patterns$speaker, 4), multiple = FALSE),
+                    selected = role_var(active_data, "speaker", vars, var_patterns$speaker, 4), multiple = FALSE),
         tags$hr(),
         if (length(lm_sets) > 0) tagList(
           h5("Align time by landmark ",
