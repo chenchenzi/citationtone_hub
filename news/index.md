@@ -2,18 +2,28 @@
 
 ## shinytone (development version)
 
+- **[`cluster_features()`](https://chenchenzi.github.io/citationtone_hub/reference/cluster_features.md)
+  resamples to 21 points by default (was 20)**, one every 5% of the
+  stretch from each contour’s first to its last f0 value. This is the
+  same default as the app’s Cluster tab,
+  [`resample_f0_equal()`](https://chenchenzi.github.io/citationtone_hub/reference/resample_f0_equal.md)
+  and
+  [`compute_mean_contour()`](https://chenchenzi.github.io/citationtone_hub/reference/compute_mean_contour.md).
 - **[`compute_mean_contour()`](https://chenchenzi.github.io/citationtone_hub/reference/compute_mean_contour.md)
   resamples tokens instead of binning their samples.** It used to assign
   each sample to the nearest of 50 time bins and average the samples in
   each bin, so with unequal numbers of f0 points per token each bin
   averaged a different subset of tokens, and a token with more than 50
   points counted more than once in some bins. Every token is now
-  interpolated at the same time points and counts once at each: by
-  default its own points when all tokens have the same number, so
-  equally spaced measurements come back unchanged, and otherwise 21, one
-  every 5% of the duration. `n_bins` is deprecated in favour of
-  `n_points`. The mean contours of the Chao tab and the GCA tab’s
-  observed overlay use the new method.
+  interpolated at the same time points, by default 21 (one every 5%, as
+  in
+  [`cluster_features()`](https://chenchenzi.github.io/citationtone_hub/reference/cluster_features.md)),
+  and counts at most once at each: nothing is extrapolated beyond a
+  token’s first and last f0 value. Measured points that fall on the
+  grid, such as 11 or 21 equally spaced points per token, keep their
+  values. `n_bins` is deprecated in favour of `n_points`. The mean
+  contours of the Chao tab and the GCA tab’s observed overlay use the
+  new method.
 - **Summarise: the robust Chao method is removed.** Its range, one SD
   beyond the mean peak of the highest tone and the mean valley of the
   lowest, suited single tokens but not the averaged contours the
