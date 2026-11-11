@@ -283,7 +283,7 @@ chao <- contour_to_chao(mean_contour)
 chao[, c("tone", "refline", "interval", "shape")]
 #>   tone refline interval         shape
 #> 1    1      22       22 mid-low level
-#> 2    2     212      112       dipping
+#> 2    2     212       12       dipping
 #> 3    3      33       32     mid level
 #> 4    4      45       55        rising
 #> 5    5      31       21       falling

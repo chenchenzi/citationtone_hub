@@ -103,16 +103,24 @@ contours themselves.</p></dd>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A data frame with one row per tone, containing:</p><ul><li><p><code>tone</code>: tone label.</p></li>
-<li><p><code>n_digits</code>: number of digits in the numeral (<code>2</code> or <code>3</code>).</p></li>
+<li><p><code>n_digits</code>, <code>n_digits_int</code>: number of digits (<code>2</code> or <code>3</code>) in the
+reference-line and interval-based numerals.</p></li>
 <li><p><code>refline</code>: reference-line method numeral, e.g. <code>"55"</code>.</p></li>
 <li><p><code>interval</code>: interval-based numeral, e.g. <code>"45"</code>.</p></li>
 <li><p><code>shape</code>: shape name from <code><a href="classify_contour.html">classify_contour()</a></code> applied to <code>refline</code>.</p></li>
+<li><p><code>dip</code>, <code>peak</code>: how far the lowest (highest) point between 10% and
+90% of the contour lies below (above) both endpoints, in Chao units
+on the reference-line scale; zero or negative when the contour has no
+dip (peak). The larger of the two is sampled as a turning point when
+it exceeds <code>threshold</code>; it adds a middle digit where that digit shows
+the turn (see Details).</p></li>
 <li><p><code>sample_times</code>, <code>ref_continuous</code>, <code>int_continuous</code>: list columns of
 the per-sample numeric values underlying the digit strings, useful
-for plotting or further analysis.</p></li>
-</ul><p>Two attributes are attached to the returned data frame: <code>f0_min</code> and
+for plotting or further analysis. When a turning point is sampled
+these have three values even if a numeral keeps only two digits.</p></li>
+</ul><p>Three attributes are attached to the returned data frame: <code>f0_min</code> and
 <code>f0_max</code>, the lowest and highest points of <code>contour_data</code>, which set
-the range.</p>
+the range, and <code>threshold</code>.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -157,15 +165,26 @@ tab converts raw f0 to LZ by speaker automatically.</p>
 
 
 <p>For each tone, the function samples the contour either at its two
-endpoints (yielding a 2-digit numeral) or at the two endpoints plus
-one interior turning point (yielding a 3-digit numeral). The 3-digit
-case applies when either:</p><ul><li><p>The interior minimum is more than <code>threshold</code> Chao units below
-both endpoints (a <em>dip</em>), or</p></li>
-<li><p>The interior maximum is more than <code>threshold</code> Chao units above
-both endpoints (a <em>peak</em>).</p></li>
-</ul><p>The default <code>threshold = 0.5</code> (half a Chao unit on the <code>[1, 5]</code>
-scale) is a conservative choice. Lower thresholds produce more
-3-digit numerals, useful for tonally rich languages.</p>
+endpoints or at the two endpoints plus one interior turning point. The
+turning point is the lowest point between 10% and 90% of the contour if
+it lies below both endpoints (a <em>dip</em>), or the highest point if it lies
+above both (a <em>peak</em>), whichever goes further, and it is sampled when it
+goes more than <code>threshold</code> Chao units beyond the nearer endpoint.</p>
+<p>Each scale then keeps the middle digit only if it shows the turn: lower
+than both endpoint digits for a dip, higher than both for a peak. If it
+rounds to the same digit as an endpoint, the turn is too shallow to show
+at five levels and that numeral keeps two digits (<code>23</code>, not <code>223</code>, which
+would read as a late rise). The two scales round differently, so a tone
+can get two digits on one and three on the other.</p>
+<p>The default <code>threshold = 0.5</code> (half a Chao unit on the <code>[1, 5]</code>
+scale) is a conservative choice. Lower thresholds sample more turning
+points and so give more 3-digit numerals, useful for tonally rich
+languages (a sampled turn too shallow to show is still left out). Any
+value from 4
+(the height of the scale) up means no turning point is sampled. The
+<code>dip</code> and <code>peak</code> columns report how far each tone's turning point goes,
+so a tone close to the threshold, whose digit count depends on it, can
+be spotted.</p>
 </div>
 
     </div>
@@ -202,7 +221,7 @@ sources.</p></li>
 <span class="r-in"><span><span class="va">chao</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"tone"</span>, <span class="st">"refline"</span>, <span class="st">"interval"</span>, <span class="st">"shape"</span><span class="op">)</span><span class="op">]</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   tone refline interval   shape</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 1    1      32       22 falling</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2    2     212      112 dipping</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2    2     212       12 dipping</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 3    3      32       32 falling</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 4    4      45       55  rising</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 5    5      31       21 falling</span>
@@ -218,7 +237,7 @@ sources.</p></li>
 <span class="r-in"><span><span class="va">chao_st</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"tone"</span>, <span class="st">"refline"</span>, <span class="st">"interval"</span>, <span class="st">"shape"</span><span class="op">)</span><span class="op">]</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   tone refline interval         shape</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 1    1      22       22 mid-low level</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2    2     212      112       dipping</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2    2     212       12       dipping</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 3    3      33       32     mid level</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 4    4      45       55        rising</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 5    5      31       21       falling</span>

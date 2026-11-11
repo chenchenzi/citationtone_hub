@@ -56,7 +56,8 @@ A data frame with one row per tone, containing:
 
 - `tone`: tone label.
 
-- `n_digits`: number of digits in the numeral (`2` or `3`).
+- `n_digits`, `n_digits_int`: number of digits (`2` or `3`) in the
+  reference-line and interval-based numerals.
 
 - `refline`: reference-line method numeral, e.g. `"55"`.
 
@@ -66,13 +67,21 @@ A data frame with one row per tone, containing:
   [`classify_contour()`](https://chenchenzi.github.io/citationtone_hub/reference/classify_contour.md)
   applied to `refline`.
 
+- `dip`, `peak`: how far the lowest (highest) point between 10% and 90%
+  of the contour lies below (above) both endpoints, in Chao units on the
+  reference-line scale; zero or negative when the contour has no dip
+  (peak). The larger of the two is sampled as a turning point when it
+  exceeds `threshold`; it adds a middle digit where that digit shows the
+  turn (see Details).
+
 - `sample_times`, `ref_continuous`, `int_continuous`: list columns of
   the per-sample numeric values underlying the digit strings, useful for
-  plotting or further analysis.
+  plotting or further analysis. When a turning point is sampled these
+  have three values even if a numeral keeps only two digits.
 
-Two attributes are attached to the returned data frame: `f0_min` and
+Three attributes are attached to the returned data frame: `f0_min` and
 `f0_max`, the lowest and highest points of `contour_data`, which set the
-range.
+range, and `threshold`.
 
 ## Details
 
@@ -113,19 +122,27 @@ tab converts raw f0 to LZ by speaker automatically.
 ### Turning-point detection
 
 For each tone, the function samples the contour either at its two
-endpoints (yielding a 2-digit numeral) or at the two endpoints plus one
-interior turning point (yielding a 3-digit numeral). The 3-digit case
-applies when either:
+endpoints or at the two endpoints plus one interior turning point. The
+turning point is the lowest point between 10% and 90% of the contour if
+it lies below both endpoints (a *dip*), or the highest point if it lies
+above both (a *peak*), whichever goes further, and it is sampled when it
+goes more than `threshold` Chao units beyond the nearer endpoint.
 
-- The interior minimum is more than `threshold` Chao units below both
-  endpoints (a *dip*), or
-
-- The interior maximum is more than `threshold` Chao units above both
-  endpoints (a *peak*).
+Each scale then keeps the middle digit only if it shows the turn: lower
+than both endpoint digits for a dip, higher than both for a peak. If it
+rounds to the same digit as an endpoint, the turn is too shallow to show
+at five levels and that numeral keeps two digits (`23`, not `223`, which
+would read as a late rise). The two scales round differently, so a tone
+can get two digits on one and three on the other.
 
 The default `threshold = 0.5` (half a Chao unit on the `[1, 5]` scale)
-is a conservative choice. Lower thresholds produce more 3-digit
-numerals, useful for tonally rich languages.
+is a conservative choice. Lower thresholds sample more turning points
+and so give more 3-digit numerals, useful for tonally rich languages (a
+sampled turn too shallow to show is still left out). Any value from 4
+(the height of the scale) up means no turning point is sampled. The
+`dip` and `peak` columns report how far each tone's turning point goes,
+so a tone close to the threshold, whose digit count depends on it, can
+be spotted.
 
 ## References
 
@@ -166,7 +183,7 @@ chao <- contour_to_chao(mc)
 chao[, c("tone", "refline", "interval", "shape")]
 #>   tone refline interval   shape
 #> 1    1      32       22 falling
-#> 2    2     212      112 dipping
+#> 2    2     212       12 dipping
 #> 3    3      32       32 falling
 #> 4    4      45       55  rising
 #> 5    5      31       21 falling
@@ -182,7 +199,7 @@ chao_st <- contour_to_chao(mc_st)
 chao_st[, c("tone", "refline", "interval", "shape")]
 #>   tone refline interval         shape
 #> 1    1      22       22 mid-low level
-#> 2    2     212      112       dipping
+#> 2    2     212       12       dipping
 #> 3    3      33       32     mid level
 #> 4    4      45       55        rising
 #> 5    5      31       21       falling
