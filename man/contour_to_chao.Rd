@@ -38,18 +38,26 @@ contours themselves.}
 A data frame with one row per tone, containing:
 \itemize{
 \item \code{tone}: tone label.
-\item \code{n_digits}: number of digits in the numeral (\code{2} or \code{3}).
+\item \code{n_digits}, \code{n_digits_int}: number of digits (\code{2} or \code{3}) in the
+reference-line and interval-based numerals.
 \item \code{refline}: reference-line method numeral, e.g. \code{"55"}.
 \item \code{interval}: interval-based numeral, e.g. \code{"45"}.
 \item \code{shape}: shape name from \code{\link[=classify_contour]{classify_contour()}} applied to \code{refline}.
+\item \code{dip}, \code{peak}: how far the lowest (highest) point between 10\% and
+90\% of the contour lies below (above) both endpoints, in Chao units
+on the reference-line scale; zero or negative when the contour has no
+dip (peak). The larger of the two is sampled as a turning point when
+it exceeds \code{threshold}; it adds a middle digit where that digit shows
+the turn (see Details).
 \item \code{sample_times}, \code{ref_continuous}, \code{int_continuous}: list columns of
 the per-sample numeric values underlying the digit strings, useful
-for plotting or further analysis.
+for plotting or further analysis. When a turning point is sampled
+these have three values even if a numeral keeps only two digits.
 }
 
-Two attributes are attached to the returned data frame: \code{f0_min} and
+Three attributes are attached to the returned data frame: \code{f0_min} and
 \code{f0_max}, the lowest and highest points of \code{contour_data}, which set
-the range.
+the range, and \code{threshold}.
 }
 \description{
 Summarises per-tone contours as Chao tone numerals (Chao 1930): 5-level
@@ -97,19 +105,28 @@ tab converts raw f0 to LZ by speaker automatically.
 \subsection{Turning-point detection}{
 
 For each tone, the function samples the contour either at its two
-endpoints (yielding a 2-digit numeral) or at the two endpoints plus
-one interior turning point (yielding a 3-digit numeral). The 3-digit
-case applies when either:
-\itemize{
-\item The interior minimum is more than \code{threshold} Chao units below
-both endpoints (a \emph{dip}), or
-\item The interior maximum is more than \code{threshold} Chao units above
-both endpoints (a \emph{peak}).
-}
+endpoints or at the two endpoints plus one interior turning point. The
+turning point is the lowest point between 10\% and 90\% of the contour if
+it lies below both endpoints (a \emph{dip}), or the highest point if it lies
+above both (a \emph{peak}), whichever goes further, and it is sampled when it
+goes more than \code{threshold} Chao units beyond the nearer endpoint.
+
+Each scale then keeps the middle digit only if it shows the turn: lower
+than both endpoint digits for a dip, higher than both for a peak. If it
+rounds to the same digit as an endpoint, the turn is too shallow to show
+at five levels and that numeral keeps two digits (\code{23}, not \code{223}, which
+would read as a late rise). The two scales round differently, so a tone
+can get two digits on one and three on the other.
 
 The default \code{threshold = 0.5} (half a Chao unit on the \verb{[1, 5]}
-scale) is a conservative choice. Lower thresholds produce more
-3-digit numerals, useful for tonally rich languages.
+scale) is a conservative choice. Lower thresholds sample more turning
+points and so give more 3-digit numerals, useful for tonally rich
+languages (a sampled turn too shallow to show is still left out). Any
+value from 4
+(the height of the scale) up means no turning point is sampled. The
+\code{dip} and \code{peak} columns report how far each tone's turning point goes,
+so a tone close to the threshold, whose digit count depends on it, can
+be spotted.
 }
 }
 \examples{

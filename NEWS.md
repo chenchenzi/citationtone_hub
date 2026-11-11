@@ -1,5 +1,44 @@
 # shinytone (development version)
 
+* **Summarise guide: shorter.** The Chao numeral guide is shorter, and its
+  data source list marks GCA / GAMM predictions and normalised f0 as
+  recommended with a thumbs-up. The sidebar help, the
+  parameters line and the note on red values are shorter too.
+* **Summarise: new Chao figure.** Both panels label every sampled point
+  (onset, any dip or peak, offset) with its digit in the tone's colour,
+  moved apart with a short leader line when they would overlap. The
+  reference-line panel marks lines 1 to 5 with digit chips at the right;
+  the interval panel shows each band's digit as a large watermark. The pink
+  zones mark digit boundaries ± the fuzzy boundary threshold, with a legend
+  entry. Colours are colour-blind safe, the two panels line up exactly,
+  and the downloaded PNG uses Open Sans like the app. The plot code lives in
+  `inst/app/ui/summarise_plot.R`.
+* **Summarise: turning-point threshold.** A new "Turning-point threshold"
+  input (default 0.5 Chao units, as before) sets how far a dip or peak must
+  go beyond both endpoints to add a middle digit. The results table has a
+  "Dip / peak" column with each tone's dip or peak, in red when within the
+  fuzzy margin of the threshold, and a note gives the numerals the other
+  side of it would produce. On the sample data, tone 6
+  dips by 0.43, so it is 23 at the default and 213 at 0.4. The CSV and the
+  R code carry the threshold. `contour_to_chao()` now returns `dip` and
+  `peak` columns and a `threshold` attribute, and checks `threshold`.
+* **Chao numerals: a middle digit only where it shows the turn.** Each
+  scale keeps the middle digit only if it is lower than both endpoint
+  digits (dip) or higher than both (peak). A turn that rounds to an
+  endpoint's digit is too shallow to show at five levels, so the numeral
+  keeps two digits: `23`, not `223` (which reads as a late rise), and `22`,
+  not `222`. The two scales round differently, so a tone can get two digits
+  on one and three on the other; `contour_to_chao()` gains `n_digits_int`
+  for the interval numeral (`n_digits` is the reference-line one). When a
+  contour both dips and peaks beyond its endpoints, the larger turn is now
+  sampled (the dip used to be checked first), so a lower threshold never
+  removes a digit. On the
+  sample data, tone 2's interval numeral changes from 112 to 12. In the app,
+  the left-out value is shown in grey brackets in the Scaled column, a note
+  lists those tones, the figure marks the point with a hollow dot, and the
+  near-threshold flag now only marks tones whose numerals would change.
+  Clearing the fuzzy boundary threshold box no longer stops the conversion,
+  and the R code panel handles flat contours (zero range) as the app does.
 * **Normalise again after Curate.** The Normalise tab can now read the
   Curated data (new "Data source" menu, shown once you have curated). This
   recomputes each speaker's mean (and SD) on the kept tokens and the new tone

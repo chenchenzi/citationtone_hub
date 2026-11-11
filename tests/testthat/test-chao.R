@@ -194,6 +194,103 @@ test_that("contour_to_chao detects a dipping shape with 3 digits", {
   expect_equal(out$n_digits, 3)
 })
 
+test_that("contour_to_chao reports dip and peak sizes, and the threshold sets the digit count", {
+  # A shallow dip: from 3 down to about 2.6 and back up to 3.4 (reference-line
+  # scale), plus a high level tone that sets the top of the range.
+  tt <- seq(0, 1, length.out = 21)
+  contour <- data.frame(
+    tone = rep(c("dip", "hi"), each = 21),
+    time = rep(tt, 2),
+    f0_predicted = c(100 + 50 * ((tt - 0.5)^2 * 4) - 20 + 20 * tt,   # dips mid-way
+                     rep(200, 21))
+  )
+  base <- contour_to_chao(contour)
+  d <- base$dip[base$tone == "dip"]
+  expect_true(d > 0)
+  expect_equal(attr(base, "threshold"), 0.5)
+  # The dip adds a middle digit only when it exceeds the threshold
+  below <- contour_to_chao(contour, threshold = d - 0.01)
+  above <- contour_to_chao(contour, threshold = d + 0.01)
+  expect_equal(below$n_digits[below$tone == "dip"], 3)
+  expect_equal(above$n_digits[above$tone == "dip"], 2)
+  # A level tone has no dip or peak beyond its endpoints
+  expect_lte(base$peak[base$tone == "hi"], 0)
+  expect_lte(base$dip[base$tone == "hi"], 0)
+  expect_error(contour_to_chao(contour, threshold = -1), "threshold")
+  expect_error(contour_to_chao(contour, threshold = c(0.3, 0.5)), "threshold")
+})
+
+test_that("contour_to_chao keeps a middle digit only where it shows the turn", {
+  # Piecewise-linear contours given directly on the reference-line scale: a
+  # low and a high level tone pin the range to f0 1..5, so chao_ref = f0 and
+  # the interval value is (f0 - 1) * 1.25.
+  tt <- seq(0, 1, length.out = 21)
+  shape3 <- function(name, a, b, c)
+    data.frame(tone = name, time = tt,
+               f0_predicted = stats::approx(c(0, 0.5, 1), c(a, b, c), xout = tt)$y)
+  contour <- rbind(
+    shape3("flat_dip", 2.45, 1.90, 2.45),   # dip 0.55: 2 2 2 on both scales
+    shape3("late_rise", 2.45, 1.90, 3.00),  # dip 0.55: 2 2 3 on both scales
+    shape3("split", 2.45, 1.75, 2.45),      # dip 0.70: 2 2 2 (ref), 2 1 2 (int)
+    shape3("deep_dip", 3.00, 1.40, 4.00),   # dip 1.60: 3 1 4 (ref), 3 1 4 (int)
+    shape3("flat_peak", 3.55, 4.20, 3.55),  # peak 0.65: 4 4 4 on both scales
+    shape3("peak", 2.00, 3.60, 2.00),       # peak 1.60: 2 4 2 on both scales
+    data.frame(tone = "lo", time = tt, f0_predicted = 1),
+    data.frame(tone = "hi", time = tt, f0_predicted = 5)
+  )
+  out <- contour_to_chao(contour)
+  row <- function(tn) out[out$tone == tn, ]
+
+  # Turn sampled (dip > 0.5) but the middle digit matches an endpoint: two digits
+  expect_equal(row("flat_dip")$refline, "22")
+  expect_equal(row("flat_dip")$interval, "22")
+  expect_length(row("flat_dip")$sample_times[[1]], 3)
+  expect_equal(row("late_rise")$refline, "23")
+  expect_equal(row("late_rise")$interval, "23")
+  expect_equal(row("late_rise")$shape, "rising")
+  # The scales round differently, so they can disagree on the digit count
+  expect_equal(row("split")$refline, "22")
+  expect_equal(row("split")$interval, "212")
+  expect_equal(row("split")$n_digits, 2)
+  expect_equal(row("split")$n_digits_int, 3)
+  # A middle digit below (above) both endpoint digits stays
+  expect_equal(row("deep_dip")$refline, "314")
+  expect_equal(row("deep_dip")$n_digits, 3)
+  expect_equal(row("flat_peak")$refline, "44")
+  expect_equal(row("flat_peak")$interval, "44")
+  expect_equal(row("peak")$refline, "242")
+  expect_equal(row("peak")$interval, "242")
+  # Level tones: two digits and no sampled turn
+  expect_equal(row("lo")$refline, "11")
+  expect_length(row("lo")$sample_times[[1]], 2)
+})
+
+test_that("contour_to_chao samples the larger of a dip and a peak", {
+  tt <- seq(0, 1, length.out = 21)
+  shape4 <- function(name, v)
+    data.frame(tone = name, time = tt,
+               f0_predicted = stats::approx(c(0, 0.25, 0.75, 1), v, xout = tt)$y)
+  contour <- rbind(
+    shape4("big_peak", c(3.4, 2.85, 4.8, 3.4)),   # dip 0.55 (rounds away), peak 1.4
+    shape4("both", c(3.0, 2.6, 4.0, 3.2)),        # dip 0.4, peak 0.8
+    data.frame(tone = "lo", time = tt, f0_predicted = 1),
+    data.frame(tone = "hi", time = tt, f0_predicted = 5)
+  )
+  out <- contour_to_chao(contour)
+  # The peak, not the shallow dip, is sampled: a rise-fall, not a level tone
+  expect_equal(out$refline[out$tone == "big_peak"], "353")
+  expect_equal(out$shape[out$tone == "big_peak"], "peaking")
+  # Lowering the threshold never removes a digit
+  ths <- c(0, 0.2, 0.3, 0.39, 0.45, 0.5, 0.79, 0.81, 1, 4)
+  n_ref <- vapply(ths, function(th) {
+    o <- contour_to_chao(contour, threshold = th); o$n_digits[o$tone == "both"] }, 1)
+  n_int <- vapply(ths, function(th) {
+    o <- contour_to_chao(contour, threshold = th); o$n_digits_int[o$tone == "both"] }, 1)
+  expect_true(all(diff(n_ref) <= 0) && all(diff(n_int) <= 0))
+  expect_equal(n_ref[ths == 0.3], 3)
+  expect_equal(n_ref[ths == 1], 2)
+})
+
 test_that("contour_to_chao takes its range from the contours' lowest and highest points", {
   contour <- data.frame(
     tone         = rep(c("lo", "hi"), each = 11),

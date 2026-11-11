@@ -323,18 +323,28 @@ chao_to_letters <- function(x) {
 #' ## Turning-point detection
 #'
 #' For each tone, the function samples the contour either at its two
-#' endpoints (yielding a 2-digit numeral) or at the two endpoints plus
-#' one interior turning point (yielding a 3-digit numeral). The 3-digit
-#' case applies when either:
+#' endpoints or at the two endpoints plus one interior turning point. The
+#' turning point is the lowest point between 10% and 90% of the contour if
+#' it lies below both endpoints (a *dip*), or the highest point if it lies
+#' above both (a *peak*), whichever goes further, and it is sampled when it
+#' goes more than `threshold` Chao units beyond the nearer endpoint.
 #'
-#' * The interior minimum is more than `threshold` Chao units below
-#'   both endpoints (a *dip*), or
-#' * The interior maximum is more than `threshold` Chao units above
-#'   both endpoints (a *peak*).
+#' Each scale then keeps the middle digit only if it shows the turn: lower
+#' than both endpoint digits for a dip, higher than both for a peak. If it
+#' rounds to the same digit as an endpoint, the turn is too shallow to show
+#' at five levels and that numeral keeps two digits (`23`, not `223`, which
+#' would read as a late rise). The two scales round differently, so a tone
+#' can get two digits on one and three on the other.
 #'
 #' The default `threshold = 0.5` (half a Chao unit on the `[1, 5]`
-#' scale) is a conservative choice. Lower thresholds produce more
-#' 3-digit numerals, useful for tonally rich languages.
+#' scale) is a conservative choice. Lower thresholds sample more turning
+#' points and so give more 3-digit numerals, useful for tonally rich
+#' languages (a sampled turn too shallow to show is still left out). Any
+#' value from 4
+#' (the height of the scale) up means no turning point is sampled. The
+#' `dip` and `peak` columns report how far each tone's turning point goes,
+#' so a tone close to the threshold, whose digit count depends on it, can
+#' be spotted.
 #'
 #' @param contour_data Per-tone contour data, typically from
 #'   [compute_mean_contour()], [predict_gca()], or [predict_gamm()].
@@ -352,17 +362,25 @@ chao_to_letters <- function(x) {
 #'
 #' @return A data frame with one row per tone, containing:
 #' * `tone`: tone label.
-#' * `n_digits`: number of digits in the numeral (`2` or `3`).
+#' * `n_digits`, `n_digits_int`: number of digits (`2` or `3`) in the
+#'   reference-line and interval-based numerals.
 #' * `refline`: reference-line method numeral, e.g. `"55"`.
 #' * `interval`: interval-based numeral, e.g. `"45"`.
 #' * `shape`: shape name from [classify_contour()] applied to `refline`.
+#' * `dip`, `peak`: how far the lowest (highest) point between 10% and
+#'   90% of the contour lies below (above) both endpoints, in Chao units
+#'   on the reference-line scale; zero or negative when the contour has no
+#'   dip (peak). The larger of the two is sampled as a turning point when
+#'   it exceeds `threshold`; it adds a middle digit where that digit shows
+#'   the turn (see Details).
 #' * `sample_times`, `ref_continuous`, `int_continuous`: list columns of
 #'   the per-sample numeric values underlying the digit strings, useful
-#'   for plotting or further analysis.
+#'   for plotting or further analysis. When a turning point is sampled
+#'   these have three values even if a numeral keeps only two digits.
 #'
-#' Two attributes are attached to the returned data frame: `f0_min` and
+#' Three attributes are attached to the returned data frame: `f0_min` and
 #' `f0_max`, the lowest and highest points of `contour_data`, which set
-#' the range.
+#' the range, and `threshold`.
 #'
 #' @seealso
 #' * [compute_mean_contour()] for one common upstream step.
@@ -421,6 +439,10 @@ contour_to_chao <- function(contour_data,
     stop("Column(s) not found in contour_data: ",
          paste(missing_cols, collapse = ", "), call. = FALSE)
   }
+  if (!is.numeric(threshold) || length(threshold) != 1 || is.na(threshold) ||
+      threshold < 0) {
+    stop("`threshold` must be a single number, 0 or more.", call. = FALSE)
+  }
   if (!is.null(raw_data) || !missing(raw_token) || !missing(raw_f0) ||
       !missing(raw_tone)) {
     warning("`raw_data`, `raw_token`, `raw_f0` and `raw_tone` are deprecated ",
@@ -470,28 +492,42 @@ contour_to_chao <- function(contour_data,
     interior_min <- fine_ref[interior_min_idx]
     interior_max <- fine_ref[interior_max_idx]
 
-    has_dip  <- (onset_ref - interior_min  > threshold) &&
-                (offset_ref - interior_min > threshold)
-    has_peak <- (interior_max - onset_ref  > threshold) &&
-                (interior_max - offset_ref > threshold)
-
-    sample_times <- if (has_dip)  c(0, fine_time[interior_min_idx], 1)
-                    else if (has_peak) c(0, fine_time[interior_max_idx], 1)
-                    else c(0, 1)
-    n_digits <- length(sample_times)
-
+    # How far the turning point lies beyond BOTH endpoints (Chao units).
+    dip  <- min(onset_ref, offset_ref) - interior_min
+    peak <- interior_max - max(onset_ref, offset_ref)
+    # Sample the larger of the two turns when it exceeds the threshold, so a
+    # lower threshold never swaps one turn for another (only adds one).
+    use_dip <- dip >= peak
+    turn    <- if (use_dip) dip else peak
+    sample_times <- if (turn <= threshold) c(0, 1)
+                    else if (use_dip) c(0, fine_time[interior_min_idx], 1)
+                    else c(0, fine_time[interior_max_idx], 1)
     ref_vals <- interp_ref(sample_times)
     int_vals <- interp_int(sample_times)
+    ref_dig  <- pmax(1L, pmin(5L, round(ref_vals)))
+    int_dig  <- pmax(1L, pmin(5L, ceiling(int_vals)))
 
-    refline_str  <- paste0(pmax(1L, pmin(5L, round(ref_vals))),   collapse = "")
-    interval_str <- paste0(pmax(1L, pmin(5L, ceiling(int_vals))), collapse = "")
+    # Each scale keeps the middle digit only where it shows the turn: lower
+    # than both endpoint digits for a dip, higher than both for a peak.
+    # Otherwise the turn is too shallow to show at five levels, and a third
+    # digit would misread (223 as a late rise, 222 as nothing at all).
+    if (length(sample_times) == 3) {
+      shows <- function(d) if (use_dip) d[2] < min(d[-2]) else d[2] > max(d[-2])
+      if (!shows(ref_dig)) ref_dig <- ref_dig[-2]
+      if (!shows(int_dig)) int_dig <- int_dig[-2]
+    }
+    refline_str  <- paste0(ref_dig, collapse = "")
+    interval_str <- paste0(int_dig, collapse = "")
 
     rows[[i]] <- data.frame(
       tone     = tv,
-      n_digits = n_digits,
+      n_digits = length(ref_dig),
+      n_digits_int = length(int_dig),
       refline  = refline_str,
       interval = interval_str,
       shape    = classify_contour(refline_str),
+      dip      = dip,
+      peak     = peak,
       stringsAsFactors = FALSE
     )
     # List columns with the per-sample numeric values (for downstream plots).
@@ -507,5 +543,6 @@ contour_to_chao <- function(contour_data,
   # can display them without recomputing.
   attr(out, "f0_min") <- f0_min
   attr(out, "f0_max") <- f0_max
+  attr(out, "threshold") <- threshold
   out
 }

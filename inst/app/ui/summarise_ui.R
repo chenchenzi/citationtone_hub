@@ -11,7 +11,9 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
   # it's UI-specific.
 
   # --- UI helper: highlight scaled values within `tol` of a reference set ---
-  format_scaled_values_html <- function(vals, refs, tol = 0.1) {
+  # `dropped`: index of a sampled turning point whose digit is left out of the
+  # numeral (it rounds to the same digit as an endpoint); shown in grey brackets.
+  format_scaled_values_html <- function(vals, refs, tol = 0.1, dropped = integer(0)) {
     pieces <- vapply(vals, function(v) {
       val_str <- sprintf("%.2f", v)
       if (any(abs(v - refs) < tol, na.rm = TRUE)) {
@@ -21,6 +23,9 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
         val_str
       }
     }, character(1))
+    for (j in dropped)
+      pieces[j] <- paste0('<span style="color: #999;" title="Turning point: same digit as an ',
+                          'endpoint, so not in the numeral">(', pieces[j], ')</span>')
     paste(pieces, collapse = " → ")
   }
 
@@ -36,7 +41,7 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
 
   # --- Guide text ---
   output$summarise_guide <- renderUI({
-    code_style <- "color: #555; background: #e8f5f0; padding: 1px 4px; border-radius: 3px;"
+    code_style <- "color: #2c5f4f; background: #dcefe7; padding: 1px 3px; border-radius: 3px;"
     # Digit-scheme diagram in the app's palette: the same colour for digits in
     # both schemes (the dark green of headings), boundaries in the gold the
     # app uses for flags and hints, and everything else muted.
@@ -46,45 +51,36 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
     # Interval digits are bands: each sits in a light mint box between two
     # boundaries.
     band  <- function(x) sprintf("<span style='background:#e8f5f0; border-radius:3px;'>%s</span>", x)
+    code  <- function(x) tags$code(style = code_style, x)
+    note_style <- "margin: 4px 0 8px 0; font-size: 0.84rem; color: #777;"
+    rec <- tags$span(style = "color: #2c8a63; margin: 0 1px 0 4px;", title = "Recommended", icon("thumbs-up"),
+                     .noWS = "inside")
     tagList(
       guide_box("Chao tone numeral guide",
-        tags$p(style = "margin-bottom: 8px;",
-          "Chao tone numerals describe tone contours using a 5-level pitch scale (1 = lowest, 5 = highest). ",
-          "For example, Mandarin T1 = ", tags$code(style = code_style, "55"),
-          " (high level), T2 = ", tags$code(style = code_style, "35"),
-          " (mid rising), T3 = ", tags$code(style = code_style, "214"),
-          " (low dipping), T4 = ", tags$code(style = code_style, "51"),
-          " (high falling)."
-        ),
-        tags$p(style = "margin-bottom: 8px;",
-          "Each numeral is also written in IPA tone letters, one per digit from ",
-          tags$span(class = "tone-letters", "\u02e9"), " (1) to ",
-          tags$span(class = "tone-letters", "\u02e5"), " (5): ",
-          tags$code(style = code_style, "35"), " = ", tags$span(class = "tone-letters", "\u02e7\u02e5"), ", ",
-          tags$code(style = code_style, "214"), " = ", tags$span(class = "tone-letters", "\u02e8\u02e9\u02e6"), "."
-        ),
-        tags$p(style = "margin-bottom: 8px;",
-          "Both methods use ",
-          tags$strong("Fraction of Range (FOR)"),
-          " normalisation: f0 is placed between min and max, the lowest and highest points of the tones\u2019 mean contours (for GCA and GAMM, the predicted contours), not the lowest and highest f0 samples. ",
-          "The two methods differ only in how Tone Numerals (i.e. 1\u20135) are assigned. Both are linear in the input\u2019s units: semitones and LZ give a log scale, closer to perceived pitch; Hz and z-scores a linear one."
-        ),
-        tags$strong("Conversion methods:"),
+        tags$p(style = "margin-bottom: 8px;", nows(
+          "Chao numerals describe a tone on a 5-level scale (1 = lowest, 5 = highest): Mandarin T1 ", code("55"),
+          ", T2 ", code("35"), ", T3 ", code("214"), ", T4 ", code("51"), ". Each is also shown in IPA tone letters, e.g. ",
+          code("214"), " = ", tags$span(class = "tone-letters", "\u02e8\u02e9\u02e6"), "."
+        )),
+        tags$p(style = "margin-bottom: 8px;", nows(
+          "Both methods use ", tags$strong("Fraction of Range (FOR)"),
+          ": f0 is placed between min and max, the lowest and highest points of the tones\u2019 mean (or model-predicted) contours. ",
+          "They differ only in how values become digits:"
+        )),
         tags$ul(style = "margin-bottom: 8px; padding-left: 18px;",
           tags$li(
             tags$strong("Reference-line FOR [1, 5]:"),
             tags$div(style = "margin: 4px 0 2px 0; font-family: 'Georgia', serif; font-style: italic; font-size: 0.92rem;",
               HTML("f\u2080\u2032 = (f\u2080 \u2212 f\u2080<sub>min</sub>) / (f\u2080<sub>max</sub> \u2212 f\u2080<sub>min</sub>) \u00d7 4 + 1")
             ),
-            " Scales f0 onto [1, 5] with 5 reference lines at integer values. Each sampled value is ", tags$code(style = code_style, "round()"), "ed to the nearest integer."
+            nows(" Each value is rounded to the nearest of 5 lines (", code("round()"), ").")
           ),
           tags$li(
             tags$strong("Interval-based FOR (0, 5]:"),
             tags$div(style = "margin: 4px 0 2px 0; font-family: 'Georgia', serif; font-style: italic; font-size: 0.92rem;",
               HTML("f\u2080\u2032 = (f\u2080 \u2212 f\u2080<sub>min</sub>) / (f\u2080<sub>max</sub> \u2212 f\u2080<sub>min</sub>) \u00d7 5")
             ),
-            " Scales f0 onto (0, 5] with 5 equal-width intervals. Each sampled value is assigned to an interval via ", tags$code(style = code_style, "ceiling()"),
-            ": (0,1]\u21921, (1,2]\u21922, (2,3]\u21923, (3,4]\u21924, (4,5]\u21925."
+            nows(" Each value takes the number of its band, 1 to 5 (", code("ceiling()"), ").")
           )
         ),
         tags$pre(style = "font-size: 0.78rem; line-height: 1.4; color: #6b7d75; background: #fff; border: 1px solid #d6e7df; border-radius: 4px; padding: 8px 10px; margin: 2px 0 8px 0; overflow-x: auto;",
@@ -98,14 +94,26 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
             paste0("  value:  ", paste(c(0, edge(1:4), 5), collapse = "       ")),
             paste0("  digit:  |", paste0(band(paste0("   ", digit(1:5), "   ")), c(rep(edge("|"), 4), "|"), collapse = ""))
           ), collapse = "\n"))),
-        tags$p(style = "margin: 4px 0 8px 0; font-size: 0.84rem; color: #777;",
-          HTML("Note: Scaled values near a digit boundary (<span style='color:#e0a800; font-weight:bold;'>|</span> above) can be ambiguous: 2.45 on the reference-line scale could be 2 or 3, and 1.1 on the interval scale could be 1 or 2, depending on the tonal contrasts in the language. Values within the fuzzy boundary threshold (\u00b1<em>t</em>) are highlighted in <span style='color:#d9534f; font-weight:bold;'>red</span>. For more discussion on conversion methods and boundary handling, see Xu &amp; Zhang (2024).")
+        tags$p(style = note_style,
+          HTML(paste("Values near a boundary (<span style='color:#e0a800; font-weight:bold;'>|</span>) are ambiguous: 2.45 could be 2 or 3.",
+                     "Those within the fuzzy boundary threshold (\u00b1<em>t</em>) are in <span style='color:#d9534f; font-weight:bold;'>red</span>;",
+                     "see Xu &amp; Zhang (2024)."))
+        ),
+        tags$p(style = note_style,
+          HTML(paste("<strong>Turning points:</strong> a dip or peak (between 10% and 90% of the tone) that goes more than the",
+                     "<em>turning-point threshold</em> (default 0.5) beyond both endpoints adds a middle digit, e.g. 214 rather than 24,",
+                     "if that digit is lower (dip) or higher (peak) than both endpoint digits. Otherwise the numeral keeps two digits",
+                     "(23, not 223). <em>Dip / peak</em> sizes near the threshold are in <span style='color:#d9534f; font-weight:bold;'>red</span>."))
         ),
         tags$strong("Data source:"),
         tags$ul(style = "margin-bottom: 0; padding-left: 18px;",
-          tags$li(tags$strong("Normalised f0 (recommended), or Curated + normalised f0:"), " Per-tone mean contours of the f0 from the Normalise tab, on the scale chosen there, with every token resampled at the same time points so that tokens with more f0 samples do not count more. Normalising first keeps Chao numerals and your models on one scale. A log scale (semitones or LZ) suits Chao numerals; z-scores are linear in Hz, which can move a digit near a boundary."),
-          tags$li(tags$strong("Uploaded or curated f0, converted to LZ here:"), " A quick route without the Normalise tab. Each speaker\u2019s f0 in Hz is first converted to LZ (log z-score, Zhu 1999), so that higher and lower voices are averaged on a common scale, and then averaged as above. Choose the speaker variable, or none to treat the data as one speaker."),
-          tags$li(tags$strong("GCA / GAMM predictions:"), " Available after fitting the respective model. Uses the population-level predicted contours (smoother, more representative).")
+          tags$li(nows(tags$strong("GCA / GAMM predictions"), rec, tags$strong(":"),
+                  " the fitted model\u2019s population-level contours, smooth and representative. Available after fitting a model.")),
+          tags$li(nows(tags$strong("Normalised or Curated + normalised f0"), rec, tags$strong(":"),
+                  " mean contours on the scale chosen in the Normalise tab, each token resampled to 21 points. ",
+                  "Semitones or LZ suit Chao numerals; z-scores are linear in Hz.")),
+          tags$li(tags$strong("Uploaded or curated f0, converted to LZ here:"),
+                  " a quick route without the Normalise tab: f0 is converted to LZ (Zhu 1999) by speaker, then averaged.")
         )
       )
     )
@@ -172,6 +180,9 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
       )
     }
     sum_note_style <- "font-size: 0.75rem; color: #6b5a1e; background: #fff8e1; border-radius: 4px; padding: 5px 8px; margin: -6px 0 10px 0;"
+    # The panel re-renders when a data source appears: keep the numbers set.
+    keep_num <- function(id, default) {
+      v <- isolate(input[[id]]); if (is.numeric(v) && length(v) == 1 && !is.na(v)) v else default }
 
     tagList(
       wellPanel(
@@ -217,7 +228,13 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
 
         # --- Fuzzy boundary threshold ---
         numericInput("sum_boundary_tol", "Fuzzy boundary threshold (\u00b1):",
-                     value = 0.1, min = 0, max = 0.5, step = 0.05),
+                     value = keep_num("sum_boundary_tol", 0.1), min = 0, max = 0.5, step = 0.05),
+
+        # --- Turning-point threshold: how far a dip or peak must go for a middle digit ---
+        numericInput("sum_turn_threshold", "Turning-point threshold (Chao units):",
+                     value = keep_num("sum_turn_threshold", 0.5), min = 0, max = 4, step = 0.1),
+        tags$div(style = "font-size: 0.75rem; color: #888; margin: -8px 0 10px 0;",
+                 "A dip or peak beyond both endpoints larger than this can add a middle digit (reference-line scale)."),
 
         # --- Action buttons ---
         actionButton("sum_button", "Convert to Chao Digits"),
@@ -375,10 +392,13 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
     # contour_to_chao() handles continuous Chao scaling, turning-point
     # detection and the two numeral methods; the range comes back as
     # attributes.
+    turn_th <- input$sum_turn_threshold
+    if (!is.numeric(turn_th) || length(turn_th) != 1 || is.na(turn_th) || turn_th < 0)
+      turn_th <- 0.5
     chao <- contour_to_chao(
       contour_data,
       tone_col  = "tone", time_col = "time", f0_col = "f0_predicted",
-      threshold = 0.5
+      threshold = turn_th
     )
     f0_min <- attr(chao, "f0_min")
     f0_max <- attr(chao, "f0_max")
@@ -397,38 +417,71 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
     sum_norm_contours(contour_data)
 
     # --- Step 4: Reshape chao result into the wide UI-display format ------
-    boundary_tol <- if (!is.null(input$sum_boundary_tol) &&
-                       input$sum_boundary_tol >= 0) input$sum_boundary_tol else 0.1
+    boundary_tol <- input$sum_boundary_tol
+    if (!is.numeric(boundary_tol) || length(boundary_tol) != 1 ||
+        is.na(boundary_tol) || boundary_tol < 0) boundary_tol <- 0.1
 
     rows <- lapply(seq_len(nrow(chao)), function(i) {
       r            <- chao[i, ]
       sample_times <- r$sample_times[[1]]
       ref_vals     <- r$ref_continuous[[1]]
       int_vals     <- r$int_continuous[[1]]
-      n_digits     <- r$n_digits
+      n_samples    <- length(sample_times)   # 3 when a turning point is sampled
 
-      ref_digits <- as.integer(strsplit(r$refline,  "")[[1]])
-      int_digits <- as.integer(strsplit(r$interval, "")[[1]])
+      # One digit per sampled point; a scale whose numeral is a digit short
+      # left out the turning point (same digit as an endpoint).
+      ref_digits <- pmax(1L, pmin(5L, round(ref_vals)))
+      int_digits <- pmax(1L, pmin(5L, ceiling(int_vals)))
+      ref_drop   <- n_samples == 3 && nchar(r$refline)  < 3
+      int_drop   <- n_samples == 3 && nchar(r$interval) < 3
+
+      # Turning point: the larger of the dip and the peak, as contour_to_chao()
+      # samples it. Near the threshold (within the fuzzy margin), also give
+      # the numerals the other side of it would produce.
+      kind <- if (r$dip >= r$peak) "dip" else "peak"
+      size <- if (kind == "dip") r$dip else r$peak
+      near <- size > 0 && abs(size - turn_th) <= boundary_tol
+      alt  <- NA_character_
+      if (near) {
+        a <- contour_to_chao(contour_data, tone_col = "tone", time_col = "time",
+                             f0_col = "f0_predicted",
+                             threshold = max(0, if (n_samples == 3) size + 1e-6 else size - 1e-6))
+        a <- a[a$tone == r$tone, , drop = FALSE]
+        if (nrow(a) == 1) alt <- paste0(a$refline, " / ", a$interval)
+        # Flag only when the other side of the threshold changes the numerals
+        near <- !is.na(alt) && alt != paste0(r$refline, " / ", r$interval)
+        if (!near) alt <- NA_character_
+      }
 
       row <- data.frame(
         tone              = r$tone,
-        n_digits          = n_digits,
+        n_samples         = n_samples,
+        ref_drop          = ref_drop,
+        int_drop          = int_drop,
         # round() changes digit half-way between the reference lines, so the
         # ambiguous values are those near 1.5, 2.5, 3.5 and 4.5.
-        ref_scaled_values = format_scaled_values_html(ref_vals, 1:4 + 0.5, boundary_tol),
+        ref_scaled_values = format_scaled_values_html(ref_vals, 1:4 + 0.5, boundary_tol,
+                                                      if (ref_drop) 2L else integer(0)),
         refline           = r$refline,
-        int_scaled_values = format_scaled_values_html(int_vals, 1:4, boundary_tol),
+        int_scaled_values = format_scaled_values_html(int_vals, 1:4, boundary_tol,
+                                                      if (int_drop) 2L else integer(0)),
         interval          = r$interval,
         ref_letters       = chao_to_letters(r$refline),
         int_letters       = chao_to_letters(r$interval),
         contour_shape     = r$shape,
+        turn_kind         = if (size > 0) kind else "none",
+        turn_size         = size,
+        turn_near         = near,
+        turn_alt          = alt,
         stringsAsFactors  = FALSE
       )
 
-      # Wide per-sample columns (always 3 slots; NA for unused ones).
+      # Wide per-sample columns (always 3 slots; NA for unused ones). The
+      # digits are per sampled point, including a turning point left out of
+      # a numeral (ref_drop / int_drop).
       max_digits <- 3
       for (j in seq_len(max_digits)) {
-        if (j <= n_digits) {
+        if (j <= n_samples) {
           row[[paste0("t",  j)]] <- sample_times[j]
           row[[paste0("v",  j)]] <- ref_vals[j]
           row[[paste0("r",  j)]] <- ref_digits[j]
@@ -451,6 +504,7 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
       source       = src,
       lz           = lz_info,
       boundary_tol = boundary_tol,
+      turn_threshold = turn_th,
       f0_min       = f0_min,
       f0_max       = f0_max
     ))
@@ -507,11 +561,52 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
     )
 
     header_row1_cells <- c(header_row1_cells, list(
-      tags$th(style = th_style, rowspan = 2, "Shape")
+      tags$th(style = th_style, rowspan = 2, "Shape"),
+      tags$th(style = th_style, rowspan = 2,
+              HTML(paste0("Dip / peak<br><span style='font-weight:normal; font-size:0.72rem; color:#888;'>sampled above ",
+                          params$turn_threshold, "</span>")))
     ))
 
     header_row1 <- do.call(tags$tr, header_row1_cells)
     header_row2 <- do.call(tags$tr, header_row2_cells)
+
+    # Tones whose dip or peak is near the turning-point threshold: say what
+    # the other side of it gives (reference-line / interval numerals).
+    near_i <- which(result$turn_near %in% TRUE)
+    turn_note <- if (length(near_i) > 0) {
+      th <- params$turn_threshold
+      lines <- lapply(near_i, function(i) {
+        sz <- result$turn_size[i]
+        now <- paste0(result$refline[i], " / ", result$interval[i])
+        other <- if (result$n_samples[i] == 3)
+          sprintf("with a threshold of %.2f or more it would be %s", ceiling(sz * 100) / 100, result$turn_alt[i])
+        else
+          sprintf("with a threshold of %.2f or less it would be %s", (ceiling(sz * 100) - 1) / 100, result$turn_alt[i])
+        tags$li(sprintf("Tone %s: %s %.2f, so %s here; %s.", result$tone[i], result$turn_kind[i], sz, now, other))
+      })
+      tags$div(style = "margin-top: 10px; font-size: 0.8rem; color: #6b5a1e;",
+        tags$strong(sprintf("Near the turning-point threshold (%s \u00b1 %s):", th, params$boundary_tol)),
+        tags$ul(style = "margin: 4px 0 0 0; padding-left: 18px;", lines))
+    }
+
+    # Tones whose turning point was sampled but rounds to the same digit as an
+    # endpoint on one or both scales, so that numeral keeps two digits.
+    drop_i <- which(result$ref_drop | result$int_drop)
+    drop_note <- if (length(drop_i) > 0) {
+      lines <- lapply(drop_i, function(i) {
+        where <- if (result$ref_drop[i] && result$int_drop[i]) "on both scales"
+                 else if (result$ref_drop[i]) "on the reference-line scale"
+                 else "on the interval scale"
+        tags$li(sprintf("Tone %s: %s %.2f, but %s the %s rounds to the same digit as an endpoint, so %s (%s / %s).",
+                        result$tone[i], result$turn_kind[i], result$turn_size[i], where, result$turn_kind[i],
+                        if (result$ref_drop[i] && result$int_drop[i]) "both numerals keep two digits"
+                        else "that numeral keeps two digits",
+                        result$refline[i], result$interval[i]))
+      })
+      tags$div(style = "margin-top: 10px; font-size: 0.8rem; color: #555;",
+        tags$strong("Turning points too shallow to show in the digits:"),
+        tags$ul(style = "margin: 4px 0 0 0; padding-left: 18px;", lines))
+    }
 
     body_rows <- lapply(seq_len(nrow(result)), function(i) {
       # Highlight where the two methods disagree
@@ -529,8 +624,13 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
         tags$td(class = "tone-letters", style = paste0(td_style_letters, " background-color: #fffcf8; border-right: 1px solid #ddd; ", hl_int), result$int_letters[i])
       )
 
+      turn_txt <- if (result$turn_kind[i] == "none") "none"
+                  else sprintf("%s %.2f", result$turn_kind[i], result$turn_size[i])
+      turn_css <- if (isTRUE(result$turn_near[i])) " color: #d9534f; font-weight: bold;"
+                  else if (result$turn_kind[i] == "none") " color: #999;" else ""
       cells <- c(cells, list(
-        tags$td(style = td_style, result$contour_shape[i])
+        tags$td(style = td_style, result$contour_shape[i]),
+        tags$td(style = paste0(td_style, turn_css), turn_txt)
       ))
 
       do.call(tags$tr, cells)
@@ -545,24 +645,31 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
           if (!is.null(lz_note)) tags$li(lz_note),
           tags$li(HTML(paste0("f0 range (lowest and highest points of the contours): ", round(params$f0_min, 2), " \u2013 ", round(params$f0_max, 2),
                               f0_unit,
-                              " &nbsp;(\u0394 = ", round(params$f0_max - params$f0_min, 2), ")")))
+                              " &nbsp;(\u0394 = ", round(params$f0_max - params$f0_min, 2), ")"))),
+          tags$li(paste0("Turning-point threshold: ", params$turn_threshold,
+                         " Chao units (reference-line scale)"))
         ),
         tags$strong("Chao tone numeral comparison:"),
         tags$p(style = "font-size: 0.8rem; color: #888; margin: 4px 0 6px 0;",
-          HTML(paste0("Values in <span style='color:#d9534f;font-weight:bold;'>red</span> are within \u00b1",
-                      params$boundary_tol, " of a digit boundary: half-way between reference lines (1.5, 2.5, 3.5, 4.5), ",
-                      "or the integers 1\u20134 for the interval-based method. These are sensitive to the choice of conversion method."))),
+          HTML(paste0("<span style='color:#d9534f;font-weight:bold;'>Red</span>: a value within \u00b1",
+                      params$boundary_tol, " of a digit boundary (1.5, 2.5, 3.5, 4.5 on the reference-line scale; ",
+                      "1\u20134 on the interval scale), or a dip or peak within \u00b1", params$boundary_tol,
+                      " of the turning-point threshold that would change the numeral."))),
         tags$table(
           style = "margin-top: 4px; border-collapse: collapse; font-size: 0.84rem; width: 100%;",
           tags$thead(header_row1, header_row2),
           tags$tbody(body_rows)
-        )
+        ),
+        turn_note,
+        drop_note
       )
     )
   })
 
   # --- Plots (panels: reference-line and interval) ---
-  sum_plot_reactive <- reactive({
+  # The data behind the figure; the figure itself is drawn by plot_chao_panels()
+  # (ui/summarise_plot.R) on whichever device is open, the app's or the PNG's.
+  sum_plot_data <- reactive({
     req(sum_norm_contours())
     req(sum_result())
 
@@ -570,12 +677,12 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
     result <- sum_result()
     params <- sum_params()
 
-    # Build sampling point overlay data for both scales
+    # Sampled points (onset, any turning point, offset) on both scales.
+    # `shown` is FALSE for a turning point left out of that scale's numeral.
     ref_point_rows <- list()
     int_point_rows <- list()
     for (i in seq_len(nrow(result))) {
-      n_digits <- result$n_digits[i]
-      for (j in 1:n_digits) {
+      for (j in seq_len(result$n_samples[i])) {
         t_col <- paste0("t", j)
         if (t_col %in% names(result) && !is.na(result[[t_col]][i])) {
           # Reference-line points
@@ -584,6 +691,7 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
             chao_val = result[[paste0("v", j)]][i],
             chao_digit = as.character(result[[paste0("r", j)]][i]),
             tone = result$tone[i],
+            shown = !(j == 2 && result$ref_drop[i]),
             stringsAsFactors = FALSE
           )
           # Interval points
@@ -592,70 +700,28 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
             chao_val = result[[paste0("iv", j)]][i],
             chao_digit = as.character(result[[paste0("ic", j)]][i]),
             tone = result$tone[i],
+            shown = !(j == 2 && result$int_drop[i]),
             stringsAsFactors = FALSE
           )
         }
       }
     }
-    ref_point_df <- do.call(rbind, ref_point_rows)
-    int_point_df <- do.call(rbind, int_point_rows)
-
-    # Shared theme
-    base_theme <- theme_bw(base_size = 13) +
-      theme(legend.position = "bottom",
-            panel.grid.minor = element_blank(),
-            plot.title = element_text(size = 12, face = "bold", hjust = 0.5),
-            plot.subtitle = element_text(size = 10, hjust = 0.5))
-
-    # --- Plot 1: Reference-line [1, 5] ---
-    ref_breaks <- 1:5
-    ref_edges  <- 1:4 + 0.5   # round() changes digit half-way between lines
-    tol <- if (is.null(params$boundary_tol)) 0.1 else params$boundary_tol
-    p_ref <- ggplot(pdat, aes(x = time, y = chao_ref, colour = tone)) +
-      annotate("rect", xmin = -Inf, xmax = Inf,
-               ymin = ref_edges - tol, ymax = ref_edges + tol,
-               fill = "grey90", alpha = 0.5) +
-      geom_hline(yintercept = ref_breaks, linetype = "dashed", colour = "grey60", linewidth = 0.3) +
-      geom_line(linewidth = 1.1) +
-      geom_point(data = ref_point_df, aes(x = time, y = chao_val),
-                 size = 3, shape = 16) +
-      geom_text(data = ref_point_df, aes(x = time, y = chao_val, label = chao_digit),
-                vjust = -1.3, size = 4, fontface = "bold", show.legend = FALSE) +
-      scale_y_continuous(breaks = ref_breaks, limits = c(0.5, 5.5)) +
-      scale_x_continuous(breaks = seq(0, 1, by = 0.25)) +
-      labs(title = "Reference-line FOR [1, 5]", subtitle = "round()",
-           x = "Normalised time", y = "Chao scale [1, 5]", colour = "Tone") +
-      base_theme
-
-    # --- Plot 2: Interval (0, 5] ---
-    band_fills <- c("#f0f4ff", "#ffffff", "#f0f4ff", "#ffffff", "#f0f4ff")
-    band_ymin  <- c(0, 1, 2, 3, 4)
-    band_ymax  <- c(1, 2, 3, 4, 5)
-    int_boundaries <- 1:4
-
-    p_int <- ggplot(pdat, aes(x = time, y = chao_int, colour = tone)) +
-      annotate("rect", xmin = -Inf, xmax = Inf,
-               ymin = band_ymin, ymax = band_ymax,
-               fill = band_fills, alpha = 0.6) +
-      geom_hline(yintercept = int_boundaries, linetype = "dashed", colour = "grey70", linewidth = 0.3) +
-      annotate("text", x = 1.06, y = c(0.5, 1.5, 2.5, 3.5, 4.5),
-               label = as.character(1:5), size = 3.5, colour = "grey40", fontface = "bold") +
-      geom_line(linewidth = 1.1) +
-      geom_point(data = int_point_df, aes(x = time, y = chao_val),
-                 size = 3, shape = 16) +
-      geom_text(data = int_point_df, aes(x = time, y = chao_val, label = chao_digit),
-                vjust = -1.3, size = 4, fontface = "bold", show.legend = FALSE) +
-      scale_y_continuous(breaks = 0:5, limits = c(-0.3, 5.5)) +
-      scale_x_continuous(breaks = seq(0, 1, by = 0.25), limits = c(0, 1.12)) +
-      labs(title = "Interval-based FOR (0, 5]", subtitle = "ceiling()",
-           x = "Normalised time", y = "Chao scale (0, 5]", colour = "Tone") +
-      base_theme
-
-    gridExtra::grid.arrange(p_ref, p_int, ncol = 2)
+    list(pdat = pdat,
+         ref_point_df = do.call(rbind, ref_point_rows),
+         int_point_df = do.call(rbind, int_point_rows),
+         tol = if (is.null(params$boundary_tol)) 0.1 else params$boundary_tol)
   })
 
+  # Build after grid.newpage() so thematic has resolved the app font first.
+  draw_sum_plot <- function(base_family = "") {
+    d <- sum_plot_data()
+    grid::grid.newpage()
+    grid::grid.draw(plot_chao_panels(d$pdat, d$ref_point_df, d$int_point_df, d$tol,
+                                     base_family = base_family))
+  }
+
   output$summarise_plot <- renderPlot({
-    sum_plot_reactive()
+    draw_sum_plot()
   }, height = function() { if (!is.null(sum_norm_contours())) 440 else 1 })
 
   # --- Download handlers ---
@@ -679,6 +745,9 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
         check.names = FALSE, stringsAsFactors = FALSE
       )
       export$Shape <- result$contour_shape
+      export$`Dip/peak` <- result$turn_kind
+      export$`Dip/peak size (Chao units)` <- round(result$turn_size, 3)
+      export$`Turning-point threshold` <- sum_params()$turn_threshold
       write.csv(export, file, row.names = FALSE)
       showNotification(paste("Data saved as", paste0(input$sum_filename, ".csv")),
                        type = "message", duration = 4)
@@ -689,9 +758,24 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
     filename = function() paste0(input$sum_filename, ".png"),
     content = function(file) {
       req(sum_norm_contours())
-      png(file, width = 12, height = 5, units = "in", res = 300)
-      sum_plot_reactive()
-      dev.off()
+      # ragg + the bundled Open Sans (as in the app); plain png() otherwise.
+      fam <- ""
+      if (requireNamespace("ragg", quietly = TRUE) &&
+          requireNamespace("systemfonts", quietly = TRUE)) {
+        fam <- tryCatch({
+          if (!"Open Sans" %in% systemfonts::registry_fonts()$family) {
+            systemfonts::register_font("Open Sans",
+              plain = "open-sans/regular.ttf", bold = "open-sans/bold.ttf",
+              italic = "open-sans/italic.ttf", bolditalic = "open-sans/bolditalic.ttf")
+          }
+          "Open Sans"
+        }, error = function(e) "")
+        ragg::agg_png(file, width = 12, height = 5, units = "in", res = 300)
+      } else {
+        png(file, width = 12, height = 5, units = "in", res = 300)
+      }
+      on.exit(grDevices::dev.off(), add = TRUE)
+      draw_sum_plot(base_family = fam)
       showNotification(paste("Plot saved as", paste0(input$sum_filename, ".png")),
                        type = "message", duration = 4)
     }
@@ -740,13 +824,17 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
       '# Step 2: Fraction of Range normalisation\n',
       '# Eq. 3 (reference-line): f0\' = (f0 - f0_min) / (f0_max - f0_min) * 4 + 1\n',
       '# Eq. 1a (interval):      f0\' = (f0 - f0_min) / (f0_max - f0_min) * 5\n',
-      'pred$chao_ref <- (pred$f0_predicted - f0_min) / (f0_max - f0_min) * 4 + 1\n',
-      'pred$chao_int <- (pred$f0_predicted - f0_min) / (f0_max - f0_min) * 5\n',
+      'if (f0_max == f0_min) {   # flat contours: mid-scale\n',
+      '  pred$chao_ref <- 3; pred$chao_int <- 2.5\n',
+      '} else {\n',
+      '  pred$chao_ref <- (pred$f0_predicted - f0_min) / (f0_max - f0_min) * 4 + 1\n',
+      '  pred$chao_int <- (pred$f0_predicted - f0_min) / (f0_max - f0_min) * 5\n',
+      '}\n',
       '\n# Step 3: Per tone, sample the onset, the offset and any turning point, then convert\n',
       '# A turning point is the lowest (dip) or highest (peak) point between 10% and 90%\n',
-      '# of the time axis on the reference-line scale. It adds a middle digit when it lies\n',
-      '# more than `threshold` Chao units below (dip) or above (peak) both endpoints.\n',
-      'threshold <- 0.5\n',
+      '# of the time axis on the reference-line scale, whichever lies further beyond both\n',
+      '# endpoints. It is sampled when it lies more than `threshold` Chao units beyond them.\n',
+      'threshold <- ', if (is.null(params$turn_threshold)) 0.5 else params$turn_threshold, '\n',
       'tone_levels <- unique(pred$tone)\n',
       'results <- lapply(tone_levels, function(tone_val) {\n',
       '  td <- pred[pred$tone == tone_val & !is.na(pred$chao_ref) & !is.na(pred$time), ]\n',
@@ -760,16 +848,25 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
       '  i_min <- inner[which.min(fine_ref[inner])]\n',
       '  i_max <- inner[which.max(fine_ref[inner])]\n',
       '  onset <- fine_ref[1]; offset <- fine_ref[200]\n',
-      '  has_dip  <- onset - fine_ref[i_min] > threshold && offset - fine_ref[i_min] > threshold\n',
-      '  has_peak <- fine_ref[i_max] - onset > threshold && fine_ref[i_max] - offset > threshold\n',
-      '  sample_times <- if (has_dip) c(0, fine_time[i_min], 1) else\n',
-      '                  if (has_peak) c(0, fine_time[i_max], 1) else c(0, 1)\n\n',
+      '  dip  <- min(onset, offset) - fine_ref[i_min]   # how far below both endpoints\n',
+      '  peak <- fine_ref[i_max] - max(onset, offset)   # how far above both endpoints\n',
+      '  use_dip <- dip >= peak                         # sample the larger turn\n',
+      '  turn <- if (use_dip) dip else peak\n',
+      '  sample_times <- if (turn <= threshold) c(0, 1) else\n',
+      '                  if (use_dip) c(0, fine_time[i_min], 1) else c(0, fine_time[i_max], 1)\n\n',
+      '  # Keep a middle digit only where it shows the turn: below both endpoint\n',
+      '  # digits for a dip, above both for a peak (223 would read as a late rise)\n',
+      '  keep_turn <- function(d) {\n',
+      '    if (length(d) < 3) return(d)\n',
+      '    shows <- if (use_dip) d[2] < min(d[-2]) else d[2] > max(d[-2])\n',
+      '    if (shows) d else d[-2]\n',
+      '  }\n\n',
       '  # Eq. 3 [1,5]: round to nearest integer\n',
       '  ref_vals <- fn_ref(sample_times)\n',
-      '  refline <- paste0(pmax(1, pmin(5, round(ref_vals))), collapse = "")\n\n',
+      '  refline <- paste0(keep_turn(pmax(1, pmin(5, round(ref_vals)))), collapse = "")\n\n',
       '  # Eq. 1a (0,5]: ceiling -> Chao digits 1-5\n',
       '  int_vals <- fn_int(sample_times)\n',
-      '  interval <- paste0(pmax(1, pmin(5, ceiling(int_vals))), collapse = "")\n',
+      '  interval <- paste0(keep_turn(pmax(1, pmin(5, ceiling(int_vals)))), collapse = "")\n',
       '\n  data.frame(tone = tone_val,\n',
       '             ref_scaled = paste(round(ref_vals, 2), collapse = " -> "),\n',
       '             refline = refline,\n',
