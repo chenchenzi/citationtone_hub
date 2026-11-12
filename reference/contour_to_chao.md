@@ -74,6 +74,14 @@ A data frame with one row per tone, containing:
   exceeds `threshold`; it adds a middle digit where that digit shows the
   turn (see Details).
 
+- `move`: the change from onset to offset, in Chao units on the
+  reference-line scale (positive for a rise, negative for a fall).
+
+- `progress`, `timing`: the share of `move` done at 50% of the contour,
+  and its name, `"early"` (above 0.75), `"mid"` or `"late"` (below
+  0.25). `NA` for a movement under half a unit or a sampled turning
+  point (see Details).
+
 - `sample_times`, `ref_continuous`, `int_continuous`: list columns of
   the per-sample numeric values underlying the digit strings, useful for
   plotting or further analysis. When a turning point is sampled these
@@ -128,12 +136,13 @@ it lies below both endpoints (a *dip*), or the highest point if it lies
 above both (a *peak*), whichever goes further, and it is sampled when it
 goes more than `threshold` Chao units beyond the nearer endpoint.
 
-Each scale then keeps the middle digit only if it shows the turn: lower
-than both endpoint digits for a dip, higher than both for a peak. If it
-rounds to the same digit as an endpoint, the turn is too shallow to show
-at five levels and that numeral keeps two digits (`23`, not `223`, which
-would read as a late rise). The two scales round differently, so a tone
-can get two digits on one and three on the other.
+Each scale then keeps the middle digit only if it differs from both
+endpoint digits. A middle digit that repeats an endpoint digit merges
+into it, since the turn is too shallow to show at five levels: `23`, not
+`223` (which would read as a late rise). The turning point lies beyond
+both endpoints, so its digit can only match an endpoint digit or go past
+it. The two scales round differently, so a tone can get two digits on
+one and three on the other.
 
 The default `threshold = 0.5` (half a Chao unit on the `[1, 5]` scale)
 is a conservative choice. Lower thresholds sample more turning points
@@ -143,6 +152,27 @@ sampled turn too shallow to show is still left out). Any value from 4
 `dip` and `peak` columns report how far each tone's turning point goes,
 so a tone close to the threshold, whose digit count depends on it, can
 be spotted.
+
+### Timing of rises and falls
+
+The numerals give pitch levels, not when a contour moves: an early and a
+late rise between the same levels get the same digits. So for a rise or
+a fall the function also reports how much of the movement is done at the
+middle of the contour. `move` is the change from onset to offset, and
+`progress` is the share of it covered at 50% of the time axis: 0.5 for a
+movement spread evenly over the contour, 0 for a contour that stays
+level until 50% and then moves, and 1 for one that has finished moving
+by 50%. `timing` names it, with cut-offs midway between these: `"early"`
+above 0.75, `"late"` below 0.25 and `"mid"` in between. A contour that
+stays level and then moves in a straight line is late once the level
+part lasts more than a third of it. One that dips slightly before it
+rises is late too, so check `dip`.
+
+Both are `NA` for a movement of less than half a Chao unit, too small to
+time, and for a tone with a sampled turning point, which is not a simple
+rise or fall. They describe the contour on normalised time, so they give
+proportional, not absolute, timing, and tokens that differ in timing
+average towards `"mid"`.
 
 ## References
 

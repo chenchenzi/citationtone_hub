@@ -114,6 +114,12 @@ on the reference-line scale; zero or negative when the contour has no
 dip (peak). The larger of the two is sampled as a turning point when
 it exceeds <code>threshold</code>; it adds a middle digit where that digit shows
 the turn (see Details).</p></li>
+<li><p><code>move</code>: the change from onset to offset, in Chao units on the
+reference-line scale (positive for a rise, negative for a fall).</p></li>
+<li><p><code>progress</code>, <code>timing</code>: the share of <code>move</code> done at 50% of the contour,
+and its name, <code>"early"</code> (above 0.75), <code>"mid"</code> or <code>"late"</code> (below
+0.25). <code>NA</code> for a movement under half a unit or a sampled turning
+point (see Details).</p></li>
 <li><p><code>sample_times</code>, <code>ref_continuous</code>, <code>int_continuous</code>: list columns of
 the per-sample numeric values underlying the digit strings, useful
 for plotting or further analysis. When a turning point is sampled
@@ -170,12 +176,13 @@ turning point is the lowest point between 10% and 90% of the contour if
 it lies below both endpoints (a <em>dip</em>), or the highest point if it lies
 above both (a <em>peak</em>), whichever goes further, and it is sampled when it
 goes more than <code>threshold</code> Chao units beyond the nearer endpoint.</p>
-<p>Each scale then keeps the middle digit only if it shows the turn: lower
-than both endpoint digits for a dip, higher than both for a peak. If it
-rounds to the same digit as an endpoint, the turn is too shallow to show
-at five levels and that numeral keeps two digits (<code>23</code>, not <code>223</code>, which
-would read as a late rise). The two scales round differently, so a tone
-can get two digits on one and three on the other.</p>
+<p>Each scale then keeps the middle digit only if it differs from both
+endpoint digits. A middle digit that repeats an endpoint digit merges
+into it, since the turn is too shallow to show at five levels: <code>23</code>, not
+<code>223</code> (which would read as a late rise). The turning point lies beyond
+both endpoints, so its digit can only match an endpoint digit or go past
+it. The two scales round differently, so a tone can get two digits on one
+and three on the other.</p>
 <p>The default <code>threshold = 0.5</code> (half a Chao unit on the <code>[1, 5]</code>
 scale) is a conservative choice. Lower thresholds sample more turning
 points and so give more 3-digit numerals, useful for tonally rich
@@ -185,6 +192,29 @@ value from 4
 <code>dip</code> and <code>peak</code> columns report how far each tone's turning point goes,
 so a tone close to the threshold, whose digit count depends on it, can
 be spotted.</p>
+</div>
+
+<div class="section">
+<h3 id="timing-of-rises-and-falls">Timing of rises and falls<a class="anchor" aria-label="anchor" href="#timing-of-rises-and-falls"></a></h3>
+
+
+<p>The numerals give pitch levels, not when a contour moves: an early and a
+late rise between the same levels get the same digits. So for a rise or
+a fall the function also reports how much of the movement is done at the
+middle of the contour. <code>move</code> is the change from onset to offset, and
+<code>progress</code> is the share of it covered at 50% of the time axis: 0.5 for a
+movement spread evenly over the contour, 0 for a contour that stays level
+until 50% and then moves, and 1 for one that has finished moving by 50%.
+<code>timing</code> names it, with cut-offs midway between these: <code>"early"</code> above
+0.75, <code>"late"</code> below 0.25 and <code>"mid"</code> in between. A contour that stays
+level and then moves in a straight line is late once the level part lasts
+more than a third of it. One that dips slightly before it rises is late
+too, so check <code>dip</code>.</p>
+<p>Both are <code>NA</code> for a movement of less than half a Chao unit, too small to
+time, and for a tone with a sampled turning point, which is not a simple
+rise or fall. They describe the contour on normalised time, so they give
+proportional, not absolute, timing, and tokens that differ in timing
+average towards <code>"mid"</code>.</p>
 </div>
 
     </div>
