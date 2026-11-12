@@ -136,6 +136,20 @@ test_that("compute_mean_contour warns that n_bins is deprecated", {
 })
 
 
+test_that("compute_mean_contour takes non-ASCII tone labels in the native encoding", {
+  # read.csv() leaves Chinese tone names unmarked ("unknown") in a UTF-8
+  # locale, and a radix sort of such labels used to stop with an error.
+  skip_if_not(isTRUE(l10n_info()[["UTF-8"]]))
+  lab <- c("\u9634\u5e73", "\u9633\u5e73")
+  Encoding(lab) <- "unknown"
+  df <- data.frame(token = rep(c("a", "b"), each = 3), time = rep(c(0, 0.5, 1), 2),
+                   f0 = c(200, 210, 220, 180, 170, 200), tone = rep(lab, each = 3))
+  out <- compute_mean_contour(df, n_points = 3, time_normalised = "yes")
+  expect_equal(nrow(out), 6)
+  expect_setequal(unique(out$tone), lab)
+})
+
+
 # ---------- chao_to_letters -------------------------------------------------
 
 test_that("chao_to_letters writes one tone letter per digit", {
@@ -289,6 +303,48 @@ test_that("contour_to_chao samples the larger of a dip and a peak", {
   expect_true(all(diff(n_ref) <= 0) && all(diff(n_int) <= 0))
   expect_equal(n_ref[ths == 0.3], 3)
   expect_equal(n_ref[ths == 1], 2)
+})
+
+test_that("contour_to_chao times rises and falls by the share done at 50%", {
+  # Piecewise-linear contours on the reference-line scale: a low and a high
+  # level tone pin the range to f0 1..5, so chao_ref = f0.
+  tt <- seq(0, 1, length.out = 21)
+  shape <- function(name, tk, v)
+    data.frame(tone = name, time = tt,
+               f0_predicted = stats::approx(tk, v, xout = tt)$y)
+  contour <- rbind(
+    shape("early_rise", c(0, 0.5, 1), c(2, 4, 4)),
+    shape("even_rise", c(0, 1), c(2, 4)),
+    shape("late_rise", c(0, 0.5, 1), c(2, 2, 4)),
+    shape("late_fall", c(0, 0.5, 1), c(4, 4, 2)),
+    shape("early_fall", c(0, 0.5, 1), c(4, 2, 2)),
+    shape("level_third", c(0, 0.34, 1), c(2, 2, 4)),   # level for over a third
+    shape("level_less", c(0, 0.32, 1), c(2, 2, 4)),    # level for under a third
+    shape("small", c(0, 1), c(3, 3.4)),                # moves 0.4: too small to time
+    shape("dip", c(0, 0.5, 1), c(2, 1, 4)),            # sampled turn: 214
+    data.frame(tone = "lo", time = tt, f0_predicted = 1),
+    data.frame(tone = "hi", time = tt, f0_predicted = 5)
+  )
+  out <- contour_to_chao(contour)
+  row <- function(tn) out[out$tone == tn, ]
+
+  # The digits are the same whatever the timing; the timing columns differ
+  rises <- c("early_rise", "even_rise", "late_rise")
+  expect_equal(unique(out$refline[out$tone %in% rises]), "24")
+  expect_equal(out$progress[match(rises, out$tone)], c(1, 0.5, 0))
+  expect_equal(out$timing[match(rises, out$tone)], c("early", "mid", "late"))
+  expect_equal(row("late_fall")$move, -2)
+  expect_equal(row("late_fall")$timing, "late")
+  expect_equal(row("early_fall")$timing, "early")
+  # A level start followed by a straight movement is late beyond a third
+  expect_equal(row("level_third")$timing, "late")
+  expect_equal(row("level_less")$timing, "mid")
+  # No timing for a small movement, a sampled turn or a level tone
+  expect_equal(row("small")$move, 0.4)
+  expect_true(is.na(row("small")$progress) && is.na(row("small")$timing))
+  expect_equal(row("dip")$refline, "214")
+  expect_true(is.na(row("dip")$progress) && is.na(row("dip")$timing))
+  expect_true(is.na(row("lo")$timing))
 })
 
 test_that("contour_to_chao takes its range from the contours' lowest and highest points", {

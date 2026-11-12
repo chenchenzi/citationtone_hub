@@ -1,5 +1,20 @@
 # shinytone (development version)
 
+* **Chao numerals: timing of rises and falls.** The numerals give pitch
+  levels, not when a tone moves, so an early and a late rise between the
+  same levels get the same digits. `contour_to_chao()` now also returns
+  `move` (the change from onset to offset), `progress` (the share of it
+  done at 50% of the contour) and `timing`: `"early"` above 0.75, `"late"`
+  below 0.25 and `"mid"` in between. They are given for a rise or fall of at
+  least half a unit with no sampled turning point, and are `NA` otherwise.
+  The numerals themselves are unchanged. In the app, the results table has
+  a Timing column, in red when the value at 50% is within the fuzzy margin
+  of a cut-off, and the CSV and the R code carry it. On the sample data,
+  tones 3 and 6 are late and tone 5 is mid.
+* **Non-ASCII tone labels.** `compute_mean_contour()` no longer stops with
+  "Character encoding must be UTF-8, Latin-1 or bytes" when tone labels
+  are non-ASCII text read by `read.csv()`, as the app reads uploads (for
+  example Chinese tone names). This affected the Summarise and GCA tabs.
 * **Summarise guide: shorter.** The Chao numeral guide is shorter, and its
   data source list marks GCA / GAMM predictions and normalised f0 as
   recommended with a thumbs-up. The sidebar help, the
@@ -23,11 +38,10 @@
   R code carry the threshold. `contour_to_chao()` now returns `dip` and
   `peak` columns and a `threshold` attribute, and checks `threshold`.
 * **Chao numerals: a middle digit only where it shows the turn.** Each
-  scale keeps the middle digit only if it is lower than both endpoint
-  digits (dip) or higher than both (peak). A turn that rounds to an
-  endpoint's digit is too shallow to show at five levels, so the numeral
-  keeps two digits: `23`, not `223` (which reads as a late rise), and `22`,
-  not `222`. The two scales round differently, so a tone can get two digits
+  scale keeps the middle digit only if it differs from both endpoint
+  digits. A middle digit that repeats an endpoint digit merges into it, as
+  the turn is too shallow to show at five levels: `23`, not `223` (which
+  reads as a late rise), and `22`, not `222`. The two scales round differently, so a tone can get two digits
   on one and three on the other; `contour_to_chao()` gains `n_digits_int`
   for the interval numeral (`n_digits` is the reference-line one). When a
   contour both dips and peaks beyond its endpoints, the larger turn is now

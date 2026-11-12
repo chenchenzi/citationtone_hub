@@ -102,8 +102,13 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
         tags$p(style = note_style,
           HTML(paste("<strong>Turning points:</strong> a dip or peak (between 10% and 90% of the tone) that goes more than the",
                      "<em>turning-point threshold</em> (default 0.5) beyond both endpoints adds a middle digit, e.g. 214 rather than 24,",
-                     "if that digit is lower (dip) or higher (peak) than both endpoint digits. Otherwise the numeral keeps two digits",
+                     "if that digit differs from both endpoint digits. A middle digit that repeats an endpoint digit merges into it",
                      "(23, not 223). <em>Dip / peak</em> sizes near the threshold are in <span style='color:#d9534f; font-weight:bold;'>red</span>."))
+        ),
+        tags$p(style = note_style,
+          HTML(paste("<strong>Timing:</strong> the digits do not show when a tone moves. For a rise or fall of at least 0.5",
+                     "with no turning point, <em>Timing</em> gives the share of the movement done at the middle of the tone:",
+                     "early above 0.75, late below 0.25, mid in between."))
         ),
         tags$strong("Data source:"),
         tags$ul(style = "margin-bottom: 0; padding-left: 18px;",
@@ -453,6 +458,13 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
         if (!near) alt <- NA_character_
       }
 
+      # Timing near a cut-off: the value at 50% lies within the fuzzy margin
+      # of one that would change the label, or the movement only just
+      # reaches the 0.5 needed to time it.
+      timing_near <- !is.na(r$timing) &&
+        (min(abs(r$progress - c(0.25, 0.75))) * abs(r$move) <= boundary_tol ||
+         abs(r$move) - 0.5 <= boundary_tol)
+
       row <- data.frame(
         tone              = r$tone,
         n_samples         = n_samples,
@@ -473,6 +485,10 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
         turn_size         = size,
         turn_near         = near,
         turn_alt          = alt,
+        move              = r$move,
+        progress          = r$progress,
+        timing            = r$timing,
+        timing_near       = timing_near,
         stringsAsFactors  = FALSE
       )
 
@@ -564,7 +580,9 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
       tags$th(style = th_style, rowspan = 2, "Shape"),
       tags$th(style = th_style, rowspan = 2,
               HTML(paste0("Dip / peak<br><span style='font-weight:normal; font-size:0.72rem; color:#888;'>sampled above ",
-                          params$turn_threshold, "</span>")))
+                          params$turn_threshold, "</span>"))),
+      tags$th(style = th_style, rowspan = 2,
+              HTML("Timing<br><span style='font-weight:normal; font-size:0.72rem; color:#888;'>share done at 50%</span>"))
     ))
 
     header_row1 <- do.call(tags$tr, header_row1_cells)
@@ -628,9 +646,14 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
                   else sprintf("%s %.2f", result$turn_kind[i], result$turn_size[i])
       turn_css <- if (isTRUE(result$turn_near[i])) " color: #d9534f; font-weight: bold;"
                   else if (result$turn_kind[i] == "none") " color: #999;" else ""
+      timing_txt <- if (is.na(result$timing[i])) "\u2013"
+                    else sprintf("%s %.2f", result$timing[i], result$progress[i])
+      timing_css <- if (isTRUE(result$timing_near[i])) " color: #d9534f; font-weight: bold;"
+                    else if (is.na(result$timing[i])) " color: #999;" else ""
       cells <- c(cells, list(
         tags$td(style = td_style, result$contour_shape[i]),
-        tags$td(style = paste0(td_style, turn_css), turn_txt)
+        tags$td(style = paste0(td_style, turn_css), turn_txt),
+        tags$td(style = paste0(td_style, timing_css), timing_txt)
       ))
 
       do.call(tags$tr, cells)
@@ -653,8 +676,9 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
         tags$p(style = "font-size: 0.8rem; color: #888; margin: 4px 0 6px 0;",
           HTML(paste0("<span style='color:#d9534f;font-weight:bold;'>Red</span>: a value within \u00b1",
                       params$boundary_tol, " of a digit boundary (1.5, 2.5, 3.5, 4.5 on the reference-line scale; ",
-                      "1\u20134 on the interval scale), or a dip or peak within \u00b1", params$boundary_tol,
-                      " of the turning-point threshold that would change the numeral."))),
+                      "1\u20134 on the interval scale), a dip or peak within \u00b1", params$boundary_tol,
+                      " of the turning-point threshold that would change the numeral, or a timing whose value at 50% is within \u00b1",
+                      params$boundary_tol, " of a cut-off."))),
         tags$table(
           style = "margin-top: 4px; border-collapse: collapse; font-size: 0.84rem; width: 100%;",
           tags$thead(header_row1, header_row2),
@@ -747,6 +771,9 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
       export$Shape <- result$contour_shape
       export$`Dip/peak` <- result$turn_kind
       export$`Dip/peak size (Chao units)` <- round(result$turn_size, 3)
+      export$`Movement (Chao units)` <- round(result$move, 3)
+      export$`Share done at 50%` <- round(result$progress, 3)
+      export$Timing <- result$timing
       export$`Turning-point threshold` <- sum_params()$turn_threshold
       write.csv(export, file, row.names = FALSE)
       showNotification(paste("Data saved as", paste0(input$sum_filename, ".csv")),
@@ -854,12 +881,18 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
       '  turn <- if (use_dip) dip else peak\n',
       '  sample_times <- if (turn <= threshold) c(0, 1) else\n',
       '                  if (use_dip) c(0, fine_time[i_min], 1) else c(0, fine_time[i_max], 1)\n\n',
-      '  # Keep a middle digit only where it shows the turn: below both endpoint\n',
-      '  # digits for a dip, above both for a peak (223 would read as a late rise)\n',
+      '  # Timing of a rise or fall of at least 0.5 with no sampled turn: the share\n',
+      '  # of the onset-to-offset movement done at the middle of the tone\n',
+      '  move <- offset - onset\n',
+      '  progress <- if (abs(move) >= 0.5 && length(sample_times) == 2)\n',
+      '                (fn_ref(0.5) - onset) / move else NA\n',
+      '  timing <- if (is.na(progress)) NA else if (progress > 0.75) "early" else\n',
+      '            if (progress < 0.25) "late" else "mid"\n\n',
+      '  # Keep a middle digit only if it differs from both endpoint digits;\n',
+      '  # one that repeats an endpoint digit merges into it (223 -> 23)\n',
       '  keep_turn <- function(d) {\n',
       '    if (length(d) < 3) return(d)\n',
-      '    shows <- if (use_dip) d[2] < min(d[-2]) else d[2] > max(d[-2])\n',
-      '    if (shows) d else d[-2]\n',
+      '    if (d[2] != d[1] && d[2] != d[3]) d else d[-2]\n',
       '  }\n\n',
       '  # Eq. 3 [1,5]: round to nearest integer\n',
       '  ref_vals <- fn_ref(sample_times)\n',
@@ -871,7 +904,8 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
       '             ref_scaled = paste(round(ref_vals, 2), collapse = " -> "),\n',
       '             refline = refline,\n',
       '             int_scaled = paste(round(int_vals, 2), collapse = " -> "),\n',
-      '             interval = interval',
+      '             interval = interval,\n',
+      '             progress = round(progress, 2), timing = timing',
       ')\n',
       '})\n',
       'chao_summary <- do.call(rbind, results)\n\n',

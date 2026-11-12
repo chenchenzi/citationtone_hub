@@ -144,7 +144,12 @@ compute_mean_contour <- function(data,
 
   # Mean across each tone's tokens at every time point; points no token
   # covers are dropped. Tones in C-locale order, as dplyr::arrange() gives.
-  out <- do.call(rbind, lapply(sort(unique(tok_tone), method = "radix"), function(tv) {
+  # The radix sort stops on non-ASCII labels in the native encoding, such as
+  # Chinese tone names read by read.csv(), so it orders their UTF-8 form; the
+  # labels themselves are kept.
+  tone_lv <- unique(tok_tone)
+  tone_lv <- tone_lv[order(enc2utf8(tone_lv), method = "radix")]
+  out <- do.call(rbind, lapply(tone_lv, function(tv) {
     data.frame(tone = tv, time = grid,
                f0_predicted = rowMeans(vals[, tok_tone == tv, drop = FALSE],
                                        na.rm = TRUE),
@@ -329,12 +334,13 @@ chao_to_letters <- function(x) {
 #' above both (a *peak*), whichever goes further, and it is sampled when it
 #' goes more than `threshold` Chao units beyond the nearer endpoint.
 #'
-#' Each scale then keeps the middle digit only if it shows the turn: lower
-#' than both endpoint digits for a dip, higher than both for a peak. If it
-#' rounds to the same digit as an endpoint, the turn is too shallow to show
-#' at five levels and that numeral keeps two digits (`23`, not `223`, which
-#' would read as a late rise). The two scales round differently, so a tone
-#' can get two digits on one and three on the other.
+#' Each scale then keeps the middle digit only if it differs from both
+#' endpoint digits. A middle digit that repeats an endpoint digit merges
+#' into it, since the turn is too shallow to show at five levels: `23`, not
+#' `223` (which would read as a late rise). The turning point lies beyond
+#' both endpoints, so its digit can only match an endpoint digit or go past
+#' it. The two scales round differently, so a tone can get two digits on one
+#' and three on the other.
 #'
 #' The default `threshold = 0.5` (half a Chao unit on the `[1, 5]`
 #' scale) is a conservative choice. Lower thresholds sample more turning
@@ -345,6 +351,27 @@ chao_to_letters <- function(x) {
 #' `dip` and `peak` columns report how far each tone's turning point goes,
 #' so a tone close to the threshold, whose digit count depends on it, can
 #' be spotted.
+#'
+#' ## Timing of rises and falls
+#'
+#' The numerals give pitch levels, not when a contour moves: an early and a
+#' late rise between the same levels get the same digits. So for a rise or
+#' a fall the function also reports how much of the movement is done at the
+#' middle of the contour. `move` is the change from onset to offset, and
+#' `progress` is the share of it covered at 50% of the time axis: 0.5 for a
+#' movement spread evenly over the contour, 0 for a contour that stays level
+#' until 50% and then moves, and 1 for one that has finished moving by 50%.
+#' `timing` names it, with cut-offs midway between these: `"early"` above
+#' 0.75, `"late"` below 0.25 and `"mid"` in between. A contour that stays
+#' level and then moves in a straight line is late once the level part lasts
+#' more than a third of it. One that dips slightly before it rises is late
+#' too, so check `dip`.
+#'
+#' Both are `NA` for a movement of less than half a Chao unit, too small to
+#' time, and for a tone with a sampled turning point, which is not a simple
+#' rise or fall. They describe the contour on normalised time, so they give
+#' proportional, not absolute, timing, and tokens that differ in timing
+#' average towards `"mid"`.
 #'
 #' @param contour_data Per-tone contour data, typically from
 #'   [compute_mean_contour()], [predict_gca()], or [predict_gamm()].
@@ -373,6 +400,12 @@ chao_to_letters <- function(x) {
 #'   dip (peak). The larger of the two is sampled as a turning point when
 #'   it exceeds `threshold`; it adds a middle digit where that digit shows
 #'   the turn (see Details).
+#' * `move`: the change from onset to offset, in Chao units on the
+#'   reference-line scale (positive for a rise, negative for a fall).
+#' * `progress`, `timing`: the share of `move` done at 50% of the contour,
+#'   and its name, `"early"` (above 0.75), `"mid"` or `"late"` (below
+#'   0.25). `NA` for a movement under half a unit or a sampled turning
+#'   point (see Details).
 #' * `sample_times`, `ref_continuous`, `int_continuous`: list columns of
 #'   the per-sample numeric values underlying the digit strings, useful
 #'   for plotting or further analysis. When a turning point is sampled
@@ -502,17 +535,29 @@ contour_to_chao <- function(contour_data,
     sample_times <- if (turn <= threshold) c(0, 1)
                     else if (use_dip) c(0, fine_time[interior_min_idx], 1)
                     else c(0, fine_time[interior_max_idx], 1)
+
+    # Timing of a rise or fall: the share of the onset-to-offset movement
+    # done at the middle of the contour (0.5 for an even movement). Not for
+    # a movement under half a unit, too small to time, or a sampled turn.
+    move     <- offset_ref - onset_ref
+    progress <- if (abs(move) >= 0.5 && length(sample_times) == 2)
+                  (interp_ref(0.5) - onset_ref) / move else NA_real_
+    timing   <- if (is.na(progress)) NA_character_
+                else if (progress > 0.75) "early"
+                else if (progress < 0.25) "late"
+                else "mid"
     ref_vals <- interp_ref(sample_times)
     int_vals <- interp_int(sample_times)
     ref_dig  <- pmax(1L, pmin(5L, round(ref_vals)))
     int_dig  <- pmax(1L, pmin(5L, ceiling(int_vals)))
 
-    # Each scale keeps the middle digit only where it shows the turn: lower
-    # than both endpoint digits for a dip, higher than both for a peak.
-    # Otherwise the turn is too shallow to show at five levels, and a third
-    # digit would misread (223 as a late rise, 222 as nothing at all).
+    # Each scale keeps the middle digit only if it differs from both endpoint
+    # digits; one that repeats an endpoint digit merges into it (223 -> 23,
+    # 222 -> 22). The turn lies beyond both endpoints, so its digit can only
+    # match an endpoint digit or go past it: "differs" means "lower than both"
+    # for a dip and "higher than both" for a peak.
     if (length(sample_times) == 3) {
-      shows <- function(d) if (use_dip) d[2] < min(d[-2]) else d[2] > max(d[-2])
+      shows <- function(d) d[2] != d[1] && d[2] != d[3]
       if (!shows(ref_dig)) ref_dig <- ref_dig[-2]
       if (!shows(int_dig)) int_dig <- int_dig[-2]
     }
@@ -528,6 +573,9 @@ contour_to_chao <- function(contour_data,
       shape    = classify_contour(refline_str),
       dip      = dip,
       peak     = peak,
+      move     = move,
+      progress = progress,
+      timing   = timing,
       stringsAsFactors = FALSE
     )
     # List columns with the per-sample numeric values (for downstream plots).
