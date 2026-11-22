@@ -8,6 +8,16 @@ no upload limits, recordings stay on your machine.
 - [`run_app()`](https://chenchenzi.github.io/citationtone_hub/reference/run_app.md)
   : Launch the Shinytone app locally
 
+## Read data
+
+Read a CSV in any Unicode encoding, including the UTF-16 files Praat
+saves for non-ASCII text, and read 0 Hz f0 values as missing.
+
+- [`read_csv_utf8()`](https://chenchenzi.github.io/citationtone_hub/reference/read_csv_utf8.md)
+  : Read a CSV in any Unicode encoding
+- [`zero_hz_to_na()`](https://chenchenzi.github.io/citationtone_hub/reference/zero_hz_to_na.md)
+  : Read 0 Hz f0 values as missing
+
 ## Normalisation
 
 By-speaker semitone, z-score or log z-score (LZ) f0 normalisation, plus
@@ -31,6 +41,8 @@ Read interval tiers from Praat TextGrids and attach per-frame segment
 labels and boundaries (e.g. syllables) to long-format f0 data, and keep
 only the frames inside chosen intervals (vowel, rhyme, or named labels).
 
+- [`read_textgrid()`](https://chenchenzi.github.io/citationtone_hub/reference/read_textgrid.md)
+  : Read a Praat TextGrid in any text encoding
 - [`tg_interval_tiers()`](https://chenchenzi.github.io/citationtone_hub/reference/tg_interval_tiers.md)
   : Interval-tier names across a set of TextGrids
 - [`tg_tier_names()`](https://chenchenzi.github.io/citationtone_hub/reference/tg_tier_names.md)
@@ -39,6 +51,8 @@ only the frames inside chosen intervals (vowel, rhyme, or named labels).
   : Assign each time to its interval in a TextGrid interval tier
 - [`attach_landmarks()`](https://chenchenzi.github.io/citationtone_hub/reference/attach_landmarks.md)
   : Attach TextGrid landmark columns to a long-format f0 data frame
+- [`landmark_prefixes()`](https://chenchenzi.github.io/citationtone_hub/reference/landmark_prefixes.md)
+  : Column names for TextGrid landmark tiers
 - [`filter_interval_rows()`](https://chenchenzi.github.io/citationtone_hub/reference/filter_interval_rows.md)
   : Keep only f0 frames that fall inside chosen TextGrid intervals
 - [`ipa_vowel_label()`](https://chenchenzi.github.io/citationtone_hub/reference/ipa_vowel_label.md)
@@ -108,10 +122,13 @@ not only seen.
 ## Curate tone labels
 
 Re-label tone-category variants or exclude tokens, without overwriting
-the original labels.
+the original labels, and sort tone labels for display, with Chinese tone
+names in their traditional order.
 
 - [`apply_relabels()`](https://chenchenzi.github.io/citationtone_hub/reference/apply_relabels.md)
   : Apply tone re-labels and exclusions to a long-format f0 table
+- [`sort_tones()`](https://chenchenzi.github.io/citationtone_hub/reference/sort_tones.md)
+  : Sort tone labels for display
 
 ## Contour modelling
 

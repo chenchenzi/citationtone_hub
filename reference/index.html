@@ -55,6 +55,29 @@
         </dt>
         <dd>Launch the Shinytone app locally</dd>
       </dl></div><div class="section level2">
+      <h2 id="read-data">Read data<a class="anchor" aria-label="anchor" href="#read-data"></a></h2>
+
+      <div class="section-desc"><p>Read a CSV in any Unicode encoding, including the UTF-16 files Praat saves for non-ASCII text, and read 0 Hz f0 values as missing.</p></div>
+
+      <dl></dl></div><div class="section level2">
+
+
+
+
+      <dl><dt>
+
+          <code><a href="read_csv_utf8.html">read_csv_utf8()</a></code>
+
+        </dt>
+        <dd>Read a CSV in any Unicode encoding</dd>
+
+        <dt>
+
+          <code><a href="zero_hz_to_na.html">zero_hz_to_na()</a></code>
+
+        </dt>
+        <dd>Read 0 Hz f0 values as missing</dd>
+      </dl></div><div class="section level2">
       <h2 id="normalisation">Normalisation<a class="anchor" aria-label="anchor" href="#normalisation"></a></h2>
 
       <div class="section-desc"><p>By-speaker semitone, z-score or log z-score (LZ) f0 normalisation, plus landmark-based time normalisation for multisyllabic words and auto-detection of time columns that are already on a [0, 1] scale.</p></div>
@@ -110,6 +133,13 @@
 
       <dl><dt>
 
+          <code><a href="read_textgrid.html">read_textgrid()</a></code>
+
+        </dt>
+        <dd>Read a Praat TextGrid in any text encoding</dd>
+
+        <dt>
+
           <code><a href="tg_interval_tiers.html">tg_interval_tiers()</a></code>
 
         </dt>
@@ -135,6 +165,13 @@
 
         </dt>
         <dd>Attach TextGrid landmark columns to a long-format f0 data frame</dd>
+
+        <dt>
+
+          <code><a href="landmark_prefixes.html">landmark_prefixes()</a></code>
+
+        </dt>
+        <dd>Column names for TextGrid landmark tiers</dd>
 
         <dt>
 
@@ -293,7 +330,7 @@
       </dl></div><div class="section level2">
       <h2 id="curate-tone-labels">Curate tone labels<a class="anchor" aria-label="anchor" href="#curate-tone-labels"></a></h2>
 
-      <div class="section-desc"><p>Re-label tone-category variants or exclude tokens, without overwriting the original labels.</p></div>
+      <div class="section-desc"><p>Re-label tone-category variants or exclude tokens, without overwriting the original labels, and sort tone labels for display, with Chinese tone names in their traditional order.</p></div>
 
       <dl></dl></div><div class="section level2">
 
@@ -306,6 +343,13 @@
 
         </dt>
         <dd>Apply tone re-labels and exclusions to a long-format f0 table</dd>
+
+        <dt>
+
+          <code><a href="sort_tones.html">sort_tones()</a></code>
+
+        </dt>
+        <dd>Sort tone labels for display</dd>
       </dl></div><div class="section level2">
       <h2 id="contour-modelling">Contour modelling<a class="anchor" aria-label="anchor" href="#contour-modelling"></a></h2>
 

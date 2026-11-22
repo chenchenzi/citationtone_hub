@@ -107,7 +107,10 @@ directly.</p>
 <dt id="arg-f-time-token-tone-speaker-item">f0, time, token, tone, speaker, item<a class="anchor" aria-label="anchor" href="#arg-f-time-token-tone-speaker-item"></a></dt>
 <dd><p>Column names for f0, time
 within token, token ID, tone category, speaker ID, and item or
-word.</p></dd>
+word. Tone levels follow a factor's own levels, or else
+<code><a href="sort_tones.html">sort_tones()</a></code> with <code>natural = FALSE</code>, which puts traditional Chinese
+tone names in their traditional order; the first level is the
+reference.</p></dd>
 
 
 <dt id="arg-degree">degree<a class="anchor" aria-label="anchor" href="#arg-degree"></a></dt>

@@ -45,7 +45,10 @@ fit_gamm(
 
 - f0, time, token, tone, speaker, item:
 
-  Column names.
+  Column names. Tone levels follow a factor's own levels, or else
+  [`sort_tones()`](https://chenchenzi.github.io/citationtone_hub/reference/sort_tones.md)
+  with `natural = FALSE`, which puts traditional Chinese tone names in
+  their traditional order; the first level is the reference.
 
 - duration:
 

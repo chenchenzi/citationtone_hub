@@ -172,9 +172,13 @@ not affect them.
 ### NA handling
 
 All summary statistics use `na.rm = TRUE`. Sample-level `NA` f0 values
-propagate as `NA` in the normalised column. For `"lz"`, f0 values of 0
-or below (sometimes used to mark unvoiced frames) have no logarithm, so
-they are treated as `NA` too.
+propagate as `NA` in the normalised column. f0 values of 0 or below are
+treated as `NA` too, for every method: pitch trackers write 0 Hz for
+unvoiced frames, and 0 is not a pitch. They are left out of the speaker
+mean and SD, and give `NA` in the normalised column (not `-Inf`
+semitones). The `f0` column itself is returned unchanged; use
+[`zero_hz_to_na()`](https://chenchenzi.github.io/citationtone_hub/reference/zero_hz_to_na.md)
+to clean it.
 
 ## References
 

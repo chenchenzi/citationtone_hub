@@ -92,7 +92,11 @@ Internally:
     and
     [`predict_gamm()`](https://chenchenzi.github.io/citationtone_hub/reference/predict_gamm.md)
     so the same downstream tools can consume either model predictions or
-    raw mean contours).
+    raw mean contours). Tones are in the order of the levels of a factor
+    `tone` column. Otherwise traditional Chinese tone names come first,
+    in their traditional order (see
+    [`sort_tones()`](https://chenchenzi.github.io/citationtone_hub/reference/sort_tones.md)),
+    and other labels follow in alphabetical (C-locale) order.
 
 ## References
 

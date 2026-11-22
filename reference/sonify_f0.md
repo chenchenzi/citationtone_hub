@@ -27,8 +27,9 @@ sonify_f0(
 
 - f0_hz:
 
-  Numeric vector of f0 values in Hz (the contour to play). Leading and
-  trailing `NA`s are trimmed; internal `NA`s are interpolated.
+  Numeric vector of f0 values in Hz (the contour to play). Values of 0
+  or below count as unvoiced, like `NA`. Leading and trailing `NA`s are
+  trimmed; internal `NA`s are interpolated.
 
 - fs:
 

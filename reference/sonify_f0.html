@@ -72,8 +72,9 @@ mean tone contour (e.g. a cluster prototype) rather than only seeing it.</p>
 
 
 <dl><dt id="arg-f-hz">f0_hz<a class="anchor" aria-label="anchor" href="#arg-f-hz"></a></dt>
-<dd><p>Numeric vector of f0 values in Hz (the contour to play). Leading
-and trailing <code>NA</code>s are trimmed; internal <code>NA</code>s are interpolated.</p></dd>
+<dd><p>Numeric vector of f0 values in Hz (the contour to play). Values
+of 0 or below count as unvoiced, like <code>NA</code>. Leading and trailing
+<code>NA</code>s are trimmed; internal <code>NA</code>s are interpolated.</p></dd>
 
 
 <dt id="arg-fs">fs<a class="anchor" aria-label="anchor" href="#arg-fs"></a></dt>

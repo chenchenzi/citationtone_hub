@@ -160,9 +160,11 @@ contours.</p></li>
 <h3 id="edge-cases">Edge cases<a class="anchor" aria-label="anchor" href="#edge-cases"></a></h3>
 
 
-<p>Tokens with fewer than <code>degree + 1</code> valid samples receive <code>NA</code> for
-all coefficients. Tokens with a single unique time point keep <code>c0</code>
-as the mean f0 and set the higher-order coefficients to <code>NA</code>.</p>
+<p>Samples with a missing or infinite f0 or time are skipped (<code>-Inf</code> comes
+from taking the log of 0 Hz). Tokens with fewer than <code>degree + 1</code> valid
+samples receive <code>NA</code> for all coefficients. Tokens with a single unique
+time point keep <code>c0</code> as the mean of their finite f0 values and set the
+higher-order coefficients to <code>NA</code>.</p>
 </div>
 
     </div>

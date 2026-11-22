@@ -129,7 +129,10 @@ tone.</p></li>
 <code>f0_predicted</code> (the column name <code>f0_predicted</code> matches the
 convention used by <code><a href="predict_gca.html">predict_gca()</a></code> and <code><a href="predict_gamm.html">predict_gamm()</a></code> so the
 same downstream tools can consume either model predictions or
-raw mean contours).</p></li>
+raw mean contours). Tones are in the order of the levels of a factor
+<code>tone</code> column. Otherwise traditional Chinese tone names come first, in
+their traditional order (see <code><a href="sort_tones.html">sort_tones()</a></code>), and other labels follow
+in alphabetical (C-locale) order.</p></li>
 </ol></div>
     <div class="section level2">
     <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a></h2>

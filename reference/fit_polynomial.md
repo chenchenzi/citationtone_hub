@@ -110,9 +110,11 @@ coefficients have a tidy shape interpretation:
 
 ### Edge cases
 
-Tokens with fewer than `degree + 1` valid samples receive `NA` for all
-coefficients. Tokens with a single unique time point keep `c0` as the
-mean f0 and set the higher-order coefficients to `NA`.
+Samples with a missing or infinite f0 or time are skipped (`-Inf` comes
+from taking the log of 0 Hz). Tokens with fewer than `degree + 1` valid
+samples receive `NA` for all coefficients. Tokens with a single unique
+time point keep `c0` as the mean of their finite f0 values and set the
+higher-order coefficients to `NA`.
 
 ## References
 

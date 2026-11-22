@@ -33,20 +33,25 @@
 <url><loc>https://chenchenzi.github.io/citationtone_hub/reference/index.html</loc></url>
 <url><loc>https://chenchenzi.github.io/citationtone_hub/reference/inspect_f0.html</loc></url>
 <url><loc>https://chenchenzi.github.io/citationtone_hub/reference/ipa_vowel_label.html</loc></url>
+<url><loc>https://chenchenzi.github.io/citationtone_hub/reference/landmark_prefixes.html</loc></url>
 <url><loc>https://chenchenzi.github.io/citationtone_hub/reference/normalise_f0.html</loc></url>
 <url><loc>https://chenchenzi.github.io/citationtone_hub/reference/normalise_time_landmarks.html</loc></url>
 <url><loc>https://chenchenzi.github.io/citationtone_hub/reference/normalise_time_token.html</loc></url>
 <url><loc>https://chenchenzi.github.io/citationtone_hub/reference/predict_gamm.html</loc></url>
 <url><loc>https://chenchenzi.github.io/citationtone_hub/reference/predict_gca.html</loc></url>
+<url><loc>https://chenchenzi.github.io/citationtone_hub/reference/read_csv_utf8.html</loc></url>
+<url><loc>https://chenchenzi.github.io/citationtone_hub/reference/read_textgrid.html</loc></url>
 <url><loc>https://chenchenzi.github.io/citationtone_hub/reference/resample_f0_equal.html</loc></url>
 <url><loc>https://chenchenzi.github.io/citationtone_hub/reference/resolve_time_norm.html</loc></url>
 <url><loc>https://chenchenzi.github.io/citationtone_hub/reference/run_app.html</loc></url>
 <url><loc>https://chenchenzi.github.io/citationtone_hub/reference/sample_f0.html</loc></url>
 <url><loc>https://chenchenzi.github.io/citationtone_hub/reference/shinytone-package.html</loc></url>
 <url><loc>https://chenchenzi.github.io/citationtone_hub/reference/sonify_f0.html</loc></url>
+<url><loc>https://chenchenzi.github.io/citationtone_hub/reference/sort_tones.html</loc></url>
 <url><loc>https://chenchenzi.github.io/citationtone_hub/reference/tg_interval_tiers.html</loc></url>
 <url><loc>https://chenchenzi.github.io/citationtone_hub/reference/tg_tier_names.html</loc></url>
 <url><loc>https://chenchenzi.github.io/citationtone_hub/reference/time_already_normalised.html</loc></url>
 <url><loc>https://chenchenzi.github.io/citationtone_hub/reference/trim_to_voiced.html</loc></url>
+<url><loc>https://chenchenzi.github.io/citationtone_hub/reference/zero_hz_to_na.html</loc></url>
 </urlset>
 

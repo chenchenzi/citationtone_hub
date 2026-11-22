@@ -44,7 +44,11 @@ fit_gca(
 - f0, time, token, tone, speaker, item:
 
   Column names for f0, time within token, token ID, tone category,
-  speaker ID, and item or word.
+  speaker ID, and item or word. Tone levels follow a factor's own
+  levels, or else
+  [`sort_tones()`](https://chenchenzi.github.io/citationtone_hub/reference/sort_tones.md)
+  with `natural = FALSE`, which puts traditional Chinese tone names in
+  their traditional order; the first level is the reference.
 
 - degree:
 

@@ -25,3 +25,17 @@ tg_interval_tiers(tg_paths, max_read = 12)
 ## Value
 
 Sorted character vector of unique interval-tier names (possibly empty).
+When some of the files read could not be parsed, attribute
+`"unreadable"` gives the reason for each, named by path (see
+[`read_textgrid()`](https://chenchenzi.github.io/citationtone_hub/reference/read_textgrid.md)).
+When some were read in a guessed 8-bit code page, attribute `"guessed"`
+names that code page for the user (such as "Western European
+(Windows-1252)"), named by path. When some were read as UTF-8 with bytes
+that are not UTF-8 replaced, attribute `"stray"` gives those lines (such
+as "line 12"), named by path.
+
+## Details
+
+Files are read with
+[`read_textgrid()`](https://chenchenzi.github.io/citationtone_hub/reference/read_textgrid.md),
+so UTF-16 TextGrids work too.
