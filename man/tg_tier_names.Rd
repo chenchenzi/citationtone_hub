@@ -17,6 +17,7 @@ the order first seen.
 Scans each file's text for tier headers instead of parsing it with
 \code{rPraat::tg.read()}, which takes tens of milliseconds per file, so it is fast
 enough to run over every TextGrid in a corpus. Reads Praat's long and short
-text formats, in UTF-8 or UTF-16 (with a byte-order mark). Files that cannot
-be read, or are in Praat's binary format, contribute no names.
+text formats in the same encodings as \code{\link[=read_textgrid]{read_textgrid()}}, UTF-16 included.
+Files that cannot be read, or are in Praat's binary format, contribute no
+names.
 }

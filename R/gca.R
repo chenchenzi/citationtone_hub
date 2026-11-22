@@ -76,7 +76,10 @@
 #' @param data A long-format data frame with one row per f0 sample.
 #' @param f0,time,token,tone,speaker,item Column names for f0, time
 #'   within token, token ID, tone category, speaker ID, and item or
-#'   word.
+#'   word. Tone levels follow a factor's own levels, or else
+#'   [sort_tones()] with `natural = FALSE`, which puts traditional Chinese
+#'   tone names in their traditional order; the first level is the
+#'   reference.
 #' @param degree Polynomial degree, one of `1`, `2`, or `3`. Default
 #'   `2`.
 #' @param random_intercept_speaker,random_intercept_item Logical;
@@ -189,7 +192,7 @@ fit_gca <- function(data,
   # Internal short names for formula building. Original columns are retained
   # so users can still locate them after the fit.
   dat$.f0      <- dat[[f0]]
-  dat$.tone    <- as.factor(dat[[tone]])
+  dat$.tone    <- tone_factor(dat[[tone]])   # Chinese tone names in order
   dat$.speaker <- as.factor(dat[[speaker]])
   dat$.item    <- as.factor(dat[[item]])
 

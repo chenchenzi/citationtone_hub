@@ -48,3 +48,9 @@ test_that("vowel source (source-filter) produces a finite Wave for a/i/u", {
     expect_true(max(abs(w@left)) > 0)
   }
 })
+
+test_that("0 Hz counts as unvoiced, like NA", {
+  expect_equal(sonify_f0(c(0, 200, 0, 220, 210, 0), dur = 0.3),
+               sonify_f0(c(NA, 200, NA, 220, 210, NA), dur = 0.3))
+  expect_error(sonify_f0(c(0, 200, 0)), "at least 2 finite")
+})

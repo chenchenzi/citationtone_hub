@@ -4,7 +4,13 @@
 \alias{attach_landmarks}
 \title{Attach TextGrid landmark columns to a long-format f0 data frame}
 \usage{
-attach_landmarks(df, audio, tier_names, strip_ext = TRUE)
+attach_landmarks(
+  df,
+  audio,
+  tier_names,
+  strip_ext = TRUE,
+  all_tiers = tier_names
+)
 }
 \arguments{
 \item{df}{Long-format f0 data frame with \code{token} and \code{time} columns.}
@@ -14,15 +20,41 @@ attach_landmarks(df, audio, tier_names, strip_ext = TRUE)
 \item{tier_names}{Character vector of interval-tier names to attach.}
 
 \item{strip_ext}{Strip file extensions when matching \code{token} to \code{basename}.}
+
+\item{all_tiers}{Every tier name the columns could come from, such as all
+interval tiers of the corpus from \code{\link[=tg_interval_tiers]{tg_interval_tiers()}}; passed to
+\code{\link[=landmark_prefixes]{landmark_prefixes()}}. Give the same set in every call, so a tier always
+gets the same columns.}
 }
 \value{
 \code{df} with the landmark columns appended. Returned unchanged when there
-are no tiers, no token/time columns, or no matching TextGrids.
+are no tiers, no \code{token}/\code{time} columns, or no \code{basename}/\code{tg_path}
+columns in \code{audio}. A token with no matching TextGrid gets \code{NA} in these
+columns, so when no TextGrid matches at all, the columns are added and
+are all \code{NA}. These attributes are present only when there is something
+to report:
+\itemize{
+\item \code{"tg_unreadable"}: a token whose TextGrid could not be read keeps \code{NA}
+landmarks; this gives the reason for each such token, named by token.
+\item \code{"tg_guessed"}: for each TextGrid read in a guessed 8-bit code page
+(see \code{\link[=read_textgrid]{read_textgrid()}}), that code page named for the user (such as
+"Western European (Windows-1252)"), named by token.
+\item \code{"tg_stray"}: for each TextGrid read as UTF-8 with bytes that are not
+UTF-8 shown as U+FFFD (see \code{\link[=read_textgrid]{read_textgrid()}}), the lines that held
+them (such as "line 12"), named by token.
+\item \code{"renamed_tiers"}: the prefix of each tier that got \verb{_2}, \verb{_3} and so
+on, or \code{"tier"} for a name with no letters or digits, named by tier.
+Lowercasing and \verb{_} for other characters are not reported, so
+\code{"Syllable"} giving \code{syllable} is not listed.
+\item \code{"missing_tiers"}: the tiers that none of the TextGrids read has as an
+interval tier. Their columns are all \code{NA}, and a warning says so.
+}
 }
 \description{
 For each selected interval tier and each token, reads the token's TextGrid
-and tags every f0 frame with the interval it falls in. Adds four columns per
-tier, named from a sanitised tier name \code{p}: \code{p} (interval label), \code{p_start},
-\code{p_end} (interval boundaries, seconds), and \code{p_i} (1-based segment index
-among labelled intervals — e.g. syllable 1, 2, 3 ...).
+(with \code{\link[=read_textgrid]{read_textgrid()}}) and tags every f0 frame with the interval it falls
+in. Adds four columns per tier, named from the tier's prefix \code{p} (see
+\code{\link[=landmark_prefixes]{landmark_prefixes()}}): \code{p} (interval label), \code{p_start}, \code{p_end} (interval
+boundaries, seconds), and \code{p_i} (1-based segment index among labelled
+intervals, e.g. syllable 1, 2, 3 ...).
 }

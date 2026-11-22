@@ -969,15 +969,24 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
     seq_axis <- identical(attr(pdat, "time_axis"), "sequential")
     n_seg    <- if (seq_axis) as.integer(attr(pdat, "n_segments")) else 1L
     tier     <- sub("_tseq$", "", time_var)
+    # Chinese labels need a CJK font (global.R). thematic sets the family of
+    # text layers in renderPlot, so the segment names get it explicitly.
+    seg_family <- label_family(pdat$tone, tone_var, tier, time_var, f0_var)
 
+    # Tones in the fit's level order (predict_gamm() lists them so), which puts
+    # Chinese tone names in their traditional order; ggplot2 would sort the
+    # labels by code point.
+    pdat$tone <- factor(pdat$tone, levels = unique(as.character(pdat$tone)))
     p <- ggplot(pdat, aes(x = time, y = f0_predicted, colour = tone, fill = tone))
     if (seq_axis) {
       if (n_seg > 1) {
         p <- p + geom_vline(xintercept = seq_len(n_seg - 1), linetype = "dashed",
                             colour = "grey55", linewidth = 0.6)
       }
-      p <- p + annotate("text", x = seq_len(n_seg) - 0.5, y = Inf, vjust = 1.6,
-                        label = paste(tier, seq_len(n_seg)), colour = "grey35", size = 4.2)
+      p <- p + do.call(annotate, c(list("text", x = seq_len(n_seg) - 0.5, y = Inf, vjust = 1.6,
+                                        label = paste(tier, seq_len(n_seg)), colour = "grey35",
+                                        size = 4.2),
+                                   if (nzchar(seg_family)) list(family = seg_family)))
     }
     p <- p +
       geom_ribbon(aes(ymin = f0_predicted - 1.96 * se,
@@ -996,7 +1005,12 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
     if (seq_axis) {
       p <- p + scale_x_continuous(limits = c(0, n_seg), breaks = seq(0, n_seg, by = 0.5))
     }
-    p + theme_bw(base_size = 14) + theme(legend.position = "bottom")
+    # No complete theme here: the app default, theme_bw(base_size = 16) from
+    # server.R, applies through thematic, as on the Visualise tab. With a
+    # theme_bw() of its own, thematic shrank the tick labels to about 7 pt
+    # (rel() sizes compounded) and dropped the app font.
+    q <- p + theme(legend.position = "bottom")
+    q + cjk_family_theme(q)
   }
 
   output$gamm_plot <- renderPlot({
@@ -1156,20 +1170,21 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
       'library(dplyr)\n',
       'library(mgcv)\n',
       'library(ggplot2)\n\n',
-      '# Read your data (adjust path to where the file is on your machine)\n',
-      'dat <- read.csv("', ds_name, '", stringsAsFactors = FALSE)\n\n',
+      paste(read_data_code(ds_name), collapse = "\n"), '\n\n',
       norm_block,
       '# Ensure factor variables\n',
       'dat$', speaker_var, ' <- as.factor(dat$', speaker_var, ')\n',
       'dat$', item_var, ' <- as.factor(dat$', item_var, ')\n'
     )
 
+    tone_now <- if (!is.null(df_now)) df_now[[tone_var]]
     if (smooth_type == "separate") {
       code_text <- paste0(code_text,
-        'dat$', tone_var, ' <- as.factor(dat$', tone_var, ')\n')
+        tone_factor_code(tone_var, tone_now), '\n')
     } else {
       code_text <- paste0(code_text,
-        'dat$', tone_var, '.ord <- as.ordered(dat$', tone_var, ')\n',
+        tone_factor_code(tone_var, tone_now, ordered = TRUE,
+                         to = paste0(tone_var, '.ord')), '\n',
         'contrasts(dat$', tone_var, '.ord) <- "contr.treatment"\n')
     }
     if (rs_type == "speaker_tone") {

@@ -64,7 +64,9 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         "boundaries from. Each adds ", tags$code("<tier>"), ", ", tags$code("<tier>_start"),
         ", ", tags$code("<tier>_end"), ", ", tags$code("<tier>_i"),
         " columns (the segment label, its start and end in seconds, and its index) to every ",
-        "f0 frame, so the Visualise tab can align contours by these landmarks."),
+        "f0 frame, so the Visualise tab can align contours by these landmarks. ",
+        "Column names keep the tier name's letters and digits in any script; other characters ",
+        "become ", tags$code("_"), ", and a name already in use gets ", tags$code("_2"), "."),
       uiOutput("fp_landmark_picker"),
       tags$hr(),
       # ---- Metadata (optional) ----
@@ -244,22 +246,34 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   }, ignoreNULL = TRUE)
 
   # ---- Read uploaded CSV reactively (only when CSV source is active) ----
-  uploaded_csv <- reactive({
+  # A read error is kept as the condition, so the upload toast can show it.
+  uploaded_csv_read <- reactive({
     req(input$fp_meta_source == "csv", input$fp_meta_file)
     tryCatch(
-      utils::read.csv(input$fp_meta_file$datapath,
-                      stringsAsFactors = FALSE, check.names = FALSE),
-      error = function(e) NULL
+      read_csv_utf8(input$fp_meta_file$datapath,
+                    stringsAsFactors = FALSE, check.names = FALSE,
+                    name = input$fp_meta_file$name),
+      error = function(e) e
     )
+  })
+  uploaded_csv <- reactive({
+    df <- uploaded_csv_read()
+    if (inherits(df, "error")) NULL else df
   })
   observeEvent(input$fp_meta_file, {
     req(input$fp_meta_source == "csv", input$fp_meta_file)
-    df <- uploaded_csv()
-    if (is.null(df) || ncol(df) == 0) {
+    df <- uploaded_csv_read()
+    if (inherits(df, "error")) {
+      showNotification(conditionMessage(df), type = "error", duration = 10)
+      return()
+    }
+    if (ncol(df) == 0) {
       showNotification("Could not read metadata CSV.",
                        type = "error", duration = 5)
       return()
     }
+    note <- attr(df, "encoding_note")
+    if (!is.null(note)) showNotification(note, type = "warning", duration = 10)
     showNotification(sprintf("Metadata loaded: %d row(s), %d column(s).",
                              nrow(df), ncol(df)),
                      type = "message", duration = 3)
@@ -457,7 +471,9 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
             "Pick one or more <em>interval</em> tiers (<code>syllable</code>, <code>phoneme</code>, ",
             "<code>vowel</code>, <code>rhyme</code>); each adds <code>&lt;tier&gt;</code>, ",
             "<code>&lt;tier&gt;_start</code>, <code>&lt;tier&gt;_end</code> and <code>&lt;tier&gt;_i</code> ",
-            "columns. The <strong>Visualise</strong> tab can then align contours by them, syllable by ",
+            "columns. Column names keep the tier name's letters and digits in any script; other characters ",
+            "become <code>_</code>, and a name already in use gets <code>_2</code>. ",
+            "The <strong>Visualise</strong> tab can then align contours by them, syllable by ",
             "syllable for multi-syllable words.")))
         ),
 
@@ -700,8 +716,10 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       if (!is.null(parsed)) {
         return(list(
           # intensity = NA keeps columns identical to the .Pitch branch, so a
-          # run mixing .Pitch and .PitchTier files rbinds cleanly.
-          df = data.frame(token = basename, time = parsed$t, f0 = parsed$f,
+          # run mixing .Pitch and .PitchTier files rbinds cleanly. f0 <= 0 is
+          # unvoiced, as in the other branches.
+          df = data.frame(token = basename, time = parsed$t,
+                          f0 = replace(parsed$f, !(parsed$f > 0), NA_real_),
                           intensity = NA_real_, stringsAsFactors = FALSE),
           candidates = NULL
         ))
@@ -732,34 +750,122 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     tg_interval_tiers(audio$tg_path)
   })
 
+  # A TextGrid named by token or by path (a path is shown as its file name).
+  tg_shown_name <- function(nm) {
+    audio <- fp_audio_data()
+    i <- if (is.null(audio)) NA else match(nm, audio$tg_path)
+    if (!is.na(i)) paste0(audio$basename[i], ".TextGrid") else nm
+  }
+  # "name: reason" for the first of the TextGrids that could not be read, from
+  # a reason vector named by token or by path.
+  tg_unreadable_first <- function(bad) sprintf("%s: %s", tg_shown_name(names(bad)[1]), bad[[1]])
+  tg_unreadable_text <- function(bad) {
+    if (length(bad) == 0) return(NULL)
+    sprintf("%d TextGrid(s) could not be read (%s).", length(bad), tg_unreadable_first(bad))
+  }
+  # TextGrids read in a guessed 8-bit code page, from the code pages' names
+  # by token or by path (attr "tg_guessed" or "guessed").
+  tg_guessed_text <- function(guessed) {
+    if (length(guessed) == 0) return(NULL)
+    first <- tg_shown_name(names(guessed)[1])
+    if (!grepl("\\.TextGrid$", first, ignore.case = TRUE)) first <- paste0(first, ".TextGrid")
+    read_as <- paste(unique(guessed), collapse = " or ")
+    if (length(guessed) == 1) {
+      sprintf(paste("'%s' is not saved as UTF-8 or UTF-16, so it was read as %s.",
+                    "If a label looks wrong, save it as UTF-8 and upload it again."), first, read_as)
+    } else {
+      sprintf(paste("%d TextGrids, such as '%s', are not saved as UTF-8 or UTF-16, so they were",
+                    "read as %s. If a label looks wrong, save them as UTF-8 and upload them again."),
+              length(guessed), first, read_as)
+    }
+  }
+  # TextGrids read as UTF-8 with a few bytes that are not, from the lines
+  # that held them by token or by path (attr "tg_stray" or "stray").
+  tg_stray_text <- function(stray) {
+    if (length(stray) == 0) return(NULL)
+    first <- tg_shown_name(names(stray)[1])
+    if (!grepl("\\.TextGrid$", first, ignore.case = TRUE)) first <- paste0(first, ".TextGrid")
+    if (length(stray) == 1) {
+      sprintf("'%s' is UTF-8 except on %s, where some text is not valid UTF-8 and is shown as \ufffd.",
+              first, stray[[1]])
+    } else {
+      sprintf("%d TextGrids, such as '%s' (%s), have some text that is not valid UTF-8, shown as \ufffd.",
+              length(stray), first, stray[[1]])
+    }
+  }
+
+  # What attach_landmarks() reported, from the attributes it sets, as
+  # sentences for the user named by kind: "renamed", "missing", "unreadable",
+  # "guessed" and "stray". Empty when there is nothing to say. Used when
+  # extraction attaches the tiers and when a download adds them.
+  landmark_attrs <- c("tg_unreadable", "tg_guessed", "tg_stray", "renamed_tiers", "missing_tiers")
+  landmark_report <- function(out) {
+    renamed <- attr(out, "renamed_tiers")
+    missing <- attr(out, "missing_tiers")
+    unlist(list(
+      renamed = if (length(renamed))
+        sprintf("Landmark column names: %s.",
+                paste(names(renamed), renamed, sep = " -> ", collapse = ", ")),
+      missing = if (length(missing))
+        sprintf("No TextGrid has an interval tier named %s, so %s landmark columns are empty.",
+                paste(missing, collapse = ", "),
+                if (length(missing) > 1) "their" else "its"),
+      unreadable = tg_unreadable_text(attr(out, "tg_unreadable")),
+      guessed    = tg_guessed_text(attr(out, "tg_guessed")),
+      stray      = tg_stray_text(attr(out, "tg_stray"))))
+  }
+
+  # Why there are no tiers to pick: no TextGrids uploaded, none could be
+  # read, or none has an interval tier.
+  tg_no_tiers_text <- function(tiers, upload_hint) {
+    audio <- fp_audio_data()
+    if (is.null(audio) || !any(!is.na(audio$tg_path))) return(upload_hint)
+    bad <- attr(tiers, "unreadable")
+    if (length(bad)) tg_unreadable_text(bad) else "The uploaded TextGrids have no interval tier."
+  }
+
   output$fp_landmark_picker <- renderUI({
     tiers <- fp_tg_tiers()
     if (length(tiers) == 0) {
       return(tags$div(style = "color: #999; font-size: 0.78rem; font-style: italic;",
-        "Upload .TextGrid files in the Start tab to enable landmark columns."))
+        tg_no_tiers_text(tiers, "Upload .TextGrid files in the Start tab to enable landmark columns.")))
     }
-    selectizeInput("fp_landmark_tiers", NULL, choices = tiers, selected = character(0),
-                   multiple = TRUE,
-                   options = list(placeholder = "No landmarks (leave empty)"))
+    guessed <- c(tg_guessed_text(attr(tiers, "guessed")), tg_stray_text(attr(tiers, "stray")))
+    tagList(
+      selectizeInput("fp_landmark_tiers", NULL, choices = tiers, selected = character(0),
+                     multiple = TRUE,
+                     options = list(placeholder = "No landmarks (leave empty)")),
+      if (length(guessed))
+        tags$div(style = "color: #8a5a00; font-size: 0.78rem; margin-top: -6px;",
+                 paste(guessed, collapse = " ")))
   })
 
   # Attach the selected TextGrid landmark columns to a freshly-extracted frame.
+  # Column names come from landmark_prefixes() over every tier on offer, so a
+  # tier gets the same columns here, in the download and in the region.
   attach_landmarks_if_any <- function(d) {
     tiers <- input$fp_landmark_tiers
     if (is.null(tiers) || length(tiers) == 0 || is.null(d)) return(d)
-    out <- tryCatch(attach_landmarks(d, fp_audio_data(), tiers),
+    # A tier in no TextGrid is reported below, not as a console warning.
+    out <- tryCatch(suppressWarnings(attach_landmarks(d, fp_audio_data(), tiers,
+                                                      all_tiers = fp_tg_tiers())),
                     error = function(e) {
                       showNotification(paste("Could not attach landmarks:", conditionMessage(e)),
                                        type = "warning", duration = 6)
                       d
                     })
+    report <- landmark_report(out)
+    for (a in landmark_attrs) attr(out, a) <- NULL
     n_new <- length(setdiff(names(out), names(d)))
     if (n_new > 0) {
       n_tok <- length(unique(out$token[!is.na(out[[setdiff(names(out), names(d))[1]]])]))
+      warn  <- any(names(report) != "renamed")
       showNotification(
-        sprintf("Attached %d landmark column(s) from tier(s) %s. Matched a TextGrid for %d token(s).",
-                n_new, paste(tiers, collapse = ", "), n_tok),
-        type = "message", duration = 6)
+        paste(c(sprintf("Attached %d landmark column(s) from tier(s) %s. Matched a TextGrid for %d token(s).",
+                        n_new, paste(tiers, collapse = ", "), n_tok),
+                report), collapse = " "),
+        type = if (warn) "warning" else "message",
+        duration = if (warn) 12 else if (length(report)) 10 else 6)
     }
     out
   }
@@ -779,22 +885,32 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   # reached the download, and the Normalise tab then had no tier to offer.
   # Tiers already on the grid are skipped, so nothing is read twice, and this
   # is a reactive of its own so a region or sampling change does not re-read
-  # the TextGrids.
+  # the TextGrids. Returns list(cols, notes) or NULL: `notes` holds what
+  # attach_landmarks() reported (landmark_report()), so the export banner and
+  # F0 Correction's downloads can say it, as the notification at extraction
+  # does.
   fp_export_landmarks <- reactive({
     d     <- fp_f0_data()
     tiers <- input$fp_landmark_tiers
     if (is.null(d) || nrow(d) == 0 || length(tiers) == 0) return(NULL)
     # Same column prefix attach_landmarks() writes for a tier name.
-    prefix <- gsub("^_+|_+$", "", tolower(gsub("[^A-Za-z0-9]+", "_", tiers)))
-    tiers  <- tiers[!paste0(prefix, "_start") %in% names(d)]
+    prefix <- landmark_prefixes(tiers, all_tiers = fp_tg_tiers())
+    have   <- vapply(prefix, function(p)
+      all(paste0(p, c("", "_start", "_end", "_i")) %in% names(d)), logical(1))
+    tiers  <- tiers[!have]
     if (length(tiers) == 0) return(NULL)
     key <- d[, c("token", "time"), drop = FALSE]
-    res <- tryCatch(attach_landmarks(key, fp_audio_data(), tiers),
-                    error = function(e) NULL)
-    if (is.null(res)) return(NULL)
+    res <- tryCatch(suppressWarnings(attach_landmarks(key, fp_audio_data(), tiers,
+                                                      all_tiers = fp_tg_tiers())),
+                    error = function(e) e)
+    if (inherits(res, "error")) {
+      return(list(cols = NULL,
+                  notes = c(error = paste("Could not add the landmark columns:",
+                                          conditionMessage(res)))))
+    }
     new_cols <- setdiff(names(res), names(d))
-    if (length(new_cols) == 0) return(NULL)
-    res[, new_cols, drop = FALSE]
+    list(cols  = if (length(new_cols)) res[, new_cols, drop = FALSE],
+         notes = landmark_report(res))
   })
 
   # Interval-region controls, shown only when that region is chosen.
@@ -802,7 +918,7 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     tiers <- fp_tg_tiers()
     if (length(tiers) == 0) {
       return(tags$div(style = "color: #999; font-size: 0.78rem; font-style: italic; margin-bottom: 8px;",
-        "Upload .TextGrid files in the Start tab to measure across an interval."))
+        tg_no_tiers_text(tiers, "Upload .TextGrid files in the Start tab to measure across an interval.")))
     }
     tagList(
       selectInput("fp_region_tier", "Tier:", choices = tiers, selectize = FALSE),
@@ -825,6 +941,20 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
           "nasals count."))
     )
   })
+
+  # The region tier's landmarks for a token/time frame. Kept from the last
+  # call, so editing the labels or the mode does not re-read every TextGrid.
+  region_memo <- new.env(parent = emptyenv())
+  region_landmarks <- function(key, tier) {
+    sig <- list(key, tier, fp_audio_data()$tg_path, fp_tg_tiers())
+    if (!identical(region_memo$sig, sig)) {
+      region_memo$res <- tryCatch(suppressWarnings(attach_landmarks(key, fp_audio_data(), tier,
+                                                                    all_tiers = fp_tg_tiers())),
+                                  error = function(e) NULL)
+      region_memo$sig <- sig
+    }
+    region_memo$res
+  }
 
   # Apply the chosen region to the full grid. Returns list(data, note) where
   # `note` explains any token loss; NULL when the region cannot be built.
@@ -851,15 +981,16 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
 
     # Attach the tier to a minimal token/time frame, then graft its landmark
     # columns on, so a tier that was not ticked as a landmark still works.
+    # Rows are picked by the tier's own labels in `res`, and only columns d
+    # lacks are added, so no column already in d is overwritten.
     key <- d[, c("token", "time"), drop = FALSE]
-    res <- tryCatch(attach_landmarks(key, fp_audio_data(), tier),
-                    error = function(e) NULL)
+    res <- region_landmarks(key, tier)
     if (is.null(res)) return(NULL)
     new_cols <- setdiff(names(res), names(key))
     lab_col  <- new_cols[paste0(new_cols, "_start") %in% new_cols][1]
     if (is.na(lab_col)) return(NULL)
     d2 <- d
-    for (cl in new_cols) d2[[cl]] <- res[[cl]]
+    for (cl in setdiff(new_cols, names(d))) d2[[cl]] <- res[[cl]]
 
     labels <- NULL
     if (identical(mode, "labels")) {
@@ -869,16 +1000,27 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       labels <- labels[nzchar(labels)]
       if (length(labels) == 0) return(NULL)
     }
-    sub <- tryCatch(filter_interval_rows(d2, lab_col, mode = mode, labels = labels),
-                    error = function(e) NULL)
-    if (is.null(sub)) return(NULL)
+    res$.row <- seq_len(nrow(res))
+    kept <- tryCatch(filter_interval_rows(res, lab_col, mode = mode, labels = labels),
+                     error = function(e) NULL)
+    if (is.null(kept)) return(NULL)
+    sub <- d2[kept$.row, , drop = FALSE]
+    rownames(sub) <- NULL
 
-    no_lab <- sum(tapply(is.na(d2[[lab_col]]), d2$token, all))
-    list(data = sub,
-         note = if (no_lab > 0)
-           sprintf(paste("%d token(s) have no labelled interval on this tier",
-                         "(no matching TextGrid, no tier of that name, or no",
-                         "frame inside its span) and are excluded."), no_lab))
+    # Tokens whose TextGrid could not be read are reported on their own.
+    bad <- attr(res, "tg_unreadable")
+    no_lab_tok <- names(which(tapply(is.na(res[[lab_col]]), res$token, all)))
+    no_lab <- length(setdiff(no_lab_tok, names(bad)))
+    notes <- c(
+      if (no_lab > 0)
+        sprintf(paste("%d token(s) have no labelled interval on this tier",
+                      "(no matching TextGrid, no tier of that name, or no",
+                      "frame inside its span) and are excluded."), no_lab),
+      if (length(bad))
+        sprintf("%d token(s) are excluded because their TextGrid could not be read (%s).",
+                length(bad), tg_unreadable_first(bad)))
+    list(data = sub, note = if (length(notes)) paste(notes, collapse = " "),
+         unreadable = length(bad) > 0)
   }
 
   # The dataset the Download button writes: fp_f0_data -> region -> sampling.
@@ -887,7 +1029,7 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     d <- fp_f0_data()
     if (is.null(d) || nrow(d) == 0) return(NULL)
     lm <- fp_export_landmarks()
-    if (!is.null(lm) && nrow(lm) == nrow(d)) d <- cbind(d, lm)
+    if (!is.null(lm$cols) && nrow(lm$cols) == nrow(d)) d <- cbind(d, lm$cols)
 
     # Correction columns loaded with a re-uploaded file describe that earlier
     # session; the live state is in fp_corrected_data. Drop the old copies,
@@ -925,7 +1067,11 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     reg <- apply_region(d)
     if (is.null(reg)) return(NULL)
     out   <- reg$data
-    notes <- reg$note
+    # What adding the landmark columns reported; the TextGrids that could not
+    # be read only once when the interval region has said so already.
+    lm_notes <- lm$notes
+    if (isTRUE(reg$unreadable)) lm_notes <- lm_notes[names(lm_notes) != "unreadable"]
+    notes <- c(reg$note, unname(lm_notes))
 
     # Equidistant percentages are relative to the REGION, so a token whose
     # voicing was only partly tracked has its points squeezed into whatever
@@ -1091,11 +1237,25 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   # the picks are valid.
   fp_f0_csv_raw <- reactive({
     req(input$fp_extract_mode == "csv", input$fp_f0_upload_file)
-    tryCatch(
-      utils::read.csv(input$fp_f0_upload_file$datapath,
-                      stringsAsFactors = FALSE, check.names = FALSE),
-      error = function(e) NULL
+    fi <- input$fp_f0_upload_file
+    # Praat writes --undefined-- where it has no f0.
+    df <- tryCatch(
+      read_csv_utf8(fi$datapath, stringsAsFactors = FALSE, check.names = FALSE,
+                    na.strings = c("NA", "--undefined--"), name = fi$name),
+      error = function(e) {
+        showNotification(conditionMessage(e), type = "error", duration = 10,
+                         id = "fp_f0_csv_read")
+        NULL
+      }
     )
+    note <- attr(df, "encoding_note")
+    if (!is.null(note)) {
+      showNotification(note, type = "warning", duration = 10, id = "fp_f0_csv_read")
+    } else if (!is.null(df)) {
+      # A good file replaces a bad one: clear the old error.
+      removeNotification("fp_f0_csv_read")
+    }
+    df
   })
 
   output$fp_f0_csv_col_pickers <- renderUI({
@@ -1536,9 +1696,17 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   fp_decorate_download <- function(d) {
     if (is.null(d) || nrow(d) == 0) return(d)
     lm <- fp_export_landmarks()
-    if (!is.null(lm) && nrow(lm) == nrow(d)) {
-      lm <- lm[, setdiff(names(lm), names(d)), drop = FALSE]
-      if (ncol(lm) > 0) d <- cbind(d, lm)
+    if (!is.null(lm$cols) && nrow(lm$cols) == nrow(d)) {
+      cols <- lm$cols[, setdiff(names(lm$cols), names(d)), drop = FALSE]
+      if (ncol(cols) > 0) d <- cbind(d, cols)
+    }
+    # The export banner is on the F0 Extraction tab, so say it here too. One
+    # id, so a second download replaces the note rather than stacking it.
+    if (length(lm$notes)) {
+      warn <- any(names(lm$notes) != "renamed")
+      showNotification(paste(lm$notes, collapse = " "), id = "fp_download_landmarks",
+                       type = if (warn) "warning" else "message",
+                       duration = if (warn) 12 else 8)
     }
     md <- if (!is.null(fp_metadata)) fp_metadata() else NULL
     keycol <- active_keycol()

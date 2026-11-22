@@ -17,6 +17,99 @@ f0_voiced <- function(x) {
   !is.na(x) & x > 0
 }
 
+# Columns that hold f0 in Hz, found by name and by value. The name has a word
+# f0, pitch or hz (split at any non-alphanumeric character; f0hz and pitchhz
+# count) or a VoiceSauce f0 name (strF0, sF0, pF0, shrF0, oF0; VoiceSauce
+# writes 0 for unvoiced frames), and every other word is one that keeps the
+# values in Hz: a processing step, a tracker, a summary such as mean or max,
+# or a number. So f0_corrected and mean_f0 count, but f0_st, f0_dur,
+# f0_peak_loc and pitch_rank do not, as 0 is a real value there. The values
+# are numeric, never negative (normalised columns are centred, so they have
+# negatives), and the positive ones have a median of 30 to 2000 Hz.
+hz_f0_columns <- function(df) {
+  nm <- names(df)
+  if (!length(nm)) return(character(0))
+  words <- strsplit(gsub("(^|[^a-z0-9])f_0(?=[^a-z0-9]|$)", "\\1f0",
+                         tolower(nm), perl = TRUE), "[^a-z0-9]+")
+  f0_word <- "^(f0|pitch)(hz)?$|^hz$|^(str|s|p|shr|o)f0$"
+  hz_word <- paste0("^(|[0-9]+|",
+    "raw|corrected|corr|original|orig|edited|manual|final|clean|cleaned|",
+    "smooth|smoothed|interp|interpolated|filtered|",
+    "praat|reaper|mean|avg|median|max|min|peak)$")
+  named <- vapply(words, function(w) {
+    f0 <- grepl(f0_word, w)
+    any(f0) && all(f0 | grepl(hz_word, w))
+  }, logical(1))
+  hz <- vapply(seq_along(nm), function(k) {
+    x <- df[[k]]
+    if (!named[k] || !is.numeric(x) || any(x < 0, na.rm = TRUE)) return(FALSE)
+    pos <- x[!is.na(x) & x > 0]
+    length(pos) > 0 && stats::median(pos) >= 30 && stats::median(pos) <= 2000
+  }, logical(1))
+  nm[hz]
+}
+
+#' Read 0 Hz f0 values as missing
+#'
+#' @description
+#' Pitch trackers write 0 Hz for unvoiced frames, where no pitch was
+#' measured. A 0 left in the data is read as a very low pitch: it pulls mean
+#' contours and fits towards 0, and gives `-Inf` in semitones. This sets 0 to
+#' `NA` in the f0 columns of `df`. The app does this to every CSV uploaded in
+#' the Start tab.
+#'
+#' @details
+#' By default the f0 columns are found by name and by value. A column is
+#' used when:
+#' * its name has the word `f0`, `pitch` or `hz`, or one of VoiceSauce's f0
+#'   names (`strF0`, `sF0`, `pF0`, `shrF0`, `oF0`), and its other words are
+#'   ones that keep the values in Hz: `raw`, `corrected`, `original`,
+#'   `edited`, `smoothed`, `interp`, `praat`, `reaper`, `mean`, `median`,
+#'   `max`, `min`, `peak` and the like, or a number. So `f0`, `F0_Hz`,
+#'   `pitch`, `f0_corrected` and `mean_f0` are used, but not `f0_st`,
+#'   `f0_dur`, `f0_peak_loc` or `pitch_rank`, where 0 is a real value. Words
+#'   are split at any character other than a letter or digit;
+#' * it is numeric with no negative values, so a normalised column (which
+#'   has negatives) is never touched;
+#' * the median of its positive values lies between 30 and 2000, a
+#'   plausible range for f0 in Hz.
+#'
+#' Negative values, which some trackers use for unvoiced frames, are left
+#' as they are, and a column that has any is not used. Give `cols` to choose
+#' the columns yourself.
+#'
+#' @param df A data frame.
+#' @param cols Names of the columns to clean. Defaults to the f0 columns
+#'   found as described in Details.
+#' @return `df` with 0 set to `NA` in `cols`. Attribute `"zero_hz"` gives
+#'   the number of values changed, named by column, for the columns with at
+#'   least one; it is an empty integer vector when there were none.
+#' @seealso [normalise_f0()], which also reads f0 of 0 or below as `NA`.
+#' @examples
+#' df <- data.frame(token = "ma1", time = 1:5 / 100,
+#'                  f0 = c(0, 212, 215, 0, 210),
+#'                  intensity = c(0, 68, 70, 66, 0))
+#' out <- zero_hz_to_na(df)
+#' out$f0          # NA where the tracker wrote 0
+#' out$intensity   # unchanged
+#' attr(out, "zero_hz")
+#' @export
+zero_hz_to_na <- function(df, cols = hz_f0_columns(df)) {
+  cols <- intersect(as.character(cols), names(df))
+  n <- stats::setNames(integer(length(cols)), cols)
+  for (cl in cols) {
+    x <- df[[cl]]
+    if (!is.numeric(x)) next
+    z <- !is.na(x) & x == 0
+    if (!any(z)) next
+    x[z] <- NA
+    df[[cl]] <- x
+    n[cl] <- sum(z)
+  }
+  attr(df, "zero_hz") <- n[n > 0]
+  df
+}
+
 #' Resample each token's f0 contour to N equidistant points
 #'
 #' @description
@@ -163,6 +256,7 @@ resample_f0_equal <- function(df, n = 21, token = "token", time = "time",
     rows <- rows[keep, , drop = FALSE]
     tt   <- tt[keep]
     ff   <- suppressWarnings(as.numeric(rows[[f0]]))
+    ff[!f0_voiced(ff)] <- NA_real_            # 0 Hz is unvoiced, not a value
 
     if (length(tt) < 2) {
       out <- data.frame(tok, 1L, tt, 0.5, ff, stringsAsFactors = FALSE)
@@ -205,7 +299,6 @@ resample_f0_equal <- function(df, n = 21, token = "token", time = "time",
       # near value when only FAR does; an out-of-range index is read as NA
       # here so the rule below handles both the same way it handles unvoiced.
       at    <- function(i) ifelse(i >= 1L & i <= m, ff[pmin(pmax(i, 1L), m)], NA_real_)
-      ff[!f0_voiced(ff)] <- NA_real_          # 0 Hz is unvoiced, not a value
       nv    <- at(near)
       f_out <- if (method == "nearest") {
         # Praat's "nearest": the frame the point falls in, and nothing when

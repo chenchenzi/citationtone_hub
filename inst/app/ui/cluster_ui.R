@@ -516,13 +516,14 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
     long <- do.call(rbind, lapply(seq_len(nrow(cm)), function(i)
       data.frame(x = xs, f0 = cm[i, ],
                  cluster = factor(i, levels = seq_len(nrow(cm))))))
-    ggplot2::ggplot(long, ggplot2::aes(x = .data$x, y = .data$f0,
-                                       colour = .data$cluster, group = .data$cluster)) +
+    p <- ggplot2::ggplot(long, ggplot2::aes(x = .data$x, y = .data$f0,
+                                            colour = .data$cluster, group = .data$cluster)) +
       ggplot2::geom_line(linewidth = 1.2) +
       cluster_colour_scale(name = NULL, labels = labs) +
       ggplot2::labs(x = "normalised time", y = f0_axis_label(input$cluster_f0_var),
                     title = sprintf("%d candidate tone contours (%s)", k, method_label(res$method))) +
       cluster_plot_theme(14)
+    p + cjk_family_theme(p)   # no-op for this fixed English text; CJK text would need it (global.R)
   })
   output$cluster_mean_plot <- renderPlot({ mean_plot_obj() })
   output$cluster_mean_dl <- cl_dl_plot(mean_plot_obj, "candidate_contours", w = 9, h = 5)
@@ -550,8 +551,8 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
     })
     cp$k <- factor(sprintf("%d tones", cp$kk),
                    levels = sprintf("%d tones", sort(unique(cp$kk))))
-    ggplot2::ggplot(cp, ggplot2::aes(x = .data$x, y = .data$f0,
-                                     colour = .data$cluster, group = .data$cluster)) +
+    p <- ggplot2::ggplot(cp, ggplot2::aes(x = .data$x, y = .data$f0,
+                                          colour = .data$cluster, group = .data$cluster)) +
       ggplot2::geom_line(linewidth = 0.9) +
       ggplot2::facet_wrap(~ k, nrow = 1) +
       ggplot2::scale_x_continuous(breaks = c(0, 0.5, 1)) +
@@ -560,6 +561,7 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
                     subtitle = sprintf("%s solution per number of tones (drag the compare slider to change)",
                                        method_label(meth))) +
       cluster_plot_theme(13)
+    p + cjk_family_theme(p)   # no-op for this fixed English text; CJK text would need it (global.R)
   })
   output$cluster_compare_plot <- renderPlot({ compare_plot_obj() })
   output$cluster_compare_dl <- cl_dl_plot(compare_plot_obj, "compare_solutions", w = 11, h = 4.5)

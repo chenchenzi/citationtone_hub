@@ -51,16 +51,6 @@
   trim = c(dot = 0.22, label = 0.33)  # leader ends held off the dot / label
 )
 
-# Natural tone order: digit runs compare as numbers ("2" < "10", "T2" < "T10").
-.chao_natural_levels <- function(x) {
-  u <- unique(as.character(x[!is.na(x)]))
-  key <- tolower(u)
-  m <- gregexpr("[0-9]+", key)
-  regmatches(key, m) <- lapply(regmatches(key, m), function(d)
-    formatC(as.numeric(d), width = 12, format = "d", flag = "0"))
-  u[order(key)]
-}
-
 # Darken a colour towards black until its WCAG contrast on white reaches
 # `target`, so a digit keeps its tone's hue but stays readable.
 .chao_readable_ink <- function(hex, target) {
@@ -163,8 +153,9 @@ plot_chao_panels <- function(pdat, ref_point_df, int_point_df, tol, base_family 
     d[is.finite(d$time) & is.finite(d$chao_val), , drop = FALSE]
   }
   pts <- lapply(list(ref = ref_point_df, int = int_point_df), clean_pts)
-  # Natural order; a factor's own level order wins for the tones it lists.
-  tone_levels <- .chao_natural_levels(c(as.character(pdat$tone), pts$ref$tone, pts$int$tone))
+  # Chinese tone names in traditional order (阴平 阳平 上声 去声), then natural
+  # order ("T2" < "T10"); a factor's own level order wins for the tones it lists.
+  tone_levels <- sort_tones(c(as.character(pdat$tone), pts$ref$tone, pts$int$tone))
   if (is.factor(pdat$tone))
     tone_levels <- union(intersect(levels(pdat$tone), tone_levels), tone_levels)
   n_tones <- length(tone_levels)

@@ -68,6 +68,41 @@ curated_reminder <- function(input_id) {
 }
 
 # ---------------------------------------------------------------------------
+# read_data_code(): the lines a tab's "Show R code" uses to read the uploaded
+# CSV the way raw_dataset() (server.R) does: any text encoding, Praat's
+# --undefined-- as NA and 0 Hz f0 as NA. A plain read.csv() would keep the
+# zeros the app dropped, so the snippet would not reproduce the app's plot
+# or fit.
+# ---------------------------------------------------------------------------
+read_data_code <- function(ds_name) {
+  c("# Read your data as the app does (adjust the path to where the file is):",
+    "# any text encoding, Praat's --undefined-- as NA, and 0 Hz f0 as NA",
+    paste0("dat <- shinytone::read_csv_utf8(", encodeString(ds_name, quote = '"'),
+           ", stringsAsFactors = FALSE,"),
+    '                                na.strings = c("NA", "--undefined--"))',
+    "dat <- shinytone::zero_hz_to_na(dat)")
+}
+
+# ---------------------------------------------------------------------------
+# tone_factor_code(): the "Show R code" line that makes tone column `var` a
+# factor (ordered = TRUE: an ordered factor, named `to`) with the levels the
+# app uses. as.factor() sorts by locale, which puts Chinese tone names out of
+# order, so when shinytone::sort_tones() gives another order for `x` (the
+# column as the app has it), the line uses sort_tones() too.
+# ---------------------------------------------------------------------------
+tone_needs_levels <- function(x) {
+  !is.null(x) && !is.factor(x) &&
+    !identical(sort_tones(x, natural = FALSE), levels(factor(x)))
+}
+tone_factor_code <- function(var, x = NULL, ordered = FALSE, to = var) {
+  fun <- if (ordered) "ordered" else "factor"
+  if (tone_needs_levels(x))
+    paste0("dat$", to, " <- ", fun, "(dat$", var,
+           ", levels = shinytone::sort_tones(dat$", var, ", natural = FALSE))")
+  else paste0("dat$", to, " <- as.", fun, "(dat$", var, ")")
+}
+
+# ---------------------------------------------------------------------------
 # role_var(): the default column for a role ("tone" or "speaker") in a tab's
 # variable menus. Data from Curate carries the variables used there (attr
 # "curate_vars"; the Normalise tab updates it for the curated + normalised
@@ -231,6 +266,178 @@ guide_box <- function(title, ..., open = TRUE) {
     tags$summary(class = "guide-summary", style = "font-weight: 700;", title),
     tags$div(class = "guide-body", ...)
   )
+}
+
+# ---------------------------------------------------------------------------
+# Chinese characters in static plots.
+# renderPlot() and ggsave() draw with ragg, one font family per text element.
+# The app font (Open Sans) has no Chinese glyphs, and the system fallback can
+# pick a font without simplified characters (on macOS 阴 and 阳 vanish, so
+# 阴平 and 阳平 both read 平). So when a plot's text contains CJK, that plot
+# switches to a font that has it:
+#   1. a font file in the app's cjk-font/ folder, if there is one (none is
+#      bundled now; see cjk-font/README.md). A file with "bold" in its name
+#      is used for bold text.
+#   2. else the first installed family in .cjk_candidates that has both
+#      simplified and traditional characters (checked glyph by glyph).
+# Plots whose text has no CJK are left exactly as they were. If no font is
+# found, one notification per session says so. Interactive (plotly) plots
+# draw text in the browser and need none of this.
+#   p + cjk_family_theme(p)    # a ggplot: add after any complete theme
+#   label_family(tones)        # a family name, or "" (no CJK, or no font)
+# ---------------------------------------------------------------------------
+.cjk_font_dir <- file.path(getwd(), "cjk-font")   # global.R runs with the app dir as wd
+# Glyphs a font must have: 阴阳发调 (simplified), 陰陽發調 (traditional), 平上去入声聲
+.cjk_probe <- "阴阳发调陰陽發調平上去入声聲"
+# Installed families to try, in order. Never "PingFang SC": FreeType cannot
+# open its file on macOS. Names are checked against system_fonts() first,
+# because match_fonts() can hang on a name the system does not have.
+.cjk_candidates <- c(
+  "Noto Sans CJK SC", "Noto Sans SC", "Source Han Sans SC", "Source Han Sans CN",
+  "Hiragino Sans GB", "Microsoft YaHei", "WenQuanYi Zen Hei", "WenQuanYi Micro Hei",
+  "Droid Sans Fallback", "Noto Sans CJK TC", "AR PL UMing CN", "AR PL SungtiL GB",
+  "Songti SC", "SimHei", "Arial Unicode MS")
+
+# Character values in x: vectors, factors (the levels in use), nested lists,
+# plotmath expressions. Numbers, functions and waivers give nothing.
+.text_values <- function(x) {
+  if (is.null(x) || is.function(x) || is.environment(x)) return(character(0))
+  if (is.factor(x)) return(as.character(unique(x)))
+  if (is.character(x)) return(unique(x))
+  if (is.expression(x)) return(as.character(x))
+  if (is.language(x)) return(paste(deparse(x), collapse = " "))
+  if (is.list(x)) return(unlist(lapply(unclass(x), .text_values), use.names = FALSE))
+  character(0)
+}
+
+# TRUE if any text in x has a CJK character. Code points, not a regex class:
+# a \x{3000} class errors in PCRE when R is not in UTF-8 mode.
+has_cjk <- function(x) {
+  x <- .text_values(x)
+  x <- enc2utf8(x[!is.na(x) & nzchar(x)])
+  x <- x[validUTF8(x)]
+  if (!length(x)) return(FALSE)
+  cp <- utf8ToInt(paste(x, collapse = ""))
+  any((cp >= 0x2E80 & cp <= 0x9FFF) |    # radicals, CJK punctuation, kana, ideographs
+      (cp >= 0xAC00 & cp <= 0xD7AF) |    # Hangul syllables
+      (cp >= 0xF900 & cp <= 0xFAFF) |    # compatibility ideographs
+      (cp >= 0xFF00 & cp <= 0xFFEF) |    # full-width forms
+      (cp >= 0x20000 & cp <= 0x3134F))   # ideograph extensions B to G
+}
+
+# The CJK family to use, or "". Not cached: cjk_family() caches it.
+.find_cjk_family <- function(dir = .cjk_font_dir, candidates = .cjk_candidates,
+                             probe = .cjk_probe) {
+  if (!requireNamespace("systemfonts", quietly = TRUE)) return("")
+  covers <- function(path, index = 0L) {
+    gi <- tryCatch(systemfonts::glyph_info(probe, path = path, index = index),
+                   error = function(e) NULL)
+    !is.null(gi) && nrow(gi) > 0 && all(gi$index > 0)
+  }
+  # 1. A font file dropped into cjk-font/
+  files <- list.files(dir, pattern = "\\.(otf|ttf|ttc)$", ignore.case = TRUE,
+                      full.names = TRUE)
+  if (length(files)) {
+    bold  <- grepl("bold", basename(files), ignore.case = TRUE)
+    slant <- grepl("italic|oblique", basename(files), ignore.case = TRUE)
+    plain <- Filter(covers, files[!bold & !slant])
+    if (length(plain)) {
+      bold <- c(Filter(covers, files[bold & !slant]), plain)[1]
+      fam <- "shinytone CJK"
+      if (!fam %in% systemfonts::registry_fonts()$family)
+        systemfonts::register_font(fam, plain = plain[1], bold = bold)
+      return(fam)
+    }
+  }
+  # 2. An installed family
+  have <- tryCatch(unique(systemfonts::system_fonts()$family),
+                   error = function(e) character(0))
+  for (f in intersect(candidates, have)) {
+    m <- tryCatch(systemfonts::match_fonts(f), error = function(e) NULL)
+    if (!is.null(m) && nrow(m) && covers(m$path[1], m$index[1])) return(f)
+  }
+  ""
+}
+
+# Cached for the R process: the font lookup runs once, the first time a plot
+# has CJK text.
+cjk_family <- local({
+  cache <- NULL
+  function() {
+    if (is.null(cache)) cache <<- tryCatch(.find_cjk_family(), error = function(e) "")
+    cache
+  }
+})
+
+# One notification per session when CJK text has no font. Silent outside a
+# session.
+cjk_font_notice <- function() {
+  session <- shiny::getDefaultReactiveDomain()
+  if (is.null(session)) return(invisible(FALSE))
+  tryCatch({
+    ud <- session$userData
+    if (!is.environment(ud) || isTRUE(ud$cjk_font_notice)) return(invisible(FALSE))
+    ud$cjk_font_notice <- TRUE
+    shiny::showNotification(
+      paste("No Chinese font was found on this server, so static plots may drop",
+            "Chinese characters. Interactive plots are unaffected."),
+      type = "warning", duration = 15, session = session)
+    invisible(TRUE)
+  }, error = function(e) invisible(FALSE))
+}
+
+# The family for text with these labels: a CJK family when they have CJK
+# (and one is found), else "" (leave the family alone).
+label_family <- function(...) {
+  if (!has_cjk(list(...))) return("")
+  fam <- cjk_family()
+  if (!nzchar(fam)) cjk_font_notice()
+  fam
+}
+
+# The text a ggplot can show: its labels, the text values of its mappings
+# (except `group`) and facets, text-layer labels and scale names and labels.
+.plot_text <- function(p) {
+  value_of <- function(q, d, name = TRUE) {
+    e <- rlang::quo_get_expr(q)
+    nm <- NULL                                  # a default axis or legend title
+    if (name && is.symbol(e)) nm <- as.character(e)
+    if (name && is.call(e) && length(e) == 3 && identical(e[[2]], quote(.data))) {
+      nm <- if (identical(e[[1]], quote(`$`))) as.character(e[[3]])
+            else tryCatch(rlang::eval_tidy(e[[3]], env = rlang::quo_get_env(q)),
+                          error = function(err) NULL)
+    }
+    v <- if (is.data.frame(d))
+      tryCatch(rlang::eval_tidy(q, data = d), error = function(err) NULL)
+    c(.text_values(nm), if (is.character(v) || is.factor(v)) .text_values(v))
+  }
+  maps <- function(m, d) lapply(m[setdiff(names(m), "group")], value_of, d = d)
+  dat <- p$data
+  out <- list(p$labels, maps(p$mapping, dat))
+  for (l in p$layers) {
+    ld <- if (is.data.frame(l$data)) l$data else dat
+    out <- c(out, list(maps(l$mapping, ld), l$aes_params$label))
+    if (isTRUE(l$inherit.aes) && is.data.frame(l$data)) out <- c(out, list(maps(p$mapping, ld)))
+  }
+  fp <- p$facet$params
+  for (q in c(fp$facets, fp$rows, fp$cols)) out <- c(out, list(value_of(q, dat, name = FALSE)))
+  for (s in p$scales$scales) out <- c(out, list(s$name, s$labels, s$limits))
+  .text_values(out)
+}
+
+# Theme that switches a ggplot to the CJK family when its text has CJK; NULL
+# (no change) otherwise. Add it after any complete theme such as theme_bw(),
+# which would reset it. With ggplot2 >= 4 it also sets the family of text
+# geoms (annotate(), geom_text()); thematic overrides that in renderPlot, so
+# pass `family` to such layers too.
+cjk_family_theme <- function(p) {
+  txt <- tryCatch(.plot_text(p), error = function(e) character(0))
+  fam <- label_family(txt)
+  if (!nzchar(fam)) return(NULL)
+  th <- ggplot2::theme(text = ggplot2::element_text(family = fam))
+  if (utils::packageVersion("ggplot2") >= "4.0.0")
+    th <- th + ggplot2::theme(geom = ggplot2::element_geom(family = fam))
+  th
 }
 
 # ---------------------------------------------------------------------------

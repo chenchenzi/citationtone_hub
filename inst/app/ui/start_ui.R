@@ -110,7 +110,7 @@ output$instruction_text <- renderUI({
       "Continuing from the ", tags$strong("F0 Correction"), " tab? Upload its ",
       tags$code("all_correctedf0.csv"), " here directly: tokens you discarded ",
       "there (", tags$code("token_dropped = TRUE"), ") are detected on upload ",
-      "and excluded from the working dataset by default — a sidebar checkbox ",
+      "and excluded from the working dataset by default. A sidebar checkbox ",
       "lets you keep them instead. The file itself is never modified."),
     tags$p("Here's what our sample data looks like (first 5 rows):"),
     {
@@ -226,10 +226,27 @@ observeEvent(raw_dataset(), {
   if (is.null(info) || info$n_drop == 0) return()
   showNotification(
     sprintf(paste0("This file marks %d of %d %ss as discarded (token_dropped). ",
-                   "They are excluded from the working dataset — untick ",
+                   "They are excluded from the working dataset. Untick ",
                    "\"Exclude discarded %ss\" in the sidebar to keep them."),
             info$n_drop, info$n_tot, info$unit, info$unit),
     type = "message", duration = 8, id = "f0a_dropped_tokens")
+})
+
+# One-off notification when the upload had 0 Hz in its f0 columns, which
+# raw_dataset() reads as NA (zero_hz_to_na(), R/resample.R).
+observeEvent(raw_dataset(), {
+  n <- attr(raw_dataset(), "zero_hz")
+  if (!length(n) || sum(n) == 0) {
+    removeNotification("f0a_zero_hz")
+    return()
+  }
+  where <- sprintf("%s (%d %s)", names(n), n, ifelse(n == 1, "row", "rows"))
+  if (length(where) > 1)
+    where <- paste(paste(where[-length(where)], collapse = ", "), "and", where[length(where)])
+  showNotification(
+    sprintf("Read 0 Hz in %s as missing (NA). Pitch trackers write 0 Hz for unvoiced frames.",
+            where),
+    type = "message", duration = 8, id = "f0a_zero_hz")
 })
 
 # Observe when the file is uploaded and set the dataset name
@@ -272,8 +289,10 @@ output$preview_title <- renderText({
 output$man_example <- renderUI({
   ds <- dataset()
   if (is.null(ds)) {
+    # A refused upload leaves raw_dataset() NULL; its error toast says why.
     return(tags$div(style = "color: #888; font-style: italic; margin: 8px 0;",
-                    "No file uploaded yet."))
+                    if (is.null(input$uploadfile)) "No file uploaded yet."
+                    else "This file could not be read."))
   }
 
   if (input$dman_preview == "preview") {
@@ -307,7 +326,7 @@ output$data_preview <- DT::renderDataTable({
 output$row_count_info <- renderText({
   req(dataset())
   total_rows <- nrow(dataset())
-  paste("10 of", total_rows, "rows shown. See View-tab for details.")
+  paste(min(10L, total_rows), "of", total_rows, "rows shown. See View-tab for details.")
 })
 
 output$data_structure <- renderPrint({
@@ -404,8 +423,18 @@ output$meta_preview <- renderUI({
 meta_csv <- reactive({
   f <- input$meta_file
   if (is.null(f)) return(NULL)
-  tryCatch(read.csv(f$datapath, stringsAsFactors = FALSE),
-           error = function(e) { showNotification("Could not read metadata CSV.", type = "error"); NULL })
+  # One toast id, so a new file replaces the last file's error or note.
+  df <- tryCatch(read_csv_utf8(f$datapath, stringsAsFactors = FALSE, name = f$name),
+                 error = function(e) {
+                   showNotification(conditionMessage(e), type = "error", duration = 10,
+                                    id = "meta_csv_read"); NULL })
+  note <- attr(df, "encoding_note")
+  if (!is.null(note)) {
+    showNotification(note, type = "warning", duration = 10, id = "meta_csv_read")
+  } else if (!is.null(df)) {
+    removeNotification("meta_csv_read")
+  }
+  df
 })
 
 # Always render the metadata-CSV column picker (with a placeholder before a

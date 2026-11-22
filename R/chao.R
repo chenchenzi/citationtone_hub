@@ -40,7 +40,10 @@
 #'    `f0_predicted` (the column name `f0_predicted` matches the
 #'    convention used by [predict_gca()] and [predict_gamm()] so the
 #'    same downstream tools can consume either model predictions or
-#'    raw mean contours).
+#'    raw mean contours). Tones are in the order of the levels of a factor
+#'    `tone` column. Otherwise traditional Chinese tone names come first, in
+#'    their traditional order (see [sort_tones()]), and other labels follow
+#'    in alphabetical (C-locale) order.
 #'
 #' @param data A long-format data frame with one row per f0 sample.
 #' @param token,f0,time,tone Column names.
@@ -143,12 +146,17 @@ compute_mean_contour <- function(data,
                      character(1))
 
   # Mean across each tone's tokens at every time point; points no token
-  # covers are dropped. Tones in C-locale order, as dplyr::arrange() gives.
+  # covers are dropped. Tones in the order of a factor's levels; otherwise
+  # traditional Chinese tone names first, in their traditional order (see
+  # sort_tones()), then the rest in C-locale order, as dplyr::arrange() gives.
   # The radix sort stops on non-ASCII labels in the native encoding, such as
   # Chinese tone names read by read.csv(), so it orders their UTF-8 form; the
   # labels themselves are kept.
   tone_lv <- unique(tok_tone)
-  tone_lv <- tone_lv[order(enc2utf8(tone_lv), method = "radix")]
+  tone_lv <- if (is.factor(data[[tone]]))
+               union(intersect(levels(data[[tone]]), tone_lv), tone_lv)
+             else tone_lv[order(zh_tone_rank(tone_lv), enc2utf8(tone_lv),
+                                method = "radix")]
   out <- do.call(rbind, lapply(tone_lv, function(tv) {
     data.frame(tone = tv, time = grid,
                f0_predicted = rowMeans(vals[, tok_tone == tv, drop = FALSE],

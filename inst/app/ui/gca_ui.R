@@ -539,12 +539,18 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
     # "Predicted …" is accurate.
     y_lab <- if (show_overlay) f0_axis_label(f0_var)
              else paste0("Predicted ", f0_axis_label(f0_var))
+    # Tones in the fit's level order (predict_gca() lists them so), which puts
+    # Chinese tone names in their traditional order; ggplot2 would sort the
+    # labels by code point.
+    tone_lv <- unique(c(as.character(pdat$tone), if (show_overlay) as.character(obs$tone)))
+    pdat$tone <- factor(pdat$tone, levels = tone_lv)
+    if (show_overlay) obs$tone <- factor(obs$tone, levels = tone_lv)
     p <- ggplot(pdat, aes(x = time, y = f0_predicted, colour = tone))
     if (show_overlay) {
       p <- p + geom_point(data = obs, alpha = 0.4, size = 1.5,
                           show.legend = FALSE)
     }
-    p +
+    q <- p +
       geom_line(linewidth = 1.2) +
       labs(
         x = "Normalised time",
@@ -554,8 +560,13 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
                     "Points: observed per-tone means · Line: GCA model fit"
                   else NULL
       ) +
-      theme_bw(base_size = 14) +
+      # No complete theme here: the app default, theme_bw(base_size = 16) from
+      # server.R, applies through thematic, as on the Visualise tab. With a
+      # theme_bw() of its own, thematic shrank the tick labels to about 7 pt
+      # (rel() sizes compounded) and dropped the app font.
       theme(legend.position = "bottom")
+    # Chinese labels need a CJK font in the PNG (cjk_family_theme(), global.R)
+    q + cjk_family_theme(q)
   }
 
   # --- Model plot ---
@@ -660,8 +671,7 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
     code_text <- paste0(
       'library(dplyr)\n',
       'library(lme4)\n\n',
-      '# Read your data (adjust path to where the file is on your machine)\n',
-      'dat <- read.csv("', ds_name, '", stringsAsFactors = FALSE)\n\n',
+      paste(read_data_code(ds_name), collapse = "\n"), '\n\n',
       norm_block,
       '# Generate orthogonal polynomial time terms\n',
       'poly_matrix <- poly(dat$time_norm, ', degree, ')\n',
@@ -669,7 +679,7 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
         paste0('dat$ot', k, ' <- poly_matrix[, ', k, ']')
       }), collapse = "\n"), '\n\n',
       '# Ensure factor variables\n',
-      'dat$', tone_var, ' <- as.factor(dat$', tone_var, ')\n',
+      tone_factor_code(tone_var, df_now[[tone_var]]), '\n',
       'dat$', speaker_var, ' <- as.factor(dat$', speaker_var, ')\n',
       'dat$', item_var, ' <- as.factor(dat$', item_var, ')\n\n',
       '# Fit GCA model\n',

@@ -25,7 +25,10 @@ fit_gca(
 
 \item{f0, time, token, tone, speaker, item}{Column names for f0, time
 within token, token ID, tone category, speaker ID, and item or
-word.}
+word. Tone levels follow a factor's own levels, or else
+\code{\link[=sort_tones]{sort_tones()}} with \code{natural = FALSE}, which puts traditional Chinese
+tone names in their traditional order; the first level is the
+reference.}
 
 \item{degree}{Polynomial degree, one of \code{1}, \code{2}, or \code{3}. Default
 \code{2}.}

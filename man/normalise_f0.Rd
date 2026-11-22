@@ -158,9 +158,12 @@ not affect them.
 \subsection{NA handling}{
 
 All summary statistics use \code{na.rm = TRUE}. Sample-level \code{NA} f0
-values propagate as \code{NA} in the normalised column. For \code{"lz"}, f0
-values of 0 or below (sometimes used to mark unvoiced frames) have no
-logarithm, so they are treated as \code{NA} too.
+values propagate as \code{NA} in the normalised column. f0 values of 0 or
+below are treated as \code{NA} too, for every method: pitch trackers write
+0 Hz for unvoiced frames, and 0 is not a pitch. They are left out of the
+speaker mean and SD, and give \code{NA} in the normalised column (not \code{-Inf}
+semitones). The \code{f0} column itself is returned unchanged; use
+\code{\link[=zero_hz_to_na]{zero_hz_to_na()}} to clean it.
 }
 }
 \examples{

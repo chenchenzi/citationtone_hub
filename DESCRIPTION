@@ -41,12 +41,15 @@ Suggests:
     mgcv,
     plotly,
     praatpicture,
+    ragg,
     RColorBrewer,
     rmarkdown,
     rPraat,
+    systemfonts,
     testthat (>= 3.0.0),
     thematic,
     tuneR,
+    utf8,
     uwot,
     wrassp
 Config/testthat/edition: 3

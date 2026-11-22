@@ -80,7 +80,10 @@
 #' Refer to Sóskuthy (2021) for guidance on choosing between these.
 #'
 #' @param data A long-format data frame with one row per f0 sample.
-#' @param f0,time,token,tone,speaker,item Column names.
+#' @param f0,time,token,tone,speaker,item Column names. Tone levels follow
+#'   a factor's own levels, or else [sort_tones()] with `natural = FALSE`,
+#'   which puts traditional Chinese tone names in their traditional order;
+#'   the first level is the reference.
 #' @param duration Optional column name with a per-sample duration
 #'   covariate. Use `NULL` to omit the duration smooth.
 #' @param k Basis dimension for the time smooth. Default `10`.
@@ -235,7 +238,7 @@ fit_gamm <- function(data,
   dat$.time_norm <- ts$time_norm
 
   dat$.f0      <- dat[[f0]]
-  dat$.tone    <- as.factor(dat[[tone]])
+  dat$.tone    <- tone_factor(dat[[tone]])   # Chinese tone names in order
   dat$.speaker <- as.factor(dat[[speaker]])
   dat$.item    <- as.factor(dat[[item]])
   dat$.token   <- as.factor(dat[[token]])

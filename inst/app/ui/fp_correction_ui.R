@@ -196,15 +196,32 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   # "user edit") but not programmatic Plotly.relayout from the keyboard handler.
   fp_xrange <- reactiveVal(NULL)   # list(token = ..., range = c(lo, hi))
 
-  # Current token's TextGrid (if available), parsed via rPraat::tg.read.
-  # Returns a list of tiers (each with $name, $type, intervals/points), or NULL.
-  current_textgrid <- reactive({
+  # Current token's TextGrid read with read_textgrid(): list(tg, encoding,
+  # reason, note, stray_lines), or NULL when the token has no TextGrid.
+  current_tg_read <- reactive({
     tok <- input$fp_corr_token
     audio <- fp_audio_data()
     if (is.null(tok) || is.null(audio)) return(NULL)
     row <- audio[audio$basename == tok, , drop = FALSE]
     if (nrow(row) == 0 || is.na(row$tg_path[1])) return(NULL)
-    suppressWarnings(tryCatch(rPraat::tg.read(row$tg_path[1]), error = function(e) NULL))
+    tryCatch(read_textgrid(row$tg_path[1], name = paste0(tok, ".TextGrid")),
+             error = function(e) list(tg = NULL, reason = conditionMessage(e)))
+  })
+  # Its tiers (each with $name, $type, intervals/points), or NULL.
+  current_textgrid <- reactive({
+    r <- current_tg_read()
+    if (is.null(r)) NULL else r$tg
+  })
+  # A note under the plot when the token's TextGrid could not be read, or
+  # was read in a guessed 8-bit code page or with bytes that are not UTF-8.
+  output$fp_corr_tg_note <- renderUI({
+    r <- current_tg_read()
+    if (is.null(r) || is.null(r$reason) && is.null(r$note)) return(NULL)
+    tags$div(style = "color: #8a5a00; font-size: 0.82rem; margin: 4px 0 0;",
+      icon("triangle-exclamation"), " ",
+      if (!is.null(r$reason))
+        sprintf("Could not read the TextGrid for %s: %s.", input$fp_corr_token, r$reason)
+      else r$note)
   })
   # TRUE when that TextGrid has an interval tier, i.e. something a click on
   # the TextGrid strip can select (point tiers have no span).
@@ -1133,15 +1150,22 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
 
   observeEvent(input$fp_corr_flagged_csv, {
     req(input$fp_corr_flagged_csv)
+    fi <- input$fp_corr_flagged_csv
     df <- tryCatch(
-      utils::read.csv(input$fp_corr_flagged_csv$datapath, stringsAsFactors = FALSE),
-      error = function(e) NULL
+      read_csv_utf8(fi$datapath, stringsAsFactors = FALSE, name = fi$name),
+      error = function(e) {
+        showNotification(conditionMessage(e), type = "error", duration = 10)
+        NULL
+      }
     )
-    if (is.null(df) || ncol(df) == 0) {
+    if (is.null(df)) return()
+    if (ncol(df) == 0) {
       showNotification("Could not read flagged-tokens CSV.",
                        type = "warning", duration = 4)
       return()
     }
+    note <- attr(df, "encoding_note")
+    if (!is.null(note)) showNotification(note, type = "warning", duration = 10)
     fp_flagged_raw(df)
     showNotification(sprintf("Loaded CSV: %d rows, %d columns. Pick the token column below.",
                              nrow(df), ncol(df)),
@@ -3564,6 +3588,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       uiOutput("fp_corr_edit_status"),
       uiOutput("fp_corr_playbar"),
       plotly::plotlyOutput("fp_corr_plot", height = "560px"),
+      uiOutput("fp_corr_tg_note"),
       # Sonify the (edited) contour, placed below the plot so the top stays
       # uncluttered. Synthetic only (complex tone or vowel) via sonify_f0() --
       # not the recorded voice. Boxed + lightly tinted to set it apart.
@@ -3676,11 +3701,15 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
   # brings the action-by-action history back into the Edit log table. ----
   observeEvent(input$fp_corr_log_upload, {
     fi <- input$fp_corr_log_upload; req(fi)
-    df <- tryCatch(utils::read.csv(fi$datapath, stringsAsFactors = FALSE,
-                                   colClasses = "character"),
-                   error = function(e) NULL)
-    if (is.null(df) || !nrow(df)) {
-      showNotification("Could not read that edit-log CSV.", type = "error", duration = 6); return() }
+    df <- tryCatch(read_csv_utf8(fi$datapath, stringsAsFactors = FALSE,
+                                 colClasses = "character", name = fi$name),
+                   error = function(e) {
+                     showNotification(conditionMessage(e), type = "error", duration = 10); NULL })
+    if (is.null(df)) return()
+    if (!nrow(df)) {
+      showNotification("That edit-log CSV has no rows.", type = "error", duration = 6); return() }
+    note <- attr(df, "encoding_note")
+    if (!is.null(note)) showNotification(note, type = "warning", duration = 10)
     if (!all(c("token", "action") %in% names(df))) {
       showNotification("That CSV does not look like an edit log (it needs at least a token and an action column).",
                        type = "error", duration = 9); return() }

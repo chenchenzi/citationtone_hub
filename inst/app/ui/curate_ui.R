@@ -259,7 +259,7 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
     tone_default <- if (identical(active_source(), "clustered") && "cluster" %in% vars)
                       "cluster" else guess_var(vars, var_patterns$tone, 5)
     tone_choices <- if (!is.null(dataset()) && tone_default %in% names(dataset()))
-                      sort(unique(as.character(dataset()[[tone_default]]))) else NULL
+                      sort_tones(as.character(dataset()[[tone_default]]), natural = FALSE) else NULL
     item_default <- lex_col(); if (is.null(item_default)) item_default <- "__none__"
     src_choices <- c("Uploaded data" = "uploaded")
     if (!is.null(.nd())) src_choices <- c(src_choices, "Normalised data" = "normalised")
@@ -346,7 +346,7 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
   observe({
     d <- dataset(); req(d); v <- cvar(); req(v$tone %in% names(d))
     updateSelectizeInput(session, "curate_new_label",
-                         choices = sort(unique(as.character(d[[v$tone]]))),
+                         choices = sort_tones(as.character(d[[v$tone]]), natural = FALSE),
                          selected = character(0), server = FALSE)
   })
 
@@ -365,7 +365,7 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
     d <- dataset()
     if (is.null(d)) return(NULL)
     v <- cvar(); req(v$tone %in% names(d))
-    tones <- sort(unique(as.character(d[[v$tone]])))
+    tones <- sort_tones(as.character(d[[v$tone]]), natural = FALSE)   # 阴平 before 阳平
     speakers <- if (v$speaker %in% names(d)) sort(unique(as.character(d[[v$speaker]]))) else character(0)
     facet_choices <- c("None" = "__none__",
                        "Speaker" = "__speaker__",
@@ -494,6 +494,11 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
                    ifelse(sub$.tok %in% flagged, "flagged (Inspect)", "other"))
     sub$.status <- factor(sub$.status, levels = c("other", "flagged (Inspect)", "selected"))
     pal <- c("other" = "grey72", "flagged (Inspect)" = "#e0a800", "selected" = "#d9534f")
+
+    # "All tones" panels: Chinese tone names in their traditional order, not
+    # by code point (sort_tones()).
+    if (all_tones && tone_needs_levels(sub[[v$tone]]))
+      sub[[v$tone]] <- factor(sub[[v$tone]], levels = sort_tones(sub[[v$tone]], natural = FALSE))
 
     p <- ggplot2::ggplot(sub, ggplot2::aes(x = .data$.x, y = .data[[v$f0]],
                                            group = .data$.tok, customdata = .data$.tok,
@@ -814,10 +819,14 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
                        type = "error", duration = 6); return() }
 
     # Read the same way the dataset was read in Start (so token strings match).
-    df <- tryCatch(utils::read.csv(fi$datapath, stringsAsFactors = FALSE),
-                   error = function(e) NULL)
-    if (is.null(df) || !nrow(df)) {
-      showNotification("Could not read that CSV.", type = "error", duration = 6); return() }
+    df <- tryCatch(read_csv_utf8(fi$datapath, stringsAsFactors = FALSE, name = fi$name),
+                   error = function(e) {
+                     showNotification(conditionMessage(e), type = "error", duration = 10); NULL })
+    if (is.null(df)) return()
+    if (!nrow(df)) {
+      showNotification("That CSV has no rows.", type = "error", duration = 6); return() }
+    note <- attr(df, "encoding_note")
+    if (!is.null(note)) showNotification(note, type = "warning", duration = 10)
 
     # Reject the *Curated* CSV (tone already overwritten; original moved aside).
     if (paste0(v$tone, "_original") %in% names(df)) {

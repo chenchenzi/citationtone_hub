@@ -26,7 +26,10 @@ fit_gamm(
 \arguments{
 \item{data}{A long-format data frame with one row per f0 sample.}
 
-\item{f0, time, token, tone, speaker, item}{Column names.}
+\item{f0, time, token, tone, speaker, item}{Column names. Tone levels follow
+a factor's own levels, or else \code{\link[=sort_tones]{sort_tones()}} with \code{natural = FALSE},
+which puts traditional Chinese tone names in their traditional order;
+the first level is the reference.}
 
 \item{duration}{Optional column name with a per-sample duration
 covariate. Use \code{NULL} to omit the duration smooth.}

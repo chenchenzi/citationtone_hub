@@ -737,11 +737,14 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
   })
 
   # Build after grid.newpage() so thematic has resolved the app font first.
+  # Chinese tone names need a CJK font (label_family(), global.R).
   draw_sum_plot <- function(base_family = "") {
     d <- sum_plot_data()
+    fam <- label_family(d$pdat$tone)
+    if (!nzchar(fam)) fam <- base_family
     grid::grid.newpage()
     grid::grid.draw(plot_chao_panels(d$pdat, d$ref_point_df, d$int_point_df, d$tol,
-                                     base_family = base_family))
+                                     base_family = fam))
   }
 
   output$summarise_plot <- renderPlot({

@@ -93,3 +93,21 @@ test_that("non-numeric f0 column gives a clear error", {
   expect_error(fit_polynomial(df, f0 = "f0"),
                "must be numeric")
 })
+
+test_that("non-finite f0 (-Inf from log of 0 Hz) is skipped, not an error", {
+  df <- data.frame(token = "t1", time = seq(0, 1, length.out = 6),
+                   f0 = c(1.0, -Inf, 0.8, 0.5, -Inf, 1.1),
+                   speaker = "S01", tone = "T1")
+  expect_no_error(out <- suppressMessages(fit_polynomial(df, degree = 2)))
+  ref <- suppressMessages(fit_polynomial(df[is.finite(df$f0), ], degree = 2))
+  expect_equal(out, ref)
+})
+
+test_that("single-time-point token takes c0 from finite f0 only", {
+  df <- data.frame(token = c("t1", "t1", "t1", "t2"), time = c(0.2, 0.2, 0.2, 0.4),
+                   f0 = c(-Inf, 1.5, 2.5, -Inf), speaker = "S01", tone = "T1")
+  out <- fit_polynomial(df, degree = 1, time_normalised = "no")
+  expect_equal(out$c0[out$token == "t1"], 2)
+  expect_true(is.na(out$c0[out$token == "t2"]))   # no finite f0 left
+  expect_true(all(is.na(out$c1)))
+})

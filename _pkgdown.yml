@@ -30,6 +30,14 @@ reference:
     contents:
       - run_app
 
+  - title: Read data
+    desc: >
+      Read a CSV in any Unicode encoding, including the UTF-16 files Praat
+      saves for non-ASCII text, and read 0 Hz f0 values as missing.
+    contents:
+      - read_csv_utf8
+      - zero_hz_to_na
+
   - title: Normalisation
     desc: >
       By-speaker semitone, z-score or log z-score (LZ) f0 normalisation, plus landmark-based
@@ -49,10 +57,12 @@ reference:
       keep only the frames inside chosen intervals (vowel, rhyme, or
       named labels).
     contents:
+      - read_textgrid
       - tg_interval_tiers
       - tg_tier_names
       - assign_tier_landmarks
       - attach_landmarks
+      - landmark_prefixes
       - filter_interval_rows
       - ipa_vowel_label
 
@@ -103,9 +113,11 @@ reference:
   - title: Curate tone labels
     desc: >
       Re-label tone-category variants or exclude tokens, without overwriting
-      the original labels.
+      the original labels, and sort tone labels for display, with Chinese
+      tone names in their traditional order.
     contents:
       - apply_relabels
+      - sort_tones
 
   - title: Contour modelling
     desc: >

@@ -1,5 +1,51 @@
 # shinytone (development version)
 
+* **CSVs and TextGrids in UTF-16 and other encodings.** Praat saves tables
+  and TextGrids as UTF-16 whenever any text is not plain ASCII, such as
+  Chinese token names or IPA labels. A UTF-16 CSV used to close the app, and
+  a UTF-16 TextGrid was silently ignored (no tiers, no TextGrid strip, empty
+  landmark columns). Every upload now reads UTF-8, UTF-16 and UTF-32, with
+  or without a byte-order mark. A file in an older code page is read as
+  Chinese (GBK, Big5) or Western European text, with a note to check it. A
+  file that cannot be read, such as an Excel workbook or a binary TextGrid,
+  gives a message saying why, and the app keeps running. Praat's
+  `--undefined--` reads as NA. The new `read_csv_utf8()` and
+  `read_textgrid()` read files the same way in R.
+* **Landmark columns keep non-ASCII tier names.** Tiers named 声调 and 音节
+  now give `声调_start` and `音节_start`, not `tier_start` and
+  `tier_1_start`, and F0 Extraction no longer leaves the second one out of
+  the download. A clash (two tiers with the same name once cleaned, or a
+  tier named `time`) gets `_2`, `_3` in a fixed order, and the notification
+  says so. ASCII tier names keep their old columns unless two differ only in
+  case. New `landmark_prefixes()`; `attach_landmarks()` gains `all_tiers`.
+* **0 Hz f0 is read as missing.** Pitch trackers write 0 Hz for unvoiced
+  frames. In a CSV uploaded in the Start tab these zeros counted as pitch
+  values: they pulled contours, fits and plots towards 0 and gave `-Inf` in
+  semitones, which could close the app in the Model tab. The Start tab now
+  reads 0 Hz in f0 columns as NA and says how many rows changed; other
+  columns, including normalised ones, are left alone. `normalise_f0()`
+  treats f0 of 0 or below as NA for every method, and the Model tab shows an
+  error instead of closing. Show R code reads the file the same way. New
+  `zero_hz_to_na()`.
+* **Chinese text in static plots.** Visualise, GCA, GAMM and Summarise plots
+  and their downloads now show Chinese tone, speaker and tier names. When
+  labels contain Chinese characters, the plot uses a Chinese font installed
+  on the machine, so 阴平 and 阳平 no longer both appear as 平. If none is
+  found, the app says so once. A font file placed in `inst/app/cjk-font/`
+  is used first. Interactive plots are unaffected.
+* **Chinese tone names in their usual order.** Legends, facets, tables and
+  menus sorted 阴平 阳平 上声 去声 by code point, as 上声 去声 阳平 阴平.
+  Traditional tone names, in simplified or traditional characters, now sort
+  平 上 去 入 with 阴 before 阳, so GCA and GAMM fits take 阴平 as the
+  reference tone. A factor keeps its own levels, and other labels keep their
+  order. New `sort_tones()`.
+* **GCA and GAMM plots: readable axis numbers.** In the app, the axis
+  numbers of the GCA and GAMM prediction plots were tiny or missing, and
+  the text was not in the app font. Both plots now use the same theme as
+  the Visualise plot, on screen and in the downloaded PNG.
+* **Small fixes.** The Start-tab preview says when a file could not be read
+  and shows the real row count for files under 10 rows. Faceted Visualise
+  plots have more room between panels.
 * **Chao numerals: timing of rises and falls.** The numerals give pitch
   levels, not when a tone moves, so an early and a late rise between the
   same levels get the same digits. `contour_to_chao()` now also returns

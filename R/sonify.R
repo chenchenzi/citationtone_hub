@@ -54,8 +54,9 @@
 #' Klatt, D. H. (1980). Software for a cascade/parallel formant synthesiser.
 #' \emph{Journal of the Acoustical Society of America}, 67(3), 971-995.
 #'
-#' @param f0_hz Numeric vector of f0 values in Hz (the contour to play). Leading
-#'   and trailing \code{NA}s are trimmed; internal \code{NA}s are interpolated.
+#' @param f0_hz Numeric vector of f0 values in Hz (the contour to play). Values
+#'   of 0 or below count as unvoiced, like \code{NA}. Leading and trailing
+#'   \code{NA}s are trimmed; internal \code{NA}s are interpolated.
 #' @param fs Output sample rate (Hz). Default 16000.
 #' @param dur Playback duration in seconds. Default 0.7.
 #' @param source \code{"tone"} for a pure sine, \code{"complex"} for a sine plus
@@ -93,6 +94,7 @@ sonify_f0 <- function(f0_hz, fs = 16000, dur = 0.7,
   source <- match.arg(source)
   vowel  <- match.arg(vowel)
   f0_hz <- as.numeric(f0_hz)
+  f0_hz[!f0_voiced(f0_hz)] <- NA_real_                   # 0 Hz is unvoiced, not a pitch
   fin <- which(is.finite(f0_hz))
   if (length(fin) < 2) stop("`f0_hz` needs at least 2 finite values.", call. = FALSE)
   keep <- fin[1]:fin[length(fin)]

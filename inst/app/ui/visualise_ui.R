@@ -149,12 +149,16 @@ visualise_ui <- function(input, output, session, dataset, normalised_data, curat
     colour_by_tone <- n_tone_lv <= 12
     one_col        <- "#3b8a6e"
 
-    # scale_color_brewer needs a discrete scale, so factor a numeric tone column
-    # (e.g. integer codes 1..5). The checkbox keeps an already-factor column as-is.
+    # The colour scale needs a discrete tone column, so factor it (e.g. integer
+    # codes 1..5) in the order as.factor() gives, except that Chinese tone
+    # names keep their traditional order (sort_tones()); ggplot2 would sort
+    # them by code point. A factor column keeps its own levels.
     if (colour_by_tone) {
       tone_col <- plot_data[[input$tone_var]]
-      if (is.numeric(tone_col) || isTRUE(input$convert_tone_to_factor)) {
-        plot_data[[input$tone_var]] <- as.factor(tone_col)
+      if (!is.factor(tone_col) && (is.numeric(tone_col) ||
+          isTRUE(input$convert_tone_to_factor) || tone_needs_levels(tone_col))) {
+        plot_data[[input$tone_var]] <- factor(tone_col,
+                                              levels = sort_tones(tone_col, natural = FALSE))
       }
     }
 
@@ -240,8 +244,13 @@ visualise_ui <- function(input, output, session, dataset, normalised_data, curat
     } else if (facet_mode == "speaker_tone") {
       p <- p + facet_grid(get(input$speaker_var) ~ get(input$tone_var))
     }
+    # Room between facets, so the last x label of one panel does not run
+    # into the first of the next (wider digits in CJK fonts made 0.30.0).
+    if (facet_mode %in% c("tone", "speaker_tone"))
+      p <- p + theme(panel.spacing.x = grid::unit(14, "pt"))
 
-    p
+    # Chinese labels need a CJK font in the PNG (cjk_family_theme(), global.R)
+    p + cjk_family_theme(p)
   })
 
   # Dynamic plot dimensions (shared by display and download)
@@ -341,18 +350,18 @@ visualise_ui <- function(input, output, session, dataset, normalised_data, curat
     code_lines <- c(
       "library(tidyverse)",
       "",
-      "# Read your data (adjust path to where the file is on your machine)",
-      paste0('dat <- read.csv("', ds_name, '")'),
+      read_data_code(ds_name),
       ""
     )
 
     # Colour by tone only when it has few enough levels (mirrors the plot).
     cbt <- is.null(vis_dataset()) ||
            length(unique(vis_dataset()[[input$tone_var]])) <= 12
-    if (cbt && input$convert_tone_to_factor) {
+    tone_now <- if (!is.null(vis_dataset())) vis_dataset()[[input$tone_var]]
+    if (cbt && (isTRUE(input$convert_tone_to_factor) || tone_needs_levels(tone_now))) {
       code_lines <- c(code_lines,
         "# Convert tone category to factor",
-        paste0('dat$', input$tone_var, ' <- as.factor(dat$', input$tone_var, ')'),
+        tone_factor_code(input$tone_var, tone_now),
         ""
       )
     }

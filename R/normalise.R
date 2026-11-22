@@ -88,9 +88,12 @@
 #' ## NA handling
 #'
 #' All summary statistics use `na.rm = TRUE`. Sample-level `NA` f0
-#' values propagate as `NA` in the normalised column. For `"lz"`, f0
-#' values of 0 or below (sometimes used to mark unvoiced frames) have no
-#' logarithm, so they are treated as `NA` too.
+#' values propagate as `NA` in the normalised column. f0 values of 0 or
+#' below are treated as `NA` too, for every method: pitch trackers write
+#' 0 Hz for unvoiced frames, and 0 is not a pitch. They are left out of the
+#' speaker mean and SD, and give `NA` in the normalised column (not `-Inf`
+#' semitones). The `f0` column itself is returned unchanged; use
+#' [zero_hz_to_na()] to clean it.
 #'
 #' @param data A long-format data frame with one row per f0 sample. Must
 #'   contain at least the f0, speaker, and (for `"weighted"` means) tone
@@ -204,15 +207,12 @@ normalise_f0 <- function(data,
   }
 
   # --- Values the formula works on ---------------------------------------
-  # LZ works on log f0 throughout, so its centre is the mean of log f0 (the
-  # log of the geometric mean). f0 <= 0 has no logarithm and counts as NA.
-  x   <- data[[f0]]   # read before speaker_mean is written below
-  val <- x
-  if (method == "lz") {
-    ok  <- !is.na(val) & val > 0   # log only valid values: no NaN warning
-    val <- rep(NA_real_, length(val))
-    val[ok] <- log10(x[ok])
-  }
+  # f0 <= 0 is an unvoiced frame (trackers write 0 Hz), not a pitch, so it
+  # counts as NA for every method. LZ works on log f0 throughout, so its
+  # centre is the mean of log f0 (the log of the geometric mean).
+  x <- data[[f0]]   # read before speaker_mean is written below
+  x[!f0_voiced(x)] <- NA_real_
+  val <- if (method == "lz") log10(x) else x
 
   # --- Per-speaker centre and spread --------------------------------------
   # "simple": mean and SD of all the speaker's values (the classic z-score

@@ -68,7 +68,10 @@ tone.
 \code{f0_predicted} (the column name \code{f0_predicted} matches the
 convention used by \code{\link[=predict_gca]{predict_gca()}} and \code{\link[=predict_gamm]{predict_gamm()}} so the
 same downstream tools can consume either model predictions or
-raw mean contours).
+raw mean contours). Tones are in the order of the levels of a factor
+\code{tone} column. Otherwise traditional Chinese tone names come first, in
+their traditional order (see \code{\link[=sort_tones]{sort_tones()}}), and other labels follow
+in alphabetical (C-locale) order.
 }
 }
 \examples{

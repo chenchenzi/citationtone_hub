@@ -263,3 +263,162 @@ test_that("nearest applies to intensity as well, so the row stays self-consisten
   out <- resample_f0_equal(df, n = 4, method = "nearest")
   expect_true(all(out$intensity %in% c(50, 60, 70)))
 })
+
+test_that("a single-frame token at 0 Hz is exported as NA, not 0", {
+  out <- resample_f0_equal(data.frame(token = "a", time = 1, f0 = 0), n = 5)
+  expect_equal(nrow(out), 1)
+  expect_true(is.na(out$f0))
+})
+
+# ---- 0 Hz read as missing: hz_f0_columns() and zero_hz_to_na() ------------
+
+test_that("hz_f0_columns finds f0 columns in Hz under common names", {
+  hz <- c(0, 0, 210, 215, 0, 220)
+  df <- data.frame(f0 = hz, F0_Hz = hz, f0_corrected = hz, f0_original = hz,
+                   pitch = hz, pitch_hz = hz, F0..Hz. = hz, f0Hz = hz,
+                   f_0 = hz, Hz = hz, mean_f0 = hz, check.names = FALSE)
+  expect_equal(hz_f0_columns(df), names(df))
+})
+
+test_that("hz_f0_columns finds VoiceSauce's f0 columns", {
+  # VoiceSauce writes 0 for unvoiced frames in each tracker's f0 column.
+  hz <- c(0, 0, 210, 215, 0, 220)
+  vs <- data.frame(Filename = "a.mat", Label = "ma1", seg_Start = 0, seg_End = 60,
+                   t_ms = seq(0, 50, 10),
+                   strF0 = hz, sF0 = hz, pF0 = hz, shrF0 = hz, oF0 = hz,
+                   strF0_mean = hz, H1c = c(0, 0, 12, 14, 0, 11),
+                   sF0_st = c(0, 0, -1.2, 0.4, 0, 0.8),   # normalised: kept
+                   pF0_dur = c(0, 0, 120, 120, 0, 120),    # not a VoiceSauce name
+                   CPP = c(0, 0, 21, 22, 0, 20), check.names = FALSE)
+  expect_equal(hz_f0_columns(vs),
+               c("strF0", "sF0", "pF0", "shrF0", "oF0", "strF0_mean"))
+  out <- zero_hz_to_na(vs)
+  expect_equal(out$sF0, c(NA, NA, 210, 215, NA, 220))
+  expect_equal(out$H1c, vs$H1c)
+  expect_equal(out$CPP, vs$CPP)
+  expect_equal(out$t_ms, vs$t_ms)
+  expect_equal(attr(out, "zero_hz"),
+               c(strF0 = 3L, sF0 = 3L, pF0 = 3L, shrF0 = 3L, oF0 = 3L, strF0_mean = 3L))
+  # Only those exact words: other letters before f0 still do not count.
+  near <- data.frame(af0 = hz, xf0 = hz, strf0x = hz, f0s = hz, sf = hz, sf00 = hz)
+  expect_equal(hz_f0_columns(near), character(0))
+})
+
+test_that("hz_f0_columns leaves normalised, time, duration and intensity columns alone", {
+  set.seed(3)
+  n  <- 40
+  hz <- c(0, 0, runif(n - 2, 180, 260))
+  df <- data.frame(
+    f0            = hz,
+    f0_st         = c(NA, NA, rnorm(n - 2)),            # normalised: negatives
+    f0_zscore     = c(NA, NA, rnorm(n - 2)),
+    f0_lz         = c(NA, NA, rnorm(n - 2)),
+    speaker_mean  = 220,
+    token_f0_dur  = rep(c(0, 250, 310, 420), 10),       # ms, 0 is valid
+    syllable_f0_dur = rep(c(0, 0.18), 20),              # s
+    f0_dur_ms     = rep(c(0, 250, 310, 420), 10),
+    time          = seq(0, 1950, length.out = n),       # ms from 0
+    time_ms       = seq(0, 1950, length.out = n),
+    pitch_start   = rep(c(0, 35, 70, 105), 10),         # landmark seconds
+    pitch_end     = rep(c(35, 70, 105, 140), 10),
+    pitch_i       = rep(1:4, 10),
+    pitch_tseq    = seq(0, 3, length.out = n),
+    intensity     = c(0, 0, runif(n - 2, 55, 80)),      # dB
+    f0_intensity  = c(0, 0, runif(n - 2, 55, 80)),
+    f0_db         = c(0, 0, runif(n - 2, 55, 80)),
+    f0_range      = rep(c(0, 45, 60, 80), 10),          # 0 = flat token
+    f0_sd         = rep(c(0, 35, 40, 50), 10),
+    F1_hz         = c(0, 0, runif(n - 2, 400, 800)),    # formant
+    freq          = rep(c(0, 120, 340, 900), 10),       # word frequency
+    f0_rel        = abs(rnorm(n, 5)),                   # st above the minimum
+    f0_chao       = rep(c(0, 1, 3, 5), 10),             # Chao numerals
+    f0_chr        = c("--undefined--", rep("210", n - 1)),
+    f0_neg        = c(-1, -1, runif(n - 2, 180, 260)),  # REAPER-style code
+    check.names = FALSE, stringsAsFactors = FALSE)
+  expect_equal(hz_f0_columns(df), "f0")
+  expect_equal(hz_f0_columns(df[0, ]), character(0))
+  expect_equal(hz_f0_columns(data.frame()), character(0))
+})
+
+test_that("hz_f0_columns leaves derived f0 measures alone, where 0 is a value", {
+  set.seed(4)
+  n  <- 40
+  hz <- c(0, 0, runif(n - 2, 180, 260))
+  df <- data.frame(
+    f0            = hz,
+    F0_Hz_smoothed = hz,
+    f0_max        = hz,
+    f0_2          = hz,
+    f0_peak_loc   = rep(c(0, 150, 220, 90), 10),        # ms; 0 = peak at onset
+    f0_peak_location_ms = rep(c(0, 150, 220, 90), 10),
+    f0_excursion  = rep(c(0, 40, 60, 90), 10),          # Hz, 0 = flat
+    f0_span       = rep(c(0, 40, 60, 90), 10),
+    pitch_span    = rep(c(0, 40, 60, 90), 10),
+    f0_change     = rep(c(0, 40, 60, 90), 10),
+    pitch_rank    = rep(c(0, 50, 100, 150), 10),
+    f0_percentile = rep(c(0, 50, 75, 99), 10),
+    f0_position   = rep(c(0, 150, 300, 450), 10),
+    f0_step       = rep(c(0, 50, 100, 150), 10),
+    f0_sample     = rep(c(0, 50, 100, 150), 10),
+    f0_target_height = hz,
+    check.names = FALSE)
+  expect_equal(hz_f0_columns(df), c("f0", "F0_Hz_smoothed", "f0_max", "f0_2"))
+  out <- zero_hz_to_na(df)
+  expect_equal(out$f0_peak_loc, df$f0_peak_loc)
+  expect_equal(out$f0_excursion, df$f0_excursion)
+  expect_equal(out$pitch_rank, df$pitch_rank)
+  expect_equal(names(attr(out, "zero_hz")), c("f0", "F0_Hz_smoothed", "f0_max", "f0_2"))
+})
+
+test_that("zero_hz_to_na sets 0 Hz to NA and counts them", {
+  df <- data.frame(token = rep(c("a", "b"), each = 4),
+                   time  = rep(c(0, 0.01, 0.02, 0.03), 2),
+                   f0    = c(0, 210, 215, 0, 0, 120, NA, 118),
+                   f0_corrected = c(0, 210, 215, 212, 130, 120, 119, 118),
+                   intensity = c(0, 70, 71, 0, 0, 65, 66, 0))
+  out <- zero_hz_to_na(df)
+  expect_equal(out$f0, c(NA, 210, 215, NA, NA, 120, NA, 118))
+  expect_equal(out$f0_corrected, c(NA, 210, 215, 212, 130, 120, 119, 118))
+  expect_equal(out$intensity, df$intensity)            # 0 dB is a value
+  expect_equal(out$time, df$time)
+  expect_equal(attr(out, "zero_hz"), c(f0 = 3L, f0_corrected = 1L))
+  # Same as reading NA in the first place
+  twin <- df
+  twin$f0[twin$f0 %in% 0] <- NA
+  twin$f0_corrected[twin$f0_corrected %in% 0] <- NA
+  expect_equal(unclass(out)[names(df)], unclass(twin)[names(df)])
+})
+
+test_that("zero_hz_to_na leaves clean, normalised and negative-coded data alone", {
+  na_df <- data.frame(f0 = c(NA, 210, 215), time = c(0, 0.01, 0.02))
+  out <- zero_hz_to_na(na_df)
+  expect_equal(out$f0, na_df$f0)
+  expect_length(attr(out, "zero_hz"), 0)
+  # A legitimate 0.00 on a normalised scale is kept
+  st <- data.frame(f0_st = c(-1.2, 0, 2.3), speaker_mean = 200)
+  expect_equal(zero_hz_to_na(st)$f0_st, c(-1.2, 0, 2.3))
+  # Negative unvoiced codes: the column is not touched at all
+  neg <- data.frame(f0 = c(-1, 0, 210, 220))
+  expect_equal(zero_hz_to_na(neg)$f0, c(-1, 0, 210, 220))
+})
+
+test_that("zero_hz_to_na takes columns by name and keeps the data frame's attributes", {
+  df <- data.frame(F0praat = c(0L, 200L, 210L), f0 = c(0, 200, 210))
+  attr(df, "encoding") <- "UTF-16BE"
+  out <- zero_hz_to_na(df, cols = c("F0praat", "missing"))
+  expect_equal(out$F0praat, c(NA, 200L, 210L))
+  expect_equal(out$f0, c(0, 200, 210))
+  expect_equal(attr(out, "zero_hz"), c(F0praat = 1L))
+  expect_equal(attr(out, "encoding"), "UTF-16BE")
+  expect_s3_class(zero_hz_to_na(dplyr::tibble(f0 = c(0, 200))), "tbl_df")
+})
+
+test_that("the attribute survives read_csv_utf8() then zero_hz_to_na()", {
+  f <- tempfile(fileext = ".csv")
+  on.exit(unlink(f))
+  writeLines(c("token,time,f0", "a,0,0", "a,0.01,210", "a,0.02,--undefined--"), f)
+  df <- zero_hz_to_na(read_csv_utf8(f, na.strings = c("NA", "--undefined--")))
+  expect_equal(df$f0, c(NA, 210, NA))
+  expect_equal(attr(df, "zero_hz"), c(f0 = 1L))
+  expect_equal(attr(df, "encoding"), "UTF-8")
+})

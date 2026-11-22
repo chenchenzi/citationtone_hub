@@ -194,6 +194,29 @@ test_that("lz treats NA and non-positive f0 as missing", {
   expect_equal(out$f0_lz[c(1, 4, 5)], (lf - mean(lf)) / sd(lf))
 })
 
+test_that("every method reads f0 of 0 (unvoiced) as NA, as if it were NA", {
+  df <- data.frame(
+    speaker = rep(c("S01", "S02"), each = 8),
+    tone    = rep(rep(c("T1", "T2"), each = 4), 2),
+    f0      = c(0, 240, 250, 0, 200, 230, 0, 260,
+                0, 130, 135, 128, 0, 110, 140, 0)
+  )
+  twin <- df
+  twin$f0[twin$f0 == 0] <- NA
+  for (m in c("semitone", "zscore", "lz")) {
+    for (mm in c("weighted", "simple")) {
+      a <- normalise_f0(df, method = m, mean_method = mm)
+      b <- normalise_f0(twin, method = m, mean_method = mm)
+      col <- switch(m, semitone = "f0_st", zscore = "f0_zscore", lz = "f0_lz")
+      expect_equal(a[[col]], b[[col]], info = paste(m, mm))
+      expect_equal(a$speaker_mean, b$speaker_mean, info = paste(m, mm))
+      expect_false(any(is.infinite(a[[col]])), info = paste(m, mm))
+    }
+  }
+  # The f0 column itself is returned as given.
+  expect_equal(normalise_f0(df)$f0, df$f0)
+})
+
 test_that("existing methods are unchanged by the shared centre code", {
   df <- data.frame(
     speaker = rep(c("S01", "S02"), each = 4),

@@ -193,15 +193,24 @@ model_ui <- function(input, output, session, dataset, normalised_data, curated_d
         input$model_speaker_var, input$model_tone_var,
         input$model_f0_var)
 
-    result <- fit_polynomial(
-      active_data(),
-      f0      = input$model_f0_var,
-      token   = input$model_token_var,
-      time    = input$model_time_var,
-      speaker = input$model_speaker_var,
-      tone    = input$model_tone_var,
-      degree  = as.integer(input$model_degree)
+    # An error here would end the session, so show it instead.
+    result <- tryCatch(
+      fit_polynomial(
+        active_data(),
+        f0      = input$model_f0_var,
+        token   = input$model_token_var,
+        time    = input$model_time_var,
+        speaker = input$model_speaker_var,
+        tone    = input$model_tone_var,
+        degree  = as.integer(input$model_degree)
+      ),
+      error = function(e) {
+        showNotification(paste("Model fitting error:", e$message),
+                         type = "error", duration = 10)
+        NULL
+      }
     )
+    if (is.null(result)) return()
 
     model_result(result)
   })
@@ -510,8 +519,7 @@ model_ui <- function(input, output, session, dataset, normalised_data, curated_d
 
     code_text <- paste0(
       'library(dplyr)\n\n',
-      '# Read your data (adjust path to where the file is on your machine)\n',
-      'dat <- read.csv("', ds_name, '", stringsAsFactors = FALSE)\n\n',
+      paste(read_data_code(ds_name), collapse = "\n"), '\n\n',
       '# Legendre polynomial basis on [-1, 1]\n',
       'legendre_basis <- function(t, degree) {\n',
       '  B <- matrix(NA_real_, nrow = length(t), ncol = degree + 1)\n',
@@ -526,8 +534,11 @@ model_ui <- function(input, output, session, dataset, normalised_data, curated_d
       'fit_token <- function(df, degree) {\n',
       '  t_raw <- df$', time_var, '\n',
       t_norm_lines,
-      '  B <- legendre_basis(t_norm, degree)\n',
-      '  fit <- lm.fit(B, df$', f0_var, ')\n',
+      '  y <- df$', f0_var, '\n',
+      '  ok <- is.finite(t_norm) & is.finite(y)   # skip missing f0, as the app does\n',
+      '  if (sum(ok) < degree + 1) return(setNames(rep(NA_real_, degree + 1), paste0("c", 0:degree)))\n',
+      '  B <- legendre_basis(t_norm[ok], degree)\n',
+      '  fit <- lm.fit(B, y[ok])\n',
       '  setNames(fit$coefficients, paste0("c", 0:degree))\n',
       '}\n\n',
       '# Fit per token and combine results\n',

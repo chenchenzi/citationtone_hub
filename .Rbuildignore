@@ -25,3 +25,11 @@
 ^cran-comments\.md$
 ^CRAN-RELEASE$
 ^README\.Rmd$
+^paper$
+^poster$
+^wav$
+^open-sans$
+^figures_300dpi$
+^slides$
+^\.rscignore$
+^\.zenodo\.json$

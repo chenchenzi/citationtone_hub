@@ -42,9 +42,11 @@
 #'
 #' ## Edge cases
 #'
-#' Tokens with fewer than `degree + 1` valid samples receive `NA` for
-#' all coefficients. Tokens with a single unique time point keep `c0`
-#' as the mean f0 and set the higher-order coefficients to `NA`.
+#' Samples with a missing or infinite f0 or time are skipped (`-Inf` comes
+#' from taking the log of 0 Hz). Tokens with fewer than `degree + 1` valid
+#' samples receive `NA` for all coefficients. Tokens with a single unique
+#' time point keep `c0` as the mean of their finite f0 values and set the
+#' higher-order coefficients to `NA`.
 #'
 #' @param data A long-format data frame with one row per f0 sample.
 #' @param f0 Column name of f0 values. Default `"f0"`. Using normalised
@@ -205,13 +207,16 @@ fit_one_token_polynomial <- function(token_data, degree, time_col) {
   # Degenerate: zero range (single unique time, all-NA, etc.)
   if (is.na(t_min) || is.na(t_max) || t_max == t_min) {
     result <- stats::setNames(rep(NA_real_, degree + 1), coef_names)
-    result["c0"] <- mean(token_data$.f0_fit, na.rm = TRUE)
+    # Finite f0 only, as in the fit below: -Inf (log of 0 Hz) would give -Inf.
+    y <- token_data$.f0_fit
+    y <- y[is.finite(y)]
+    if (length(y)) result["c0"] <- mean(y)
     return(as.data.frame(as.list(result)))
   }
 
   t_norm <- 2 * t_raw - 1
   y <- token_data$.f0_fit
-  valid <- !is.na(t_norm) & !is.na(y)
+  valid <- is.finite(t_norm) & is.finite(y)   # -Inf (log of 0 Hz) breaks lm.fit
 
   if (sum(valid) < degree + 1) {
     result <- stats::setNames(rep(NA_real_, degree + 1), coef_names)

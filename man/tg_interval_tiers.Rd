@@ -12,11 +12,21 @@ tg_interval_tiers(tg_paths, max_read = 12)
 \item{max_read}{Maximum number of files to read.}
 }
 \value{
-Sorted character vector of unique interval-tier names (possibly empty).
+Sorted character vector of unique interval-tier names (possibly
+empty). When some of the files read could not be parsed, attribute
+\code{"unreadable"} gives the reason for each, named by path (see
+\code{\link[=read_textgrid]{read_textgrid()}}). When some were read in a guessed 8-bit code page,
+attribute \code{"guessed"} names that code page for the user (such as
+"Western European (Windows-1252)"), named by path. When some were read
+as UTF-8 with bytes that are not UTF-8 replaced, attribute \code{"stray"}
+gives those lines (such as "line 12"), named by path.
 }
 \description{
 Reads up to \code{max_read} TextGrid files and returns the union of their
 interval-tier names. Point tiers are ignored: landmarks come from interval
 boundaries. Tiers are usually uniform across a corpus, so a small sample is
 enough to populate a tier selector without reading thousands of files.
+}
+\details{
+Files are read with \code{\link[=read_textgrid]{read_textgrid()}}, so UTF-16 TextGrids work too.
 }

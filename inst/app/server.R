@@ -111,9 +111,32 @@ server <- function(input, output, session) {
   # exact same code path as a manual upload.
   # Raw uploaded CSV — the single source of truth before any optional,
   # View-tab metadata is attached.
+  # Read in any Unicode encoding (Praat saves UTF-16 for non-ASCII text);
+  # Praat's --undefined-- reads as NA. A file that cannot be read gives NULL
+  # and a message, never an error: an error here would reach the observers
+  # and close the session.
   raw_dataset <- reactive({
-    if (is.null(input$uploadfile)) return(NULL)
-    read.csv(input$uploadfile$datapath, stringsAsFactors = FALSE)
+    fi <- input$uploadfile
+    if (is.null(fi)) return(NULL)
+    df <- tryCatch(
+      read_csv_utf8(fi$datapath, stringsAsFactors = FALSE,
+                    na.strings = c("NA", "--undefined--"), name = fi$name),
+      error = function(e) {
+        showNotification(conditionMessage(e), type = "error", duration = NULL,
+                         id = "upload_read")
+        NULL
+      })
+    if (is.null(df)) return(NULL)
+    # 0 Hz in an f0 column is an unvoiced frame: read it as NA. Counts go in
+    # attr "zero_hz" for the Start-tab notice.
+    df <- zero_hz_to_na(df)
+    note <- attr(df, "encoding_note")
+    if (!is.null(note)) {
+      showNotification(note, type = "warning", duration = 10, id = "upload_read")
+    } else {
+      removeNotification("upload_read")
+    }
+    df
   })
 
   # Optional metadata attached in the Start tab, so users who already have an

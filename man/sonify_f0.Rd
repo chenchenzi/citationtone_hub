@@ -19,8 +19,9 @@ sonify_f0(
 )
 }
 \arguments{
-\item{f0_hz}{Numeric vector of f0 values in Hz (the contour to play). Leading
-and trailing \code{NA}s are trimmed; internal \code{NA}s are interpolated.}
+\item{f0_hz}{Numeric vector of f0 values in Hz (the contour to play). Values
+of 0 or below count as unvoiced, like \code{NA}. Leading and trailing
+\code{NA}s are trimmed; internal \code{NA}s are interpolated.}
 
 \item{fs}{Output sample rate (Hz). Default 16000.}
 
