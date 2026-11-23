@@ -1,5 +1,5 @@
 {
- "updated": "2026-11-22T11:32:22Z",
+ "updated": "2026-11-23T12:56:54Z",
  "github": {
   "repo": "chenchenzi/citationtone_hub",
   "stars": 4,
@@ -13,7 +13,7 @@
  "zenodo": {
   "concept_doi": "10.5281/zenodo.22632508",
   "latest_version": "1.0.0",
-  "views": 31,
+  "views": 33,
   "downloads": 2,
   "history": [
    {
@@ -170,13 +170,18 @@
     "date": "2026-11-22",
     "views": 31,
     "downloads": 2
+   },
+   {
+    "date": "2026-11-23",
+    "views": 33,
+    "downloads": 2
    }
   ]
  },
  "visits": {
   "source": "Google Analytics",
   "since": "2026-03-30",
-  "total": 970,
+  "total": 972,
   "daily": [
    {
     "date": "2026-03-30",
@@ -869,6 +874,10 @@
    {
     "date": "2026-11-21",
     "sessions": 3
+   },
+   {
+    "date": "2026-11-22",
+    "sessions": 2
    }
   ]
  }
