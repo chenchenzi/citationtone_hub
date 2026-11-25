@@ -102,11 +102,12 @@ test_that("the screen counts, removes and marks the rows without f0 on a padded 
     expect_no_match(rep, "Tick Drop the flagged token", fixed = TRUE)
     expect_false(any(nzchar(d$screen_flag)))
     expect_no_match(rep, "in tokens with no f0", fixed = TRUE)
-    # Rows removed: the folded save note, before the rule
+    # Rows removed: the folded save note, and no fold on what counts as no f0
     expect_match(rep, paste("Your raw file is not changed The boxes change only the app's copy of the data.",
-                            "To save that copy, download it in Normalise or Curate. What counts as no f0"),
+                            "To save that copy, download it in Normalise or Curate."),
                  fixed = TRUE)
     expect_no_match(rep, "What removal changes", fixed = TRUE)
+    expect_no_match(rep, "What counts as no f0", fixed = TRUE)
     # One toast for the screen, with the 0 Hz count
     expect_true("f0a_f0_screen" %in% start_toast_ids(s$rec))
     expect_false("f0a_zero_hz" %in% start_toast_ids(s$rec))
@@ -251,8 +252,8 @@ test_that("an upload where every row has f0 and a token column has nothing to re
     expect_no_match(start_text(output$f0_screen_report), "flagged", fixed = TRUE)
     rep <- start_text(output$f0_screen_report)
     # Nothing to remove: all good, in one line
-    expect_match(rep, "Data screening Every row has f0 All good: every row has f0. What counts as no f0",
-                 fixed = TRUE)
+    expect_match(rep, "Data screening Every row has f0 All good: every row has f0.", fixed = TRUE)
+    expect_no_match(rep, "What counts as no f0", fixed = TRUE)
     expect_no_match(rep, "nothing to remove", fixed = TRUE)
     expect_match(start_html(output$f0_screen_report),
                  '<div><strong class="st-verdict">All good:</strong> every row has f0.</div>', fixed = TRUE)
@@ -349,10 +350,10 @@ test_that("an equal-point file: removal as for frames, and the flagged tokens li
       "tokens flagged: fewer than 11 points with f0. Reasons are in a new screen_flag column. Points",
       "without f0 inside: p02, p03, p04 No f0 at the first or last point: p05 Fewer than 3 points with",
       "f0: p06 Tick Drop the 5 flagged tokens to leave them out. Your raw file is not changed The boxes",
-      "change only the app's copy of the data. To save that copy, download it in Normalise or Curate.",
-      "What counts as no f0 Missing f0 or 0 Hz."), fixed = TRUE)
-    for (w in c("Missing first or last points", "Export again", "at all 11 points", "not removed",
-                "Your file is not changed", "points without f0", "Kept", "No f0 at all", "and 1 more",
+      "change only the app's copy of the data. To save that copy, download it in Normalise or Curate."),
+      fixed = TRUE)
+    for (w in c("Missing first or last points", "What counts as no f0", "Export again",
+                "at all 11 points", "not removed", "Your file is not changed", "points without f0", "Kept", "No f0 at all", "and 1 more",
                 "Also remove runs", "a gap cuts off")) {
       expect_no_match(rep, w, fixed = TRUE)
     }
@@ -564,8 +565,7 @@ test_that("equal points: two reasons on two lines, gaps inside only, 0 Hz, -1, a
     expect_identical(start_toast_text(s$rec, "f0a_f0_screen"),
                      paste("11 of 330 rows have no f0 (2 of them 0 Hz) and are removed. 6 tokens are flagged.",
                            "See the Start page."))
-    expect_match(start_text(output$f0_screen_report), "What counts as no f0 Missing f0 or 0 Hz (2 rows of 0 Hz).",
-                 fixed = TRUE)
+    expect_no_match(start_text(output$f0_screen_report), "What counts as no f0", fixed = TRUE)
     start_code_ok(s, f, start_settings(), dataset())
   })
 
@@ -1298,10 +1298,10 @@ test_that("frames: a token with 2 samples and a token with no f0 are flagged, wh
     expect_no_match(html, "st-flag-list", fixed = TRUE)
     expect_no_match(rep, "(only 2 samples with f0)", fixed = TRUE)
     expect_no_match(rep, "Fewer than 3 samples", fixed = TRUE)
-    # Tiles and lines as before, and the save note last but the rule; no
-    # tile for S2_b's rows
-    expect_match(rep, paste("To save that copy, download it in Normalise or Curate. What counts as no f0"),
-                 fixed = TRUE)
+    # Tiles and lines as before, and the save note last; no tile for
+    # S2_b's rows
+    expect_match(rep, "To save that copy, download it in Normalise or Curate.", fixed = TRUE)
+    expect_no_match(rep, "What counts as no f0", fixed = TRUE)
     for (w in c("in tokens with no f0", "which removal drops", "which the drop leaves out",
                 "Missing first or last points")) {
       expect_no_match(rep, w, fixed = TRUE)
@@ -1582,8 +1582,8 @@ test_that("gaps only the time steps show: 'more' and 'too' only after the inside
     start_code_ok(s, f, start_settings(), dataset())
     session$setInputs(screen_remove = FALSE)
     rep <- start_text(output$f0_screen_report)
-    expect_match(rep, "The time steps show 1 gap in 1 token, where the file has no rows. What counts",
-                 fixed = TRUE)
+    # Nothing follows the gap sentence: no "voiced_run marks it"
+    expect_match(rep, "The time steps show 1 gap in 1 token, where the file has no rows\\.\\s*$")
   })
   # A row without f0 inside g3: the inside tile, then "more" and "too"
   fx <- rbind(g1[-4, ], mk("g3", c(190, 191, NA, 193:197)))
@@ -1735,18 +1735,18 @@ test_that("0 and -1 in an Hz column zero_hz_to_na() did not pick are read as no 
     expect_equal(max(d$voiced_run[d$token == "a"]), 2L)
     code <- s$env$read_data_code("x.csv", start_settings())
     expect_true(any(grepl("unvoiced = c(0, -1)", code, fixed = TRUE)))
-    # The rule names the values read as no f0, and never says they count as f0
+    # The sidebar box names the values; the card has no rule of its own
     rep <- start_text(output$f0_screen_report)
-    expect_match(rep, "What counts as no f0 Missing f0. 0 and -1 count as no f0 too, as ticked in the sidebar (6 rows).",
-                 fixed = TRUE)
+    expect_no_match(rep, "What counts as no f0", fixed = TRUE)
     expect_no_match(rep, "count as f0", fixed = TRUE)
     # Unticked: the values stay, and there is nothing to remove
     session$setInputs(screen_unvoiced = FALSE)
     expect_equal(nrow(dataset()), 17L)
     expect_equal(sum(dataset()$f0_rapt <= 0), 6L)
     expect_identical(data_version(), 1L)
-    expect_match(start_text(output$f0_screen_report),
-                 "What counts as no f0 Missing f0. 0 and negative values count as f0 in this column.", fixed = TRUE)
+    rep <- start_text(output$f0_screen_report)
+    expect_match(rep, "Every row has f0 All good: every row has f0.", fixed = TRUE)
+    expect_no_match(rep, "count as f0", fixed = TRUE)
   })
 })
 
@@ -2158,8 +2158,7 @@ test_that("the report's wording fits the counts: one row, no rows without f0, no
                             "another f0 variable in the sidebar."), fixed = TRUE)
     expect_no_match(rep, "as no row has f0", fixed = TRUE)
     expect_no_match(rep, "voiced_run", fixed = TRUE)
-    # An Hz name, though it has no values
-    expect_match(rep, "What counts as no f0 Missing f0 or 0 Hz.", fixed = TRUE)
+    expect_no_match(rep, "What counts as no f0", fixed = TRUE)
   })
 
   # The only f0 column has no f0 at all: the toast says so, and nothing else
@@ -2247,8 +2246,8 @@ test_that("the report speaks of the time steps only when gaps hang on them and t
     expect_no_match(rep, "gaps in the middle", fixed = TRUE)
     expect_no_match(rep, "have the same time", fixed = TRUE)
     expect_no_match(rep, "Gaps cannot be read", fixed = TRUE)
-    expect_match(rep, "Data screening Every row has f0 All good: every row has f0. What counts as no f0",
-                 fixed = TRUE)
+    expect_match(rep, "Data screening Every row has f0 All good: every row has f0.", fixed = TRUE)
+    expect_no_match(rep, "What counts as no f0", fixed = TRUE)
   })
   # With 25 rows in every token, the frames are counted as points, as the
   # Data screening card counts them, and the same sentence says points

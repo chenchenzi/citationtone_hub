@@ -520,7 +520,7 @@ screen_extra <- reactive({
 # rows), how its f0 is sampled, the columns used, and a time-step problem
 # only when it matters (start_data_facts(), global.R, on prepared(): before
 # any removal). "Data screening": the rows without f0, where they are,
-# what the boxes do with them, and the longer explanations folded away. The
+# what the boxes do with them, and a folded note on saving the copy. The
 # styles are in www/styles.css, scoped to .st-report; ui.R does not link that
 # file, so the report brings it as a dependency.
 st_css <- htmltools::htmlDependency("shinytone-start-report", "1.1.0",
@@ -792,8 +792,8 @@ st_your_data <- function(fa, scr, ex) {
 # The "Data screening" card: the rows without f0 and what the boxes do with
 # them, one idea per sentence, the same for frame and equal-point files.
 # Only the flagged tokens read differently: in an equal-point file every
-# point without f0 flags its token, so they are listed by reason. The
-# longer explanations are folded away.
+# point without f0 flags its token, so they are listed by reason. Where
+# to save the app's copy is folded away.
 st_rows_card <- function(scr, plan, ex) {
   f0c <- scr$cols$f0
   # The f0 column as a code chip, so a column named f0 does not read as prose
@@ -815,22 +815,6 @@ st_rows_card <- function(scr, plan, ex) {
   chip <- if (without > 0) st_chip(sprintf("%s without f0", pct(without, scr$rows)), "warn")
           else st_chip("Every row has f0", "ok", "circle-check")
 
-  # What counts as no f0, for the folded explanation: "Missing f0 or 0 Hz.",
-  # with the 0 Hz rows read as NA and the values ticked to read as no f0
-  z  <- scr$zero_hz
-  zc <- if (length(z) && f0c %in% names(z)) z[[f0c]] else 0
-  rule <- if (isTRUE(ex$is_hz)) {
-    paste0("Missing f0 or 0 Hz", if (zc > 0) sprintf(" (%s of 0 Hz)", count_label(zc, "row")), ".")
-  } else if (length(scr$unvoiced)) {
-    "Missing f0."
-  } else {
-    "Missing f0. 0 and negative values count as f0 in this column."
-  }
-  if (length(scr$unvoiced)) {
-    rule <- paste0(rule, " ", unv_text(scr$unvoiced, " and "), n_verb(length(scr$unvoiced), " counts", " count"),
-                   sprintf(" as no f0 too, as ticked in the sidebar (%s).", count_label(scr$unvoiced_rows, "row")))
-  }
-  rule_more <- st_more("What counts as no f0", tags$p(rule))
   # Where to save the app's copy, folded away: shown whenever that copy
   # differs from the file (see `differs` below). Excluding the discarded
   # tokens (prepared(), server.R) changes it too: their rows and the
@@ -865,7 +849,7 @@ st_rows_card <- function(scr, plan, ex) {
                            n_verb(without, "it is", "they are"), n_verb(without, "it", "them"), none_txt))))
     }
     return(tags$div(class = "st-card st-rows", head(chip), body,
-                    if (length(plan$unvoiced) || excl) save_more, rule_more))
+                    if (length(plan$unvoiced) || excl) save_more))
   }
 
   # `s`: what the upload has (the lead and where the rows are). `sp`: what
@@ -1116,7 +1100,7 @@ st_rows_card <- function(scr, plan, ex) {
       else st_inline("The models rescale ", tags$code(tcol), " from each token's first f0 to its last ",
                      "with these rows, but take it as already on 0\u20131 without them."))))
   }
-  # Folded away, each only when it applies. The save note, whenever the
+  # Folded away: the save note, whenever the
   # app's copy differs from the file: rows removed, tokens dropped or
   # discarded tokens excluded, values read as no f0, or a screen_flag or
   # voiced_run column added (or the file's own screen_flag left out).
@@ -1125,7 +1109,7 @@ st_rows_card <- function(scr, plan, ex) {
     length(plan$unvoiced) > 0 || excl
   tags$div(class = "st-card st-rows", head(chip), body,
            if (length(notes)) tags$ul(class = "st-notes", notes),
-           if (differs) save_more, rule_more)
+           if (differs) save_more)
 }
 
 output$f0_screen_report <- renderUI({
