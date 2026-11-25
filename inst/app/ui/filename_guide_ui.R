@@ -101,6 +101,11 @@ filename_guide_ui <- function(input, output, session) {
           " recording, makes downstream filtering and metadata joins much easier. ",
           "Encode each piece of information you would want to filter or group by as a ",
           "separate underscore-separated segment."),
+        # What a token is, as the rest of the app uses the word
+        tags$p(class = "fn-lead", HTML(paste(
+          "Here a <strong>token</strong> is one recording of one syllable or word by one speaker",
+          "(one repetition): one <code>.wav</code> file, and all the rows of f0 data that share",
+          "its token ID."))),
 
         # ===================== 1. The filename structure =====================
         fsec("1", "The filename structure"),

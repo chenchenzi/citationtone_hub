@@ -6,7 +6,7 @@
 #' machine, so it has no file-size, memory, or session limits and your
 #' audio / CSV files never leave your computer.
 #'
-#' @param ... Additional arguments forwarded to [shiny::runApp()] — e.g.
+#' @param ... Additional arguments forwarded to [shiny::runApp()], e.g.
 #'   `port = 4321`, `launch.browser = FALSE`, `host = "0.0.0.0"`.
 #'
 #' @details

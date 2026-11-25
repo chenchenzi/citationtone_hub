@@ -11,7 +11,8 @@ flag_level_outliers(
   speaker = "speaker",
   tone = "tone",
   level_threshold = 3.5,
-  min_tokens = 5
+  min_tokens = 5,
+  time = NULL
 )
 }
 \arguments{
@@ -31,6 +32,12 @@ level is flagged. Default \code{3.5} (Iglewicz & Hoaglin 1993).}
 \item{min_tokens}{Minimum number of same-speaker-same-tone tokens
 required to run the check for a group. Default \code{5}. More tokens give a
 more reliable estimate of the group's spread.}
+
+\item{time}{Column name of time, or \code{NULL} (the default). Used only to
+break a tie between two speaker or tone values that are equally
+frequent within a token: the one that comes first in time wins.
+\code{\link[=inspect_f0]{inspect_f0()}} passes its \code{time}, so it picks the same tone as
+\code{\link[=fit_polynomial]{fit_polynomial()}}.}
 }
 \value{
 A token-level data frame (one row per token with at least one
@@ -44,17 +51,23 @@ with other tokens of the \strong{same speaker and same tone}, even when the
 contour is smooth (no sample-to-sample jumps) and not extreme for the
 speaker overall. This catches the "right shape, wrong height" case that
 \code{\link[=flag_outliers]{flag_outliers()}} (which pools all tones within a speaker) and
-\code{\link[=flag_pitch_jumps]{flag_pitch_jumps()}} (which only sees within-token movement) both miss
---- for example a low-tone token mis-tracked up into the mid-tone band.
+\code{\link[=flag_pitch_jumps]{flag_pitch_jumps()}} (which only sees within-token movement) both miss,
+for example a low-tone token mis-tracked up into the mid-tone band.
 }
 \details{
 \subsection{What the function does internally}{
 \enumerate{
-\item Drop samples where \code{f0} is \code{NA} or \code{0} (unvoiced frames).
+\item Drop the rows without f0 (\code{NA}, 0 or a negative marker; only values
+above 0 Hz count). Each token's speaker and tone are the most frequent
+non-empty values on its rows with f0, so a tone column that changes
+within a token (for example one read from a TextGrid tier) still gives
+one tone per token. A tie goes to the value that comes first in \code{time}
+(when given), then to the first in alphabetical (C-locale) order, so
+neither the row order nor the rows without f0 change it.
 \item Compute each token's \strong{median f0}, converted to semitones
 (\code{12 * log2(Hz)}). The median (rather than the mean) is used so that a
-handful of mis-tracked frames --- which \code{\link[=flag_pitch_jumps]{flag_pitch_jumps()}} already
-catches --- do not shift a token's apparent level.
+handful of mis-tracked frames, which \code{\link[=flag_pitch_jumps]{flag_pitch_jumps()}} already
+catches, do not shift a token's apparent level.
 \item Within each speaker x tone group, compute the \strong{modified z-score}
 (Iglewicz & Hoaglin 1993) of each token's level:
 \code{0.6745 * (level - median) / MAD}, where MAD is the median absolute

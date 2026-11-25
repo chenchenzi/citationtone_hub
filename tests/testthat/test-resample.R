@@ -156,6 +156,58 @@ test_that("trim then resample puts real f0 at both endpoints", {
   expect_equal(out$time_prop, seq(0, 1, length.out = 11))
 })
 
+# Input with the rows without f0 removed. A gap then shows as a time step
+# longer than 1.5 times the token's usual step, which needs times written
+# finely enough (here 10 ms frames to 3 decimals), or as a voiced_run column.
+frames10 <- function(f0, token = "x") {
+  data.frame(token = token, time = 0.005 + 0.01 * (seq_along(f0) - 1),
+             f0 = f0, stringsAsFactors = FALSE)
+}
+voiced_rows <- function(df) {
+  out <- df[!is.na(df$f0) & df$f0 > 0, , drop = FALSE]
+  rownames(out) <- NULL
+  out
+}
+
+test_that("rows removed: a stray frame cut off by a gap is still trimmed", {
+  df   <- frames10(c(NA, 300, NA, NA, 200, 210, 220, 215, 205, NA, NA, 90, NA))
+  gone <- voiced_rows(df)
+  expect_equal(range(trim_to_voiced(df)$time), c(0.045, 0.085))
+  expect_equal(trim_to_voiced(gone), voiced_rows(trim_to_voiced(df)))
+  expect_equal(range(trim_to_voiced(gone)$time), c(0.045, 0.085))
+  # min_run = 1 keeps every voiced frame, with or without the rows
+  expect_equal(trim_to_voiced(gone, min_run = 1), gone)
+  expect_equal(voiced_rows(trim_to_voiced(df, min_run = 1)), gone)
+})
+
+test_that("rows removed: trim_to_voiced is per token and keeps the input order", {
+  df <- rbind(frames10(c(300, NA, NA, 200, 210, 220, 215, NA, NA, 90), "a"),
+              frames10(c(NA, 150, 160, 170, NA, 180, 185, NA, NA, NA), "b"),
+              frames10(rep(NA_real_, 6), "c"))
+  gone <- voiced_rows(df)
+  set.seed(3)
+  shuffled <- gone[sample(nrow(gone)), ]
+  out  <- trim_to_voiced(shuffled)
+  want <- voiced_rows(trim_to_voiced(df))
+  expect_setequal(paste(out$token, out$time), paste(want$token, want$time))
+  kept <- paste(shuffled$token, shuffled$time) %in% paste(want$token, want$time)
+  expect_equal(paste(out$token, out$time),
+               paste(shuffled$token, shuffled$time)[kept])
+  expect_false("c" %in% trim_to_voiced(df)$token)   # no voiced frame: dropped
+})
+
+test_that("rows removed: trim_to_voiced reads the gaps in a voiced_run column", {
+  # Times written to 2 decimals at 10 ms frames: the time steps cannot mark
+  # the gaps, but voiced_run does.
+  df   <- data.frame(token = "x", time = 0.01 * (1:10),
+                     f0 = c(300, NA, NA, 200, 210, 220, 215, NA, NA, 90))
+  gone <- df[!is.na(df$f0), ]
+  expect_equal(range(trim_to_voiced(gone)$time), c(0.01, 0.10))
+  gone$voiced_run <- c(1L, 2L, 2L, 2L, 2L, 3L)
+  expect_equal(range(trim_to_voiced(gone)$time), c(0.04, 0.07))
+  expect_equal(range(trim_to_voiced(gone, run = NULL)$time), c(0.01, 0.10))
+})
+
 test_that("point numbers restart at 1 for every token", {
   df <- data.frame(token = rep(c("a", "b"), each = 4),
                    time  = rep(c(0, 0.1, 0.2, 0.3), 2),
@@ -206,6 +258,97 @@ test_that("flag_f0_gaps handles empty input and validates columns", {
   expect_equal(nrow(e), 0L)
   expect_true(all(c("n_missing", "has_gap") %in% names(e)))
   expect_error(flag_f0_gaps(data.frame(a = 1)), "not found")
+})
+
+test_that("rows removed: flag_f0_gaps reads has_gap from the time steps", {
+  df <- rbind(frames10(c(NA, 200, 210, NA, NA, 220, 215, 205, NA), "gap"),
+              frames10(c(NA, 200, 210, 220, 215, 205, 200, NA, NA), "clean"))
+  gone <- voiced_rows(df)
+  out  <- unique(flag_f0_gaps(gone)[, c("token", "n_missing", "has_gap")])
+  expect_equal(out$has_gap, c(TRUE, FALSE))
+  expect_equal(out$n_missing, c(0L, 0L))            # no rows left to count
+  # the same has_gap as with the rows kept
+  kept <- unique(flag_f0_gaps(df)[, c("token", "has_gap")])
+  expect_equal(out$has_gap, kept$has_gap)
+})
+
+test_that("rows removed: flag_f0_gaps keeps the data's own has_gap and n_missing", {
+  df <- rbind(frames10(c(200, 210, NA, NA, 220, 215, 205), "gap"),
+              frames10(c(200, 210, 220, 215, 205, 200), "clean"))
+  flagged <- flag_f0_gaps(df)
+  gone <- voiced_rows(flagged)
+  out  <- flag_f0_gaps(gone)
+  expect_equal(out$has_gap, gone$has_gap)
+  expect_equal(out$n_missing, gone$n_missing)
+  expect_equal(unique(out$n_missing[out$token == "gap"]), 2L)
+  # kept even where the time steps cannot show the gap (2-decimal times)
+  gone$time <- round(gone$time, 2)
+  out2 <- flag_f0_gaps(gone)
+  expect_equal(out2$has_gap, gone$has_gap)
+  expect_equal(out2$n_missing, gone$n_missing)
+  # columns read from a CSV as text still count
+  txt <- gone
+  txt$has_gap <- as.character(txt$has_gap)
+  expect_equal(flag_f0_gaps(txt)$has_gap, gone$has_gap)
+})
+
+test_that("flag_f0_gaps recomputes tokens that still have rows without f0", {
+  df <- rbind(frames10(c(200, NA, 210, 220), "a"),
+              frames10(c(200, 205, 210, 220), "b"))
+  df$n_missing <- 9L
+  df$has_gap   <- c(rep(FALSE, 4), rep(TRUE, 4))
+  out <- unique(flag_f0_gaps(df)[, c("token", "n_missing", "has_gap")])
+  expect_equal(out$n_missing, c(1L, 9L))    # a: recounted; b: kept
+  expect_equal(out$has_gap, c(TRUE, TRUE))  # a: recomputed; b: kept
+})
+
+test_that("flag_f0_gaps reads gaps from a voiced_run column", {
+  df <- data.frame(token = rep(c("a", "b"), each = 4),
+                   time  = rep(c(0.01, 0.02, 0.05, 0.06), 2),
+                   f0    = 200,
+                   voiced_run = c(1L, 1L, 2L, 2L, 1L, 1L, 1L, 1L))
+  out <- unique(flag_f0_gaps(df, time = "none")[, c("token", "has_gap")])
+  expect_equal(out$has_gap, c(TRUE, FALSE))
+  expect_false(any(flag_f0_gaps(df, time = "none", run = NULL)$has_gap))
+})
+
+test_that("without a time column only rows without f0 mark a gap", {
+  # Six tokens interleaved, with token z's rows in the middle: row order is
+  # no time axis, so the longer 'step' across z's rows must not read as a
+  # gap in a to f. z has a real gap, a row without f0.
+  tok <- c(rep(letters[1:6], 3), rep("z", 6), rep(letters[1:6], 3))
+  df  <- data.frame(token = tok, f0 = 200, stringsAsFactors = FALSE)
+  df$f0[which(tok == "z")[3]] <- NA
+  out <- unique(flag_f0_gaps(df)[, c("token", "has_gap")])
+  expect_equal(out$has_gap, c(rep(FALSE, 6), TRUE))
+})
+
+test_that("f0_long.csv: trim_to_voiced and flag_f0_gaps with the rows removed", {
+  path <- test_path("..", "..", "test", "f0_long.csv")
+  skip_if_not(file.exists(path), "test/f0_long.csv not found")
+  fl <- utils::read.csv(path, encoding = "UTF-8", stringsAsFactors = FALSE)
+  gone <- voiced_rows(fl)
+  # trim_to_voiced: the same 7 stray edge rows (6 tokens) go either way
+  tk <- trim_to_voiced(fl)
+  tg <- trim_to_voiced(gone)
+  expect_equal(nrow(gone) - nrow(tg), 7L)
+  expect_identical(paste(tg$token, tg$time),
+                   paste(tk$token, tk$time)[!is.na(tk$f0)])
+  # flag_f0_gaps: F0 Extraction's default export, then 'Drop rows without f0'
+  ext  <- flag_f0_gaps(tk)
+  drop <- voiced_rows(ext)
+  n_tok <- function(d) length(unique(d$token[d$has_gap]))
+  expect_equal(n_tok(ext), 99L)
+  out <- flag_f0_gaps(drop)
+  expect_identical(out$has_gap, drop$has_gap)
+  expect_identical(out$n_missing, drop$n_missing)
+  # without the export's columns, the time steps find the same 99 tokens
+  drop$has_gap <- NULL
+  drop$n_missing <- NULL
+  expect_setequal(unique(flag_f0_gaps(drop)$token[flag_f0_gaps(drop)$has_gap]),
+                  unique(ext$token[ext$has_gap]))
+  # and with every row without f0 removed, the 105 tokens with a gap inside
+  expect_equal(n_tok(flag_f0_gaps(gone)), 105L)
 })
 
 test_that("Praat rule: a point keeps the near frame when only the far one is unvoiced", {

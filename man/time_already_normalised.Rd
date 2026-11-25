@@ -4,7 +4,7 @@
 \alias{time_already_normalised}
 \title{Does a time column look already normalised to [0, 1]?}
 \usage{
-time_already_normalised(time_values, tokens, eps = 1e-08)
+time_already_normalised(time_values, tokens, eps = 1e-08, name = NULL)
 }
 \arguments{
 \item{time_values}{Numeric vector of time values.}
@@ -12,6 +12,9 @@ time_already_normalised(time_values, tokens, eps = 1e-08)
 \item{tokens}{Vector of token IDs, same length as \code{time_values}.}
 
 \item{eps}{Numeric slop allowed beyond the \verb{[0, 1]} bounds. Default \code{1e-8}.}
+
+\item{name}{The time column's name, or \code{NULL} (the default) to decide by
+value alone. See "By name" in Details.}
 }
 \value{
 \code{TRUE} if the column looks already normalised, else \code{FALSE}.
@@ -19,38 +22,65 @@ time_already_normalised(time_values, tokens, eps = 1e-08)
 \description{
 Heuristic used by the modelling functions (via \code{\link[=resolve_time_norm]{resolve_time_norm()}}) to
 decide whether a time column is already proportional (per-token normalised
-to the unit interval) and should be used as-is rather than min-max rescaled
-within each token again.
+to the unit interval) and should be used as-is rather than rescaled within
+each token again.
 }
 \details{
-Returns \code{TRUE} only when all three hold:
+\subsection{By name}{
+
+Three column names mark a 0-1 time axis: \verb{<tier>_t01} from
+\code{\link[=normalise_time_landmarks]{normalise_time_landmarks()}}, \code{token_t01} from \code{\link[=normalise_time_token]{normalise_time_token()}}
+and \code{time_prop} from \code{\link[=resample_f0_equal]{resample_f0_equal()}}. When \code{name} is one of these,
+the column counts as already normalised as soon as every finite value lies
+in \verb{[0, 1]} (within \code{eps}). Its tokens do not need to cover the interval.
+The first two run from the first f0 to the last and are \code{NA} on the other
+rows, so removing rows never changes them. The name matters for
+\code{time_prop}, which runs over the frames of the extracted region, for
+columns made by older versions, which ran from the first row or interval
+boundary to the last, and for a subset taken after a column was made.
+
+A sequential landmark axis (\verb{<tier>_tseq} or \verb{<tier>_tbound}) is not
+recognised by its name. It runs from 0 to the number of segments, so it
+goes through the value test below, as before.
+}
+
+\subsection{By value}{
+
+Any other column, or a call without \code{name}, counts as already normalised
+only when all three hold:
 \enumerate{
 \item Every finite value lies in \verb{[0, 1]} (within \code{eps}).
 \item The pooled values actually use the unit scale: pooled minimum
 at or below 0.05 and pooled maximum at or above 0.95.
 \item Tokens individually cover the interval: the median per-token span
-(\code{max - min}) is at least 0.9.
+(\code{max - min}) is at least 0.9. The span runs over every row with a
+finite time, rows without f0 included, so for a column without such a
+name, removing rows at a token's edges can change the decision. The
+app's Start page says so when removal would change it for its time
+column.
 }
 
 Condition 3 is the load-bearing one: raw time in \emph{seconds} for citation
-tones (durations of, say, 0.2–0.9 s) can satisfy the first two, but its
+tones (durations of, say, 0.2 to 0.9 s) can satisfy the first two, but its
 per-token spans equal the (variable, well under 0.9) durations, so it is
 correctly treated as unnormalised. Millisecond-scale time fails condition 1
-outright, as do sequential landmark axes (\verb{<tier>_tseq}, which run from 0 to
-the number of segments).
+outright, as do sequential landmark axes (\verb{<tier>_tseq} and
+\verb{<tier>_tbound}, which run from 0 to the number of segments).
 
-Two limits are worth knowing, both following from the fact that no
-value-based test can separate these cases:
+Two limits of the value test are worth knowing, both following from the
+fact that no value-based test can separate these cases:
 \itemize{
 \item \strong{Not detected}: a set in which \emph{every} token is a partial span of the
 proportional axis (e.g. a vowel-only subset where each token covers
 \verb{[0.3, 0.7]}) looks exactly like ordinary variable-duration time, so it
-is rescaled per token as before. Pass \code{time_normalised = "yes"} to
-\code{\link[=resolve_time_norm]{resolve_time_norm()}} (or to the fitters) to keep such an axis intact.
+is rescaled per token as before, unless its name marks it (see "By
+name"). Pass \code{time_normalised = "yes"} to \code{\link[=resolve_time_norm]{resolve_time_norm()}} (or to
+the fitters) to keep such an axis intact.
 \item \strong{Detected}: raw seconds in which every token happens to last just under
 one second, with a median duration of 0.9 s or more, satisfies all three
 conditions and is used as-is. Pass \code{time_normalised = "no"} to force the
 per-token rescale for such data.
+}
 }
 }
 \seealso{

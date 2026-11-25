@@ -24,7 +24,13 @@ compute_mean_contour(
 at which every token is resampled. Default 21, one point every 5\%, as
 in \code{\link[=resample_f0_equal]{resample_f0_equal()}} and \code{\link[=cluster_features]{cluster_features()}}. Measured points
 that fall on this grid, such as 11 or 21 equally spaced points per
-token, keep their values; for denser data, raise \code{n_points}.}
+token, keep their values on \code{time_prop}, or on a time column rescaled
+here when each token's first and last points have f0. When a token's
+first or last point has no f0, the rescale from its first f0 to its
+last stretches it by at least \code{(N - 1) / (N - 2)} (see
+\code{\link[=screen_f0_rows]{screen_f0_rows()}}), whether or not that row is removed, so its points
+fall between the grid points and are interpolated. For denser data,
+raise \code{n_points}.}
 
 \item{time_normalised}{One of \code{"auto"} (default: detect an
 already-normalised \verb{[0, 1]} time column and use it as-is), \code{"no"}
@@ -49,21 +55,45 @@ normalised dataset as the input.
 \details{
 Internally:
 \enumerate{
-\item Within each token, normalise the time axis to \verb{[0, 1]} so tokens
-of different durations can be averaged across the same grid. A
-time column that is \emph{already} normalised is detected with
-\code{\link[=time_already_normalised]{time_already_normalised()}} and used as-is (override with
-\code{time_normalised}), matching what \code{\link[=fit_gca]{fit_gca()}} and \code{\link[=fit_gamm]{fit_gamm()}} do.
+\item Within each token, rescale the time axis to \verb{[0, 1]}, from the
+token's first f0 (0) to its last f0 (1), so tokens of different
+durations can be averaged on one grid and rows without f0 at a token's
+edges do not move it. A time column that is \emph{already} normalised is
+detected with \code{\link[=time_already_normalised]{time_already_normalised()}} and used as it is (override
+with \code{time_normalised}), matching what \code{\link[=fit_gca]{fit_gca()}} and \code{\link[=fit_gamm]{fit_gamm()}} do.
+A \verb{<tier>_tseq} (syllables in sequence) or \verb{<tier>_tbound} (in
+sequence, gap kept) is rescaled per token too, so with the same
+number of syllables the boundaries sit at 1/n, 2/n
+and so on. A token whose first or last syllable has no values on the
+axis is stretched: its other syllables fill 0 to 1. On a
+\verb{<tier>_tseq} that is a syllable with f0 at fewer than two times; on a
+\verb{<tier>_tbound}, one with no f0.
 \item Resample every token, by linear interpolation, at the same
 \code{n_points} equally spaced time points, so each token counts once at
-every point however many f0 samples it has. Missing f0 values are
-skipped. A token is left out at points beyond its first or last f0
-value rather than extrapolated; a point within a tenth of a grid step
-of that value takes it, so rounded times do not drop a measured end
-point. Tokens with f0 at fewer than two time points are dropped, with
-a message.
+every point however many f0 samples it has. Rows without f0 are
+skipped: missing values, and 0 in a column in Hz (one that
+\code{\link[=hz_f0_columns]{hz_f0_columns()}} finds). A token is left out at points beyond its
+first or last f0 value rather than extrapolated (on a rescaled axis
+every token reaches 0 and 1, so this applies to a column used as it
+is, such as \code{time_prop}); a point within a tenth of a grid step of
+that value takes it, so rounded times do not drop a measured end
+point. On a \verb{<tier>_tseq} (syllables in sequence), one syllable's
+last f0 and the
+next one's first f0 share a time (on a \verb{<tier>_tbound}, only rows
+exactly on a boundary can). The two are never averaged: at that
+time, and just after it, the next syllable's f0 is used, and just
+before it the earlier syllable's. The syllable is read from
+\verb{<tier>_i} (or, on a \verb{<tier>_tseq}, \verb{<tier>_t01}), so the row order
+does not matter; without either column, give each token's rows in
+time order. Other rows of a
+token at the same time, such as two recordings that share a token
+name, are averaged, with a message. Tokens with f0 at fewer than two
+time points are dropped, with a message.
 \item At each time point, take the mean of \code{f0} across the tokens of each
-tone.
+tone. A token's tone is the most frequent non-empty value of \code{tone}
+on its rows with f0 (a tie goes to the value that comes first in
+time), so a tone column that changes within a token, such as one read
+from a TextGrid tier, gives one tone per token whatever the row order.
 \item Return the long-format mean contour with columns \code{tone}, \code{time},
 \code{f0_predicted} (the column name \code{f0_predicted} matches the
 convention used by \code{\link[=predict_gca]{predict_gca()}} and \code{\link[=predict_gamm]{predict_gamm()}} so the

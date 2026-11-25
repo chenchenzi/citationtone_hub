@@ -35,7 +35,9 @@ ever computed.}
 \value{
 A data frame with the \code{token}, \code{point} (measurement number,
 \code{1}...\code{n}), \code{time} (seconds, on the new grid), \code{time_prop}
-(proportional position 0-1 within the token), and \code{f0} columns, plus
+(proportional position 0-1 within the token: 0 and 1 are the first and
+last frames of the extracted region, which need not have f0), and \code{f0}
+columns, plus
 \code{intensity} (when present) and any carried token-constant columns.
 Input columns named \code{point} or \code{time_prop} are dropped, since those
 names are computed here. Rows are sorted by time within each token;
@@ -70,13 +72,18 @@ that frame's value exactly. At a point falling exactly midway between two
 frames the choice of \emph{near} is a floating-point tie and may fall either
 way; it only changes the answer when exactly one of the two is unvoiced.
 
-This rests on unvoiced frames being \strong{present as \code{NA} (or 0 Hz) rows},
-which is how the wrassp and \code{.Pitch} paths deliver them. Sparse input
-carries no such rows: a \code{.PitchTier}, or a CSV listing only voiced
-samples, represents an unvoiced stretch as nothing more than a wide gap
-between two voiced anchors, so both bracketing frames are voiced and the
-point is interpolated straight across. Praat does the same on a PitchTier.
-Add explicit \code{NA} rows if such stretches should read as unvoiced.
+This reads gaps from rows only: unvoiced frames must be \strong{present as \code{NA}
+(or 0 Hz) rows}, which is how the wrassp and \code{.Pitch} paths deliver them.
+Input without such rows has a gap only as a wide step between two voiced
+frames: a \code{.PitchTier}, a CSV listing only voiced samples, or data whose
+rows without f0 were removed (the app's Start page, or
+\code{\link[=drop_rows_without_f0]{drop_rows_without_f0()}}). Both bracketing frames are then voiced, and the
+point is interpolated straight across the gap. Praat does the same on a
+PitchTier. The time steps and a \code{voiced_run} column are not read here. So
+resample before removing the rows without f0, as F0 Extraction does: its
+"Drop rows without f0" option is applied after resampling.
+\code{\link[=screen_f0_rows]{screen_f0_rows()}} counts the gaps that the time steps show
+(\code{n_gaps_time}), so a file can be checked for them first.
 
 With \code{method = "nearest"} (Praat's other option) the middle case goes
 away: a point always takes the nearer frame's measured value, or \code{NA}
@@ -91,7 +98,7 @@ the extraction aligns the intensity track to the f0 frames).
 Any other column is carried through when it is constant within every
 token (metadata, \code{token_dropped}, and similar token-level columns);
 per-frame columns that vary within a token cannot survive a change of
-grid and are dropped — their names are recorded in the
+grid and are dropped. Their names are recorded in the
 \code{dropped_columns} attribute of the result.
 
 Rows with a missing time are dropped, and rows sharing a frame time
@@ -99,8 +106,15 @@ are collapsed to the first of them, so interpolation has strictly
 increasing anchors. A token left with fewer than two distinct frame
 times cannot be resampled and keeps its single remaining row, with
 \code{time_prop = 0.5}.
+
+\code{time_prop} is used as it is by the model fits (see
+\code{\link[=time_already_normalised]{time_already_normalised()}}). Over a region trimmed to its voiced part
+(F0 Extraction's \emph{Whole token (voiced region)}, or \code{\link[=trim_to_voiced]{trim_to_voiced()}}), 0
+and 1 are close to the first and last f0. Over a TextGrid interval, an
+end point may have no f0, and the contour then does not reach 0 or 1.
 }
 \seealso{
-\code{\link[=normalise_time_token]{normalise_time_token()}} for adding a proportional time
-column without changing the sampling grid.
+\code{\link[=normalise_time_token]{normalise_time_token()}} for a 0-1 column from the first f0 to
+the last, without changing the sampling grid. On equal-point data with
+no f0 at an end point, it moves the other points off the grid.
 }

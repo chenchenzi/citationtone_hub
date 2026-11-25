@@ -2,24 +2,73 @@
 % Please edit documentation in R/landmarks.R
 \name{normalise_time_token}
 \alias{normalise_time_token}
-\title{Whole-token 0-1 time normalisation}
+\title{Whole-token 0-1 time}
 \usage{
-normalise_time_token(df, time, token)
+normalise_time_token(df, time, token, f0 = "f0")
 }
 \arguments{
-\item{df}{Data frame with the \code{time} and \code{token} columns.}
+\item{df}{Data frame with the \code{time}, \code{token} and \code{f0} columns.}
 
-\item{time}{Name of the raw time column (seconds).}
+\item{time}{Name of the time column. Only the order and spacing of times
+within a token matter.}
 
-\item{token}{Name of the token-ID column (rows are grouped by it).}
+\item{token}{Name of the token-ID column.}
+
+\item{f0}{Name of the f0 column that says which rows have f0. Default
+\code{"f0"}. For F0 Correction output, pass \code{f0 = "f0_corrected"}: left at
+the default, the tracked f0 would decide, with a message.}
 }
 \value{
-\code{df} with \code{token_t01} appended. Returned unchanged when the required
-columns are absent.
+\code{df} with \code{token_t01} added (or replaced). A missing column is an
+error.
 }
 \description{
-Rescales each token's time to the interval 0-1, treating the whole token as a
-single segment. No landmarks are needed, so it works for monosyllabic data,
-or to put many tokens on one common 0-1 axis. Adds a single column,
-\code{token_t01}.
+Puts each token on one 0-1 time axis that runs from its first f0 to its
+last f0, so contour shapes can be compared. Adds the column \code{token_t01}.
+No landmarks are needed.
+}
+\details{
+Rows have f0 as in \code{\link[=normalise_time_landmarks]{normalise_time_landmarks()}}: in a column in Hz, 0 is
+no f0, and a column with negative markers such as -1 is not read as Hz,
+so set those to \code{NA} first. Rows without f0 between
+the first and last f0 keep their place by time. Rows before the first f0
+or after the last get \code{NA}, not 0 or 1, and so does every row of a token
+with f0 at fewer than two times and every row with no token. So removing
+rows without f0 does not change the column. A lone f0 sample in the
+silence, cut off by a gap, does become the first or last f0.
+\code{\link[=contour_duration]{contour_duration()}} anchors its span on runs of at least \code{min_run = 2}
+samples by default, so for such a token its \code{token_f0_dur} is shorter
+than the stretch \code{token_t01} covers. The Start page's option for short
+edge runs, or \code{drop_rows_without_f0(min_run = 3)}, removes such samples
+first.
+
+For a word of several syllables, \code{token_t01} is the whole word: the
+stretch without f0 between the syllables and the syllables' duration
+ratio are kept. So the syllable boundary falls at a different point in
+each token and blurs when tokens are averaged. \verb{<tier>_tseq} from
+\code{\link[=normalise_time_landmarks]{normalise_time_landmarks()}} puts the syllables in sequence instead, so
+the boundaries line up, and \verb{<tier>_tbound} puts them in sequence with
+the gap kept, so the TextGrid boundaries line up. A word tier's
+\verb{<word>_t01} gives the same values as \code{token_t01} when all of the
+token's f0 lies inside the word interval.
+
+The model fits rescale a time column the same way (\code{\link[=resolve_time_norm]{resolve_time_norm()}}
+with \code{f0}), so a fit on the time column equals a fit on \code{token_t01},
+apart from two cases. Tokens with f0 at one time only: the fits keep
+those at 0.5, while \code{token_t01} is \code{NA} on them. And rows with no token:
+the fits treat them as one token of their own, while \code{token_t01} is \code{NA}
+on them.
+
+Columns made by shinytone 1.0.0 ran from each token's first row to its
+last, rows without f0 included. Make them again with this function.
+}
+\examples{
+df <- data.frame(token = rep(c("a", "b"), c(6, 5)),
+                 time  = c(0:5, 0:4) / 100,
+                 f0    = c(NA, 210, 215, NA, 220, NA, 180, 185, 190, 195, NA))
+normalise_time_token(df, "time", "token")
+}
+\seealso{
+\code{\link[=normalise_time_landmarks]{normalise_time_landmarks()}} for each syllable on its own axis,
+or the syllables in sequence.
 }

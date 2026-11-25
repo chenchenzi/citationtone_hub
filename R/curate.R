@@ -30,7 +30,7 @@
 #' repairing mis-tracked f0). Variant patterns are often discovered visually
 #' or surfaced by the token-level register check of [flag_level_outliers()],
 #' which flags tokens whose overall level is unusual for their speaker and
-#' tone --- a natural seed for relabelling.
+#' tone: a natural seed for relabelling.
 #'
 #' @param data A long-format data frame with one row per f0 sample.
 #' @param token Column name of token ID. Default `"token"`.

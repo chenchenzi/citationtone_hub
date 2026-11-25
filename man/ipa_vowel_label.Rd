@@ -18,13 +18,13 @@ Vectorised heuristic for picking vowel intervals out of a segmental
 TextGrid tier without knowing the language. A label counts as a vowel
 when, after stripping length marks, stress marks, tone digits/letters,
 superscripts, ties, spaces, and combining diacritics, every remaining
-character is an IPA vowel letter — so long vowels (\code{aː}), nasalised
+character is an IPA vowel letter. So long vowels (\code{aː}), nasalised
 vowels (\verb{ã}), and di-/triphthongs (\code{ai}, \code{iau}) all match, while
 anything containing a consonant letter (\code{ang}, \code{pa}, \code{n}) does not.
 
 Di- and triphthongs need no special handling: the test applies to \emph{every}
 character of the label, so a label matches when all of its letters are
-vowels -- \code{ai}, \code{au}, \code{iau}, \code{uai}, \code{ɔi}, \code{aːi} and \verb{ai̯} all pass.
+vowels: \code{ai}, \code{au}, \code{iau}, \code{uai}, \code{ɔi}, \code{aːi} and \verb{ai̯} all pass.
 
 Offglides written as consonant letters are accepted too, since many
 traditions spell diphthongs that way: \code{j}, \code{w} and \code{ɥ} count inside a
@@ -43,8 +43,8 @@ upper-case counterparts \verb{A E I O U Y}, \code{@} (schwa in SAMPA-style label
 and precomposed accented Latin vowels, including the pinyin tone-marked
 forms (\verb{ã é ü ā á ǎ à ū ǔ ǖ ǘ ǚ ǜ} ...) in either Unicode normalisation.
 Labels in other schemes (whole pinyin finals such as \code{ang}, X-SAMPA
-consonant-bearing rhymes) should be selected with explicit labels instead
-— see \code{\link[=filter_interval_rows]{filter_interval_rows()}}.
+consonant-bearing rhymes) should be selected with explicit labels instead:
+see \code{\link[=filter_interval_rows]{filter_interval_rows()}}.
 }
 \seealso{
 \code{\link[=filter_interval_rows]{filter_interval_rows()}} for subsetting f0 frames by interval.

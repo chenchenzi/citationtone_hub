@@ -15,9 +15,9 @@ summarisation.
 \section{Online app}{
 
 The hosted version of the app is available at
-\url{https://chenzixu.shinyapps.io/shinytone/}. A local launcher
-(\code{run_app()}) will be added in a future release so the same UI can be
-served offline once the package is installed.
+\url{https://chenzixu.shinyapps.io/shinytone/}. Run the same UI locally with
+\code{\link[=run_app]{run_app()}}: it has no upload limits, and recordings stay on your
+machine.
 }
 
 \section{Programmatic API}{

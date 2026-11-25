@@ -444,7 +444,12 @@ appendInfoLine: "  Combined CSV: ", csv_path$
                 " by default) directly in ",
                 tags$strong("F0 Analysis > Start"), " and proceed to ",
                 tags$em("Normalise"), ", ", tags$em("Visualise"), ", ",
-                tags$em("Inspect"), ", or any of the modelling tabs.")
+                tags$em("Inspect"), ", or any of the modelling tabs.",
+                " This CSV covers each whole file, silence included. Data screening",
+                " on the Start page removes the rows without f0 by default when",
+                " you upload it.",
+                " Each token's time axis runs from its first f0 to its last, so",
+                " check for stray f0 in the silence (", tags$strong("Inspect"), ").")
       )
     )
   })

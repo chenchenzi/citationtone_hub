@@ -3,60 +3,166 @@
 ###############################################
 
 gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_data = NULL, curated_data = NULL, cluster_data = NULL,
-                    curated_norm_data = NULL) {
+                    curated_norm_data = NULL,
+                    start_cols = NULL, data_version = NULL, start_settings = NULL) {
+
+  # The app tests bind this body to their own reactives, without these three
+  # arguments in older tests: then they count as left out (NULL).
+  for (nm in c("start_cols", "data_version", "start_settings"))
+    if (!exists(nm, inherits = TRUE)) assign(nm, NULL)
+
+  # Parts of the tier per token on a <set>_t01, <set>_tseq or <set>_tbound
+  # (t01_parts(), global.R), counted in the data rather than read from the
+  # name. 1 for a word, rhyme or vowel tier: a whole-token axis, like
+  # token_t01. NA when they cannot be counted (the set's columns are
+  # missing), which counts as several.
+  gamm_parts <- function(tv, tok, df) {
+    if (!is.character(tv) || length(tv) != 1 || !grepl("_(t01|tseq|tbound)$", tv) ||
+        identical(tv, "token_t01")) return(NA_integer_)
+    t01_parts(df, tv, tok)
+  }
 
   # GAMM is the right tab for multisyllabic words, so the only thing to catch
   # here is picking the wrong landmark column: the within-segment 0-1 axis
-  # (_t01) resets each segment and is not a valid model time axis. The
-  # sequential _tseq column is the one to use.
+  # (_t01) restarts in each part and is not a valid time axis for a
+  # whole-word model. The in-sequence _tseq or _tbound, or token_t01, is the
+  # one to use for that; _t01 suits syllables modelled one by one (each its own token and
+  # label). A <set>_t01 with one part per token is not warned about: it is a
+  # whole-token axis and gets the blue note below.
   output$gamm_multisyl_note <- renderUI({
     tv <- input$gamm_time_var
-    if (is.null(tv) || !grepl("_t01$", tv)) return(NULL)
-    # normalise_time_token() writes exactly "token_t01" (whole-token
-    # proportional time, a perfectly good axis); normalise_time_landmarks()
-    # writes "<set>_t01", which resets at every segment boundary. Keyed on the
-    # name the producer guarantees, not on a companion column that a trimmed
-    # re-upload may have lost.
-    if (identical(tv, "token_t01")) return(NULL)
+    if (is.null(tv) || !grepl("_t01$", tv) || identical(tv, "token_t01")) return(NULL)
+    if (identical(gamm_parts(tv, input$gamm_token_var,
+                             tryCatch(active_data(), error = function(e) NULL)), 1L)) return(NULL)
     tags$div(
       style = paste("background-color:#fff8e1; border-left:4px solid #e0a800;",
                     "padding:10px 14px; margin:8px 0; border-radius:4px;",
                     "color:#7a5d00; font-size:0.9rem;"),
       tags$span(style = "color:#c0392b;", icon("triangle-exclamation")),
-      HTML(sprintf(" <code>%s</code> rescales time to 0&ndash;1 <em>within</em> each segment, so it resets at every boundary and is <strong>not a valid model time axis</strong>. Use the sequential <code>&hellip;_tseq</code> column instead.", tv)))
+      HTML(sprintf(" <code>%s</code> runs from 0 to 1 <em>within</em> each %s, from its first f0 to its last, so it restarts at every boundary and is <strong>not a valid time axis for a whole-word model</strong>. For that, use <code>%s</code> (syllables in sequence), <code>%s</code> (in sequence, gap kept) or <code>token_t01</code> (whole word, syllable ratio kept). It does suit syllables modelled one by one, each its own token with a label for its tone pattern and place, as for one Chao numeral per syllable in Summarise.",
+                   tv, sub("_t01$", "", tv), sub("_t01$", "_tseq", tv), sub("_t01$", "_tbound", tv))))
   })
 
-  # Value-based check: a time column that is already proportional ([0, 1] per
-  # token) is used as-is by fit_gamm() rather than rescaled again — say so
-  # before the user clicks Fit. A sequential _tseq axis is also used as-is,
-  # on its own 0-to-n scale (fit_gamm() recognises it by name); the red
-  # warning above owns the within-segment _t01.
+  # The amber notice (edge_f0_line(), global.R): tokens whose f0 does not
+  # reach 0 or 1 on a time column the fit uses as it is. Never on the real
+  # time column, which the fit rescales from each token's first f0 to its
+  # last. Not on a <tier>_tseq or <tier>_tbound axis (several parts in
+  # sequence per token): fit_gamm() keeps it as it is, on its own 0-to-n scale. Both
+  # from Normalise run from the token's first f0 to its last (on _tseq, each
+  # syllable's), so edge_f0_line() would find nothing there anyway. One with
+  # one part per token runs from 0 to 1, so it is checked like a <tier>_t01.
+  # One reactive, shared by the notice and the blue note below.
+  gamm_edges <- reactive({
+    tv <- input$gamm_time_var
+    if (is.null(tv)) return(NULL)
+    df <- tryCatch(active_data(), error = function(e) NULL)
+    if (grepl("_(tseq|tbound)$", tv) && !identical(gamm_parts(tv, input$gamm_token_var, df), 1L))
+      return(NULL)
+    edge_f0_line(df, input$gamm_token_var, input$gamm_f0_var, tv)
+  })
+
+  # The fit's own check (resolve_time_norm()): a time column that is already
+  # proportional ([0, 1] per token) is used as-is by fit_gamm() rather than
+  # rescaled again, so say so before the user clicks Fit. *_t01 and
+  # time_prop are recognised by name (with every value in [0, 1]), so
+  # removing rows does not flip this note. An in-sequence _tseq or _tbound
+  # axis is also used as it is, on its own 0-to-n scale (fit_gamm() recognises
+  # it by name), and gets its own note: on _tseq one smooth cannot follow an
+  # f0 jump at a boundary, on _tbound the gap is kept so it can. The red
+  # warning above owns a <set>_t01 with several parts per token. A tier with
+  # one part per token falls through to the 0-1 note.
   output$gamm_timenorm_note <- renderUI({
     tv  <- input$gamm_time_var
     tok <- input$gamm_token_var
     if (is.null(tv)) return(NULL)
-    if (grepl("_tseq$", tv)) {
+    df <- tryCatch(active_data(), error = function(e) NULL)
+    parts <- gamm_parts(tv, tok, df)
+    if (grepl("_tseq$", tv) && !identical(parts, 1L)) {
       return(tags$div(
         style = paste("background-color:#e8f5f0; border-left:4px solid #78c2ad;",
                       "padding:10px 14px; margin:8px 0; border-radius:4px;",
                       "color:#2a7a5a; font-size:0.9rem;"),
         icon("circle-info"),
-        HTML(sprintf(" <code>%s</code> is a sequential landmark axis: each segment spans one unit (0&ndash;1, 1&ndash;2, &hellip;). The fit keeps it on that scale rather than rescaling each token to 0&ndash;1, so the segment boundaries line up across tokens, and the plot marks them.", tv))))
+        HTML(sprintf(paste(
+          " <code>%s</code> puts the syllables in sequence. Each runs from its first f0 to its last over",
+          "one unit (0&ndash;1, 1&ndash;2, &hellip;), and a gap without f0 between them takes no",
+          "room. The fit keeps this scale rather than rescaling each token to 0&ndash;1, so the",
+          "syllable boundaries line up across tokens, and the plot marks them. One",
+          "syllable&rsquo;s last f0 and the next one&rsquo;s first f0 both sit on the boundary,",
+          "so one smooth cannot follow an f0 jump there, and raising <em>k</em> does not help.",
+          "To model the whole word, use <code>%s_tbound</code> (in sequence, gap kept) or",
+          "<code>token_t01</code>, or model each syllable as its own token on",
+          "<code>%s_t01</code>."), tv, sub("_tseq$", "", tv), sub("_tseq$", "", tv)))))
+    }
+    if (grepl("_tbound$", tv) && !identical(parts, 1L)) {
+      return(tags$div(
+        style = paste("background-color:#e8f5f0; border-left:4px solid #78c2ad;",
+                      "padding:10px 14px; margin:8px 0; border-radius:4px;",
+                      "color:#2a7a5a; font-size:0.9rem;"),
+        icon("circle-info"),
+        HTML(sprintf(paste(
+          " <code>%s</code> puts the syllables in sequence, gap kept: 0 is the",
+          "word&rsquo;s first f0, the TextGrid boundaries sit at 1, 2, &hellip;, and the last f0 at the",
+          "end. The fit keeps this scale rather than rescaling each token to 0&ndash;1, so the",
+          "boundaries line up across tokens, and the plot marks them. The gap without f0 at a",
+          "boundary is kept, so one smooth can follow an f0 jump across it."), tv))))
     }
     if (is.null(tok)) return(NULL)
-    df <- tryCatch(active_data(), error = function(e) NULL)
     if (is.null(df) || !all(c(tv, tok) %in% names(df))) return(NULL)
-    # A landmark set's within-segment <set>_t01 gets the red warning above,
-    # not this note; only the whole-token token_t01 falls through.
-    if (grepl("_t01$", tv) && !identical(tv, "token_t01")) return(NULL)
-    if (!time_already_normalised(df[[tv]], df[[tok]])) return(NULL)
+    if (grepl("_t01$", tv) && !identical(tv, "token_t01") && !identical(parts, 1L)) return(NULL)
+    if (!time_already_normalised(df[[tv]], df[[tok]], name = tv)) return(NULL)
+    by_name <- grepl("_t01$", tv) || tv == "time_prop"
+    why <- if (by_name) "its name marks a 0&ndash;1 axis, and every value lies in that range"
+           else "every value lies in that range and a typical token covers most of it; some tokens may cover less"
     tags$div(
       style = paste("background-color:#e8f5f0; border-left:4px solid #78c2ad;",
                     "padding:10px 14px; margin:8px 0; border-radius:4px;",
                     "color:#2a7a5a; font-size:0.9rem;"),
       icon("circle-info"),
-      HTML(sprintf(" <code>%s</code> looks already normalised to [0, 1] (every value lies in that range and a typical token covers most of it; some tokens may cover less). The fit will use it as-is instead of rescaling per token, so tokens that cover only part of the interval keep their position. To force per-token rescaling, call <code>fit_gamm(..., time_normalised = \"no\")</code> in R.", tv)))
+      HTML(sprintf(" <code>%s</code> %s already on 0&ndash;1 (%s). The fit uses it as it is, so 0 and 1 stay where the column puts them%s. To rescale each token from its first f0 to its last instead, call <code>fit_gamm(..., time_normalised = \"no\")</code> in R.",
+                 tv, if (by_name) "is" else "looks", why,
+                 t01_where(tv, !is.null(gamm_edges())))))
   })
+
+  output$gamm_track_edges <- renderUI(gamm_edges())
+
+  # Where 0 and 1 fall on a column used as it is, for the blue note. Only
+  # when the amber notice is not shown: then every token's (or part's) f0
+  # reaches 0 and 1. With the notice, the note points to it instead.
+  t01_where <- function(tv, edge) {
+    if (isTRUE(edge)) return(" (see the notice above)")
+    if (identical(tv, "token_t01"))
+      return(": on <code>token_t01</code> from Normalise, each token&rsquo;s first and last f0")
+    if (grepl("_t01$", tv))
+      return(sprintf(": on <code>%s</code> from Normalise, each %s&rsquo;s first and last f0",
+                     tv, sub("_t01$", "", tv)))
+    if (identical(tv, "time_prop"))
+      return(": on <code>time_prop</code>, the first and last frames of the extracted region")
+    ""
+  }
+
+  # The Normalise step in the exported code's data-source note. The time
+  # columns there need the f0 (Hz) and token columns that tab used, since
+  # each token, or each part of a tier, runs from its first f0 to its last.
+  # A time column the data had before Normalise gets the general line.
+  norm_time_lines <- function(time_var, token_var, before = NULL) {
+    q <- function(x) encodeString(x, quote = '"')
+    made <- !time_var %in% names(before)
+    if (made && identical(time_var, "token_t01")) {
+      c("# token_t01, made with the time, token and f0 (Hz) columns that tab used:",
+        sprintf('#   dat <- shinytone::normalise_time_token(dat, "<time>", %s,', q(token_var)),
+        '#                                          f0 = "<f0 (Hz)>")')
+    } else if (made && grepl("_(t01|tseq|tbound)$", time_var)) {
+      c(sprintf("# %s, made with the time, token and f0 (Hz) columns that tab used:", time_var),
+        sprintf('#   dat <- shinytone::normalise_time_landmarks(dat, "<time>", %s,',
+                q(sub("_(t01|tseq|tbound)$", "", time_var))),
+        sprintf('#                                              f0 = "<f0 (Hz)>", token = %s)',
+                q(token_var)))
+    } else {
+      c("# if it made a time column, normalise_time_token() or normalise_time_landmarks()",
+        "# with the f0 (Hz) and token columns that tab used (f0 =, token =).")
+    }
+  }
 
   # --- Guide text ---
   output$gamm_guide <- renderUI({
@@ -69,9 +175,20 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
           tags$li(tags$strong("f0:"), " An f0-related variable. Normalised f0 (e.g. semitone, z-score or log z-score) is recommended for more interpretable results.",
             " Use the ", tags$strong("Normalise"), " tab first, then select ", tags$em("Normalised data"),
             " (or, after Curate, ", tags$em("Curated + normalised data"), ") from the dataset dropdown to access ", tags$code(style = code_style, "f0_st"), ", ", tags$code(style = code_style, "f0_zscore"), " or ", tags$code(style = code_style, "f0_lz"), "."),
-          tags$li(tags$strong("Time:"), " The time variable that orders f0 samples within each token. Will be normalised to [0, 1] per token before fitting. A column that is already normalised (e.g. ",
-            tags$code(style = code_style, "token_t01"), " from the Normalise tab, or ",
-            tags$code(style = code_style, "time_prop"), " from equal-point extraction) is detected and used as-is, so partial-span tokens are not stretched."),
+          tags$li(tags$strong("Time:"),
+            " The time variable that orders f0 samples within each token. Each token is rescaled to [0, 1]",
+            " from its first f0 to its last before fitting, so rows without f0 at its edges do not move it.",
+            " A column already on 0\u20131 is used as it is: ",
+            tags$code(style = code_style, "token_t01"),
+            " from the Normalise tab (0 = each token's first f0, 1 = its last), or ",
+            tags$code(style = code_style, "time_prop"),
+            " from equal-point extraction (0 and 1 = the first and last frames of the extracted region).",
+            " A ", tags$code(style = code_style, "<tier>_tseq"), " or ",
+            tags$code(style = code_style, "<tier>_tbound"),
+            " column is kept on its own 0-to-n scale. On a ", tags$code(style = code_style, "<tier>_tseq"),
+            " column, one syllable's last f0 and the next",
+            " one's first f0 share a time and keep their order in the data, so keep each token's",
+            " rows in time order: the AR1 correction runs along that order."),
           tags$li(tags$strong("Speaker:"), " Grouping variable for by-speaker random effects."),
           tags$li(tags$strong("Item:"), " The word or syllable type (e.g. different segmental compositions). Grouping variable for by-item random effects."),
           tags$li(tags$strong("Tone category:"), " Fixed effect factor. Used to model f0 contour differences across tone categories."),
@@ -159,7 +276,11 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
         tags$summary(icon("music"), " Working with multisyllabic words?",
                      tags$span(class = "msg-hint", "(click to expand)")),
         tags$p(class = "msg-intro",
-          "Fit a disyllabic (or longer) word as one curve on a syllable-aligned time axis. GAMM handles the extra shape complexity that polynomials and GCA cannot summarise with a few interpretable terms."),
+          HTML(paste("Fit a disyllabic (or longer) word as one curve, on the syllables in sequence",
+                     "(<code>&lt;tier&gt;_tseq</code>), in sequence with the gap kept",
+                     "(<code>&lt;tier&gt;_tbound</code>) or on the whole word (<code>token_t01</code>).",
+                     "GAMM handles the extra shape complexity that polynomials and GCA cannot",
+                     "summarise with a few interpretable terms."))),
         tags$div(class = "msg-flow",
           tags$div(class = "msg-step",
             tags$div(class = "msg-shead",
@@ -167,7 +288,7 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
               tags$span(class = "msg-stitle", "Extract"),
               tags$span(class = "msg-tab", "F0 Extraction")),
             tags$div(class = "msg-swhy",
-              "Add a landmark tier (e.g. syllable) so every f0 frame carries its segment boundaries.")),
+              "Add a landmark tier (e.g. syllable) so every f0 frame knows which syllable it belongs to.")),
           tags$div(class = "msg-arrow", HTML("&#10132;")),
           tags$div(class = "msg-step",
             tags$div(class = "msg-shead",
@@ -175,20 +296,35 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
               tags$span(class = "msg-stitle", "Normalise time"),
               tags$span(class = "msg-tab", "Normalise")),
             tags$div(class = "msg-swhy",
-              HTML("Time Normalisation options: pick the tier to add a sequential time axis (<code>&lt;tier&gt;_tseq</code>)."))),
+              HTML(paste("Time Normalisation options: pick the tier. <code>&lt;tier&gt;_tseq</code>",
+                         "puts the syllables in sequence: each runs from its first f0 to its last over one unit.",
+                         "<code>&lt;tier&gt;_tbound</code> puts the TextGrid boundaries at 1, 2, ...,",
+                         "with the gap kept.")))),
           tags$div(class = "msg-arrow", HTML("&#10132;")),
           tags$div(class = "msg-step msg-step-here",
             tags$div(class = "msg-shead",
               tags$span(class = "msg-badge msg-here", HTML("&#9679;")),
               tags$span(class = "msg-stitle", "GAMM")),
             tags$div(class = "msg-swhy",
-              HTML("You are here. Set the <strong>Time</strong> variable to <code>&lt;tier&gt;_tseq</code> and fit one smooth across the whole word.")))
+              HTML(paste("You are here. Set the <strong>Time</strong> variable to",
+                         "<code>&lt;tier&gt;_tseq</code> or <code>&lt;tier&gt;_tbound</code> to line the",
+                         "syllables up, or to <code>token_t01</code> to keep the word&rsquo;s own timing."))))
         ),
         tags$div(class = "msg-tip",
           icon("lightbulb"), HTML(" <strong>For this workflow:</strong>"),
           tags$ul(style = "margin:4px 0 0 0; padding-left:18px;",
             tags$li(HTML("<strong>Tone category</strong> = the per-word <strong>tone-sequence label</strong> (e.g. <code>H.L</code>), one per token; not a per-syllable tone.")),
-            tags$li(HTML("Raise the <strong>basis dimension k</strong> so the smooth can capture every syllable's shape (penalisation keeps the effective complexity in check).")),
+            tags$li(HTML(paste("Raise the <strong>basis dimension k</strong> so the smooth can capture",
+                               "every syllable's shape (penalisation keeps the effective complexity in",
+                               "check). On <code>&lt;tier&gt;_tseq</code>, one syllable&rsquo;s last f0 and the",
+                               "next one&rsquo;s first f0 both sit on the boundary, so no <em>k</em> lets one",
+                               "smooth follow an f0 jump there, such as a fall before a voiceless consonant",
+                               "and a high start after it. For such words, model the whole word on",
+                               "<code>&lt;tier&gt;_tbound</code>, which keeps the gap and still lines the",
+                               "boundaries up, or on <code>token_t01</code> (<em>Whole token (0&ndash;1)</em>",
+                               "in Normalise), which keeps the gap and the syllable ratio, so the boundary",
+                               "falls at a different point in each token. Or model each syllable as its",
+                               "own token on <code>&lt;syllable_tier&gt;_t01</code>."))),
             tags$li(HTML("Use a batch with a <strong>uniform syllable count</strong>, so segment boundaries line up across tokens (e.g. a disyllabic batch, then a trisyllabic batch, as separate runs)."))))
       )
     )
@@ -214,6 +350,68 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
     } else {
       dataset()
     }
+  })
+
+  # --- Column defaults (Start page, D8) ---
+  # Token: the Start page's token column, when the data has it. f0: a
+  # normalised column first (f0_st, f0_zscore, f0_lz and f0_norm*, which
+  # var_patterns$f0 ranks first), then the column the Start page screens
+  # (f0_corrected, say, rather than the raw f0), then the usual guess. Time
+  # and the other roles keep their defaults (time prefers <tier>_tbound).
+  gamm_col_default <- function(key, vars) {
+    if (!length(vars)) return(NULL)
+    if (identical(key, "token")) {
+      tok <- start_col(start_cols, "token")
+      return(if (!is.null(tok) && tok %in% vars) tok else guess_var(vars, var_patterns$token, 1))
+    }
+    g   <- guess_var(vars, var_patterns$f0, 2)
+    scr <- start_col(start_cols, "f0")
+    if (grepl("^f0_(st|zscore|lz)$|^f0_norm", g, ignore.case = TRUE) ||
+        is.null(scr) || !scr %in% vars) g else scr
+  }
+  # The token and f0 menus show the default until the user picks another
+  # column, and then keep that pick while the data has it: a change on the
+  # Start page, another dataset in the menu or new rows do not override it.
+  # A value equal to the default is not a pick, so the value a menu sends
+  # when it is drawn does not count, and picking the default again makes the
+  # menu follow the Start page once more.
+  gamm_user_pick <- new.env()
+  gamm_col_selected <- function(key, vars) {
+    v <- gamm_user_pick[[key]]
+    if (is.character(v) && length(v) == 1 && v %in% vars) v else gamm_col_default(key, vars)
+  }
+  for (key in c("token", "f0")) local({
+    k  <- key
+    id <- paste0("gamm_", k, "_var")
+    observeEvent(input[[id]], {
+      vars <- names(tryCatch(active_data(), error = function(e) NULL))
+      v    <- input[[id]]
+      gamm_user_pick[[k]] <- if (!length(vars) || identical(v, gamm_col_default(k, vars))) NULL else v
+    })
+  })
+  # A change of column on the Start page reaches a menu still on its default
+  # here, without drawing the sidebar again (which would reset the model
+  # settings). When the change also changes the rows, the sidebar is drawn
+  # again anyway, with the same columns selected.
+  if (is.function(start_cols)) {
+    observeEvent(start_cols(), {
+      vars <- names(tryCatch(active_data(), error = function(e) NULL))
+      if (!length(vars)) return()
+      for (k in c("token", "f0")) {
+        id  <- paste0("gamm_", k, "_var")
+        cur <- input[[id]]
+        sel <- gamm_col_selected(k, vars)
+        if (!is.null(cur) && !is.null(sel) && !identical(cur, sel))
+          updateSelectInput(session, id, selected = sel)
+      }
+    }, ignoreInit = TRUE)
+  }
+
+  # A one-line note under the f0 menu when it is not the column the Start
+  # page screens and still has rows without f0 (screened_f0_note(), global.R).
+  output$gamm_f0_note <- renderUI({
+    screened_f0_note(tryCatch(active_data(), error = function(e) NULL),
+                     input$gamm_f0_var, start_cols)
   })
 
   # --- Sidebar controls ---
@@ -255,15 +453,23 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
         selectInput("gamm_dataset", "Select dataset:",
                     choices = ds_choices, selected = ds_selected),
         curated_reminder("gamm_dataset"),
+        # Start-page defaults; isolated, so a change there updates the menus
+        # (observer above) rather than drawing the sidebar again
         selectInput("gamm_token_var", "Select Token ID variable:",
                     choices = setNames(vars, var_types),
-                    selected = guess_var(vars, var_patterns$token, 1)),
+                    selected = isolate(gamm_col_selected("token", vars))),
         selectInput("gamm_f0_var", "Select f0 variable (normalised f0 recommended):",
                     choices = setNames(vars, var_types),
-                    selected = guess_var(vars, var_patterns$f0, 2)),
-        selectInput("gamm_time_var", "Select Time variable:",  # auto-prefers <tier>_tseq
+                    selected = isolate(gamm_col_selected("f0", vars))),
+        uiOutput("gamm_f0_note"),
+        # auto-prefers a <tier>_tbound, then a <tier>_tseq, when some token
+        # has several parts of the tier (guess_time_var(), with the data and
+        # the token above); Model and GCA prefer <tier>_tseq first
+        selectInput("gamm_time_var", "Select Time variable:",
                     choices = setNames(vars, var_types),
-                    selected = guess_time_var(vars, 3)),
+                    selected = guess_time_var(vars, 3, d = active,
+                                              token = isolate(gamm_col_selected("token", vars)),
+                                              prefer = "tbound")),
         selectInput("gamm_speaker_var", "Select Speaker variable:",
                     choices = setNames(vars, var_types),
                     selected = role_var(active, "speaker", vars, var_patterns$speaker, 4)),
@@ -385,10 +591,13 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
   gamm_rho_val <- reactiveVal(NULL)
   gamm_fitting <- reactiveVal(FALSE)
   gamm_diag_data <- reactiveVal(NULL)  # NULL until the user clicks "Run model diagnostics"
-  observeEvent(input$uploadfile, {   # new file: clear the old fit
+  # A new file, or new rows from the Start page (data_version: its boxes or
+  # columns, discarded tokens, metadata or duration columns), clears the old
+  # fit, which was fitted on rows the tab no longer has.
+  observeEvent({ input$uploadfile; if (!is.null(data_version)) data_version() }, {
     for (rv in list(gamm_model, gamm_fit_obj, gamm_summary_data, gamm_convergence_warning,
                     gamm_plot_data, gamm_formula_str, gamm_rho_val, gamm_diag_data)) rv(NULL)
-  }, ignoreInit = TRUE)
+  }, ignoreInit = TRUE, ignoreNULL = FALSE)
 
   # --- Core computation ---
   observeEvent(input$gamm_button, {
@@ -486,8 +695,18 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
     gamm_summary_data(list(p_table = p_table, s_table = s_table))
 
     # Population-level per-tone predictions, computed by predict_gamm()
-    # which knows the smooth_type / random_smooth / duration setup.
-    plot_df <- predict_gamm(fit, n = 200)
+    # which knows the smooth_type / random_smooth / duration setup. An error
+    # here shows a notification and leaves no curves; it must not end the
+    # session.
+    plot_df <- tryCatch(
+      predict_gamm(fit, n = 200),
+      error = function(e) {
+        showNotification(paste("The model was fitted, but its curves could not be predicted:",
+                               conditionMessage(e)),
+                         type = "error", duration = 10)
+        NULL
+      }
+    )
     gamm_plot_data(plot_df)
     if (!is.null(gamm_pred_data)) gamm_pred_data(plot_df)
 
@@ -756,12 +975,12 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
     acf_note <- if (isTRUE(diag$acf_whitened)) {
       tags$div(
         style = "font-size: 0.84rem; color: #555; margin: 2px 0 8px;",
-        HTML(sprintf("An AR1 correction was applied (rho = %s). The ACF below is computed on the <strong>AR1-whitened residuals, per token</strong>, so it shows whether the correction worked: if it did, the lag-1 bar should now sit <em>inside</em> the dashed band. Bars still poking well outside it mean autocorrelation remains &mdash; consider a different structure.",
+        HTML(sprintf("An AR1 correction was applied (rho = %s). The ACF below is computed on the <strong>AR1-whitened residuals, per token</strong>, so it shows whether the correction worked: if it did, the lag-1 bar should now sit <em>inside</em> the dashed band. Bars still poking well outside it mean autocorrelation remains. Consider a different structure.",
                      formatC(diag$rho, format = "f", digits = 3))))
     } else if (isTRUE(diag$acf_grouped)) {
       tags$div(
         style = "font-size: 0.84rem; color: #555; margin: 2px 0 8px;",
-        HTML("Computed <strong>per token</strong> (within-token autocorrelation pooled across tokens, so token boundaries don't distort the low lags &mdash; the same idea as <code>itsadug::acf_resid</code>). Bars decaying slowly across lags (rather than dropping inside the dashed band after lag 1) indicate temporal autocorrelation; enable <strong>AR1 correction</strong> in the sidebar and refit."))
+        HTML("Computed <strong>per token</strong>, as <code>itsadug::acf_resid</code> does: autocorrelation within tokens is pooled across tokens, so token boundaries don't distort the low lags. Bars decaying slowly across lags (rather than dropping inside the dashed band after lag 1) indicate temporal autocorrelation; enable <strong>AR1 correction</strong> in the sidebar and refit."))
     } else {
       tags$div(
         style = "font-size: 0.84rem; color: #555; margin: 2px 0 8px;",
@@ -776,7 +995,7 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
         tags$ul(style = "margin-bottom: 0; padding-left: 18px;",
           tags$li(tags$strong("Basis dimension (k):"),
             " the key check. If a time smooth has a k-index below 1 and a small p-value, its ",
-            tags$em("k"), " is likely too low — most convincingly when its ",
+            tags$em("k"), " is likely too low, most convincingly when its ",
             tags$em("edf"), " is also close to ", tags$em("k'"),
             ". Raise ", tags$em("k"),
             " and refit. Random-effect terms (by-speaker / by-item) are not checked this way."),
@@ -959,8 +1178,10 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
   # --- Model plot ---
   # Shared by the panel and the PNG download. Column names come from the fit,
   # so the labels match the plotted model even if the pickers changed since.
-  # On a sequential landmark axis (<tier>_tseq) the x axis keeps its 0-to-n
-  # scale, with a dashed line at each segment boundary and each segment named.
+  # On a sequential landmark axis (<tier>_tseq or <tier>_tbound) the x axis
+  # keeps its 0-to-n scale, with a dashed line at each boundary (1, 2, ...:
+  # on _tseq where one segment's f0 ends and the next begins, on _tbound the
+  # TextGrid boundary), and each segment named.
   gamm_prediction_plot <- function(pdat, fit) {
     cn       <- if (!is.null(fit)) fit$col_names else list()
     f0_var   <- if (!is.null(cn$f0))   cn$f0   else input$gamm_f0_var
@@ -968,7 +1189,7 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
     time_var <- if (!is.null(cn$time)) cn$time else input$gamm_time_var
     seq_axis <- identical(attr(pdat, "time_axis"), "sequential")
     n_seg    <- if (seq_axis) as.integer(attr(pdat, "n_segments")) else 1L
-    tier     <- sub("_tseq$", "", time_var)
+    tier     <- sub("_(tseq|tbound)$", "", time_var)
     # Chinese labels need a CJK font (global.R). thematic sets the family of
     # text layers in renderPlot, so the segment names get it explicitly.
     seg_family <- label_family(pdat$tone, tone_var, tier, time_var, f0_var)
@@ -1088,6 +1309,11 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
     }
     random_parts <- c()
     tone_code_var <- if (smooth_type == "separate") tone_var else paste0(tone_var, ".ord")
+    # "Speaker by Tone" smooths go by the plain tone factor with either
+    # smooth type, as in fit_gamm(). Only "Reference + difference" uses the
+    # ordered factor of difference smooths. With difference smooths, the
+    # code then makes both factors.
+    plain_tone_too <- rs_type == "speaker_by_tone" && smooth_type != "separate"
     if (rs_type == "speaker") {
       random_parts <- c(random_parts,
         paste0('s(time_norm, ', speaker_var, ', bs = "fs", m = 1, k = ', k_val, ')'))
@@ -1096,7 +1322,7 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
         paste0('s(time_norm, ', speaker_var, '.', tone_var, ', bs = "fs", m = 1, k = ', k_val, ')'))
     } else if (rs_type == "speaker_by_tone") {
       random_parts <- c(random_parts,
-        paste0('s(time_norm, ', speaker_var, ', by = ', tone_code_var, ', bs = "fs", m = 1, k = ', k_val, ')'))
+        paste0('s(time_norm, ', speaker_var, ', by = ', tone_var, ', bs = "fs", m = 1, k = ', k_val, ')'))
     } else if (rs_type == "ref_diff") {
       random_parts <- c(random_parts,
         paste0('s(time_norm, ', speaker_var, ', bs = "fs", m = 1, k = ', k_val, ')'))
@@ -1135,43 +1361,120 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
                  paste0(input$dataset_name, ".csv")
                else "your_data.csv"
 
+    # The code reads the uploaded file. When this tab used other data, a note
+    # at the top says so, and how to get that data. A source counts only when
+    # its data exists, as in active_data().
+    src      <- input$gamm_dataset
+    src_data <- switch(if (is.null(src)) "" else src,
+                       normalised = normalised_data, curated = curated_data,
+                       curated_norm = curated_norm_data, clustered = cluster_data)
+    if (is.null(src_data) || is.null(src_data())) src <- "uploaded"
+    src_note <- switch(src,
+      normalised = c(
+        "# Note: this tab used the Normalised data, not the uploaded file read below.",
+        "# After the lines that read and prepare that file, add the Normalise tab's",
+        "# steps with that tab's settings: shinytone::normalise_f0(), and",
+        norm_time_lines(time_var, token_var, tryCatch(dataset(), error = function(e) NULL))),
+      curated = c(
+        "# Note: this tab used the Curated data, not the uploaded file read below.",
+        "# Read the Curate tab's \"Curated CSV (analysis-ready)\" download in place of",
+        "# that file, and leave out the Start-page steps below: the download has them."),
+      curated_norm = c(
+        "# Note: this tab used the Curated + normalised data, not the uploaded file",
+        "# read below. Read the Curate tab's \"Curated CSV (analysis-ready)\" download",
+        "# in place of that file, and leave out the Start-page steps below: the",
+        "# download has them. Then add the Normalise tab's steps with that tab's",
+        "# settings: shinytone::normalise_f0(), and",
+        norm_time_lines(time_var, token_var,
+                        if (!is.null(curated_data)) tryCatch(curated_data(), error = function(e) NULL))),
+      clustered = c(
+        "# Note: this tab used the Clustered data, not the uploaded file read below.",
+        "# Read the Cluster tab's \"Download clustered CSV\" file in place of that",
+        "# file, and leave out the Start-page steps below: the download has them."))
+    src_note <- if (length(src_note)) paste0(paste(src_note, collapse = "\n"), "\n\n") else ""
+
     # Mirror fit_gamm()'s auto-detection so the snippet reproduces the app's
     # fit: an already-normalised [0, 1] time column is used as-is, anything
-    # else gets the per-token min-max rescale.
+    # else is rescaled per token from its first f0 to its last. The name goes
+    # in too, as in resolve_time_norm(), so a token_t01 or time_prop column
+    # keeps its decision after rows without f0 are removed.
     df_now  <- tryCatch(active_data(), error = function(e) NULL)
     prenorm <- !is.null(df_now) && all(c(time_var, token_var) %in% names(df_now)) &&
-      time_already_normalised(df_now[[time_var]], df_now[[token_var]])
-    # A sequential landmark axis (<tier>_tseq) is kept on its own scale, as
-    # fit_gamm() does; predictions then span its observed range.
-    seq_axis <- grepl("_tseq$", time_var)
-    norm_block <- if (seq_axis) {
+      time_already_normalised(df_now[[time_var]], df_now[[token_var]], name = time_var)
+    # A sequential landmark axis (<tier>_tseq or <tier>_tbound) is kept on
+    # its own scale, as fit_gamm() does; predictions then span its observed
+    # range.
+    seq_axis <- grepl("_(tseq|tbound)$", time_var)
+    tseq_axis <- grepl("_tseq$", time_var)
+    norm_block <- if (seq_axis && !tseq_axis) {
       paste0(
-      '# ', time_var, ' is a sequential landmark axis (segment i spans [i - 1, i]):\n',
-      '# use it as-is, so segment boundaries stay at whole numbers across tokens\n',
+      '# ', time_var, ' puts the syllables in sequence, gap kept: 0 is the first\n',
+      '# f0, and the TextGrid boundaries are at 1, 2, and so on. Use it as it is,\n',
+      '# so the boundaries stay at whole numbers.\n',
+      'dat$time_norm <- dat$', time_var, '\n\n')
+    } else if (seq_axis) {
+      paste0(
+      '# ', time_var, ' puts the syllables in sequence: syllable i runs from its\n',
+      '# first f0 to its last over [i - 1, i]. Use it as it is, so the boundaries\n',
+      '# stay at whole numbers.\n',
       'dat$time_norm <- dat$', time_var, '\n\n')
     } else if (prenorm) {
       paste0(
-      '# ', time_var, ' is already normalised to [0, 1] — use it as-is\n',
-      '# (no per-token rescale, so partial-span tokens keep their position)\n',
+      '# ', time_var, ' is already on [0, 1]: use it as it is\n',
+      '# (no per-token rescale: 0 and 1 stay where the column puts them)\n',
       'dat$time_norm <- pmin(pmax(dat$', time_var, ', 0), 1)\n\n')
     } else {
+      # resolve_time_norm(f0 =)'s rescale: from each token's first f0 to its
+      # last, over the rows with a time and f0 (0 Hz is NA after
+      # zero_hz_to_na()), so rows without f0 at the token's edges do not
+      # move it, with the rows removed or kept. Rows before the first f0 or
+      # after the last get NA, and a token whose f0 is all at one time point
+      # gets 0.5 there.
       paste0(
-      '# Normalise time to [0, 1] within each token\n',
+      '# Normalise time to [0, 1] within each token, from its first f0 to its\n',
+      '# last, as the app does. Rows before the first f0 or after the last get\n',
+      '# NA. A token whose f0 is all at one time point sits at 0.5 there.\n',
+      'rescale01 <- function(t, has_f0) {\n',
+      '  ok <- has_f0 & is.finite(t)\n',
+      '  if (!any(ok)) return(rep(NA_real_, length(t)))\n',
+      '  t_min <- min(t[ok])\n',
+      '  t_max <- max(t[ok])\n',
+      '  if (t_max == t_min) return(ifelse(t == t_min, 0.5, NA_real_))\n',
+      '  p <- (t - t_min) / (t_max - t_min)\n',
+      '  p[p < 0 | p > 1] <- NA\n',
+      '  p\n',
+      '}\n',
       'dat <- dat %>%\n',
       '  group_by(', token_var, ') %>%\n',
-      '  mutate(\n',
-      '    time_norm = (', time_var, ' - min(', time_var, ')) / \n',
-      '                (max(', time_var, ') - min(', time_var, '))\n',
-      '  ) %>%\n',
+      '  mutate(time_norm = rescale01(', time_var, ', is.finite(', f0_var, '))) %>%\n',
       '  ungroup()\n\n')
     }
+
+    # Keep the rows the model fits, as fit_gamm() does: bam() leaves out rows
+    # that lack a model variable, such as rows without f0 at a token's edges.
+    # Time is normalised above, from each token's first f0 to its last; rows
+    # outside are NA and drop out with the other rows the model leaves out.
+    # The rows go before the factors are made, so the factor
+    # levels, the AR1 start marker and the prediction grid (its time range and
+    # its reference levels) all come from the rows the model uses.
+    fit_vars <- unique(c(f0_var, "time_norm", tone_var,
+      if (isTRUE(ri_speaker) || rs_type %in% c("speaker", "speaker_tone", "speaker_by_tone", "ref_diff"))
+        speaker_var,
+      if (isTRUE(ri_item)) item_var,
+      if (use_dur) dur_var))
 
     code_text <- paste0(
       'library(dplyr)\n',
       'library(mgcv)\n',
       'library(ggplot2)\n\n',
-      paste(read_data_code(ds_name), collapse = "\n"), '\n\n',
+      # The Start-page steps (discarded tokens, metadata, durations, rows
+      # without f0) come first, so the code fits the rows the app fits.
+      src_note,
+      paste(read_data_code(ds_name, start = if (is.null(start_settings)) NULL else start_settings()),
+            collapse = "\n"), '\n\n',
       norm_block,
+      '# Keep the rows the model fits (bam() leaves out rows without f0)\n',
+      'dat <- dat[complete.cases(dat[, c(', paste0('"', fit_vars, '"', collapse = ', '), ')]), ]\n\n',
       '# Ensure factor variables\n',
       'dat$', speaker_var, ' <- as.factor(dat$', speaker_var, ')\n',
       'dat$', item_var, ' <- as.factor(dat$', item_var, ')\n'
@@ -1185,7 +1488,10 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
       code_text <- paste0(code_text,
         tone_factor_code(tone_var, tone_now, ordered = TRUE,
                          to = paste0(tone_var, '.ord')), '\n',
-        'contrasts(dat$', tone_var, '.ord) <- "contr.treatment"\n')
+        'contrasts(dat$', tone_var, '.ord) <- "contr.treatment"\n',
+        if (plain_tone_too) paste0(
+          '# The Speaker by Tone smooths go by the plain tone factor\n',
+          tone_factor_code(tone_var, tone_now), '\n'))
     }
     if (rs_type == "speaker_tone") {
       code_text <- paste0(code_text,
@@ -1195,7 +1501,11 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
 
     if (use_ar1) {
       code_text <- paste0(code_text,
-        '# Create AR1 start event column\n',
+        '# Create AR1 start event column: the first row of each token\n',
+        if (tseq_axis) paste0(
+        '# Rows at the same time (one syllable\'s last f0 and the next one\'s first)\n',
+        '# keep their order in the file, as in the app: give each token\'s rows in\n',
+        '# time order.\n'),
         'dat <- dat %>%\n',
         '  arrange(', token_var, ', time_norm) %>%\n',
         '  group_by(', token_var, ') %>%\n',
@@ -1207,8 +1517,10 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
         '  data = dat,\n',
         '  discrete = TRUE\n',
         ')\n\n',
-        '# Estimate AR1 rho from residual autocorrelation\n',
-        'rho <- acf(resid(model_init), plot = FALSE)$acf[2]\n',
+        '# Estimate AR1 rho from the lag-1 autocorrelation within tokens\n',
+        'r    <- resid(model_init) - mean(resid(model_init))\n',
+        'same <- which(dat$', token_var, '[-1] == dat$', token_var, '[-nrow(dat)])\n',
+        'rho  <- sum(r[-1][same] * r[-length(r)][same]) / sum(r^2)\n',
         'cat("Estimated rho:", round(rho, 4), "\\n")\n\n',
         '# Refit with AR1 correction\n',
         'model <- bam(\n',
@@ -1252,7 +1564,10 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
       'par(mfrow = c(2, 2))\n',
       'gam.check(model)\n',
       'k.check(model)                 # k-index < 1 with small p-value => raise k, refit\n',
-      'concurvity(model, full = TRUE) # smooth-term collinearity (0 = independent, 1 = confounded)\n\n',
+      '# Smooth-term collinearity (0 = independent, 1 = confounded). It can fail on\n',
+      '# a large model (a singular matrix), as in the app, which then shows no table;\n',
+      '# try() lets the rest of the code run.\n',
+      'try(concurvity(model, full = TRUE))\n\n',
       '# Residual autocorrelation, respecting token boundaries (the app\'s ACF panel).\n',
       '# itsadug::acf_resid is the standard tool in phonetics GAMM workflows:\n',
       '#   install.packages("itsadug")\n',
@@ -1262,7 +1577,13 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
       '#   gratia::appraise(model); gratia::draw(model)\n\n')
 
     code_text <- paste0(code_text,
-      '# Predict population-level smooth curves\n',
+      if (seq_axis) paste0(
+      '# Predict population-level smooth curves over the span the model fits.\n',
+      '# dat holds only the rows the model fits, so the time range and the\n',
+      '# levels below come from them.\n')
+      else paste0(
+      '# Predict population-level smooth curves on the 0-1 axis, as the app does.\n',
+      '# dat holds only the rows the model fits, so the levels below come from them.\n'),
       'tone_levels <- levels(dat$', tone_var_pred, ')\n',
       'newdat <- expand.grid(\n',
       if (seq_axis)
@@ -1274,6 +1595,18 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
       'newdat$', speaker_var, ' <- levels(dat$', speaker_var, ')[1]\n',
       'newdat$', item_var, ' <- levels(dat$', item_var, ')[1]\n'
     )
+    if (rs_type == "speaker_tone") {
+      # predict() needs every model variable; the term itself is excluded.
+      code_text <- paste0(code_text,
+        'newdat$', speaker_var, '.', tone_var, ' <- levels(dat$', speaker_var, '.', tone_var, ')[1]\n')
+    }
+    if (plain_tone_too) {
+      # The Speaker by Tone smooths read the plain tone factor, as
+      # predict_gamm() gives it.
+      code_text <- paste0(code_text,
+        'newdat$', tone_var, ' <- factor(as.character(newdat$', tone_var, '.ord), levels = levels(dat$',
+        tone_var, '))\n')
+    }
 
     if (use_dur) {
       code_text <- paste0(code_text,
@@ -1290,7 +1623,8 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
       'ggplot(newdat, aes(x = time_norm, y = fit,\n',
       '                   colour = ', tone_var_pred, ', fill = ', tone_var_pred, ')) +\n',
       if (seq_axis) paste0(
-      '  # dashed line at each segment boundary (1, 2, ...)\n',
+      if (tseq_axis) '  # dashed line where one syllable\'s f0 ends and the next begins (1, 2, ...)\n'
+      else '  # dashed line at each TextGrid boundary (1, 2, ...)\n',
       '  geom_vline(xintercept = seq_len(ceiling(max(dat$time_norm, na.rm = TRUE)) - 1),\n',
       '             linetype = "dashed", colour = "grey55") +\n'),
       '  geom_ribbon(aes(ymin = fit - 1.96 * se,\n',
@@ -1298,8 +1632,8 @@ gamm_ui <- function(input, output, session, dataset, normalised_data, gamm_pred_
       '             alpha = 0.2, colour = NA) +\n',
       '  geom_line(linewidth = 1.2) +\n',
       '  labs(x = "', if (seq_axis) sprintf("Normalised time, %s by %s (%s)",
-                                            sub("_tseq$", "", time_var),
-                                            sub("_tseq$", "", time_var), time_var)
+                                            sub("_(tseq|tbound)$", "", time_var),
+                                            sub("_(tseq|tbound)$", "", time_var), time_var)
                     else "Normalised time", '",\n',
       '       y = "Predicted ', f0_axis_label(f0_var), '",\n',
       '       colour = "', tone_var, '", fill = "', tone_var, '") +\n',

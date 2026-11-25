@@ -31,8 +31,8 @@ Default \code{"token"}.}
 The subset of \code{df}, row order preserved.
 }
 \description{
-Subsets a long-format f0 data frame — with landmark columns already
-attached by \code{\link[=attach_landmarks]{attach_landmarks()}} — to the rows whose time falls inside
+Subsets a long-format f0 data frame, with landmark columns already
+attached by \code{\link[=attach_landmarks]{attach_landmarks()}}, to the rows whose time falls inside
 selected intervals of one tier: automatically detected vowel intervals,
 the rhyme (first vowel interval to the end of the token; monosyllabic
 data only), or an explicit set of labels.
@@ -41,7 +41,7 @@ data only), or an explicit set of labels.
 The three modes:
 \itemize{
 \item \code{"vowel"}: keep rows whose interval label passes
-\code{\link[=ipa_vowel_label]{ipa_vowel_label()}} — all vowel intervals, whatever the syllable
+\code{\link[=ipa_vowel_label]{ipa_vowel_label()}}: all vowel intervals, whatever the syllable
 count.
 \item \code{"rhyme"}: keep rows in labelled intervals from the \emph{first} vowel
 interval of each token to the token's end (vowel + coda). This
@@ -49,12 +49,12 @@ assumes each token is one syllable; for multisyllabic tokens it
 would span from the first vowel across every following syllable.
 Tokens with no vowel-labelled interval are dropped entirely.
 \item \code{"labels"}: keep rows whose (whitespace-trimmed) label equals one of
-\code{labels} — for tiers where the region of interest is marked
+\code{labels}, for tiers where the region of interest is marked
 explicitly (e.g. a \code{rhyme} tier, or non-IPA label schemes).
 }
 
-Rows with an \code{NA} label — tokens with no matching TextGrid, or frames
-outside the tier's span — are always excluded, as are frames in
+Rows with an \code{NA} label (tokens with no matching TextGrid, or frames
+outside the tier's span) are always excluded, as are frames in
 empty-labelled (silence) intervals. Callers should tell users how many
 tokens were lost that way rather than let them vanish silently.
 }

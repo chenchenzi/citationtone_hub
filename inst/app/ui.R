@@ -69,7 +69,9 @@ ui <- fluidPage(
     tags$link(rel = "stylesheet", href = "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"),
     tags$script(src = "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"),
     tags$script(src = "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/r.min.js"),
-    tags$style("
+    # HTML(): a plain string would have its ">" escaped, and the browser would
+    # drop every rule with a child selector (the guide-box headings, the FAQ).
+    tags$style(HTML("
       #plot_button, #show_code_button { display: block; }
       #save_plot_button { display: block; margin-top: 4px; width: fit-content; }
       /* IPA tone letters (Summarise): a tone-letter subset of Charis SIL,
@@ -83,6 +85,9 @@ ui <- fluidPage(
       .tone-letters { font-family: 'Shinytone Tone Letters', 'Charis SIL', 'Doulos SIL', 'Gentium Plus', serif; font-weight: 400; white-space: nowrap; }
       span.tone-letters { font-size: 1.35em; line-height: 0; }
       #visualise_guide strong, #normalise_guide strong, #view_guide strong, #inspect_guide strong, #model_guide strong, #gca_guide strong, #gamm_guide strong, #summarise_guide strong { font-weight: 900; color: #3a3a3a; }
+      /* The top menu (About, F0 Analysis, ...) a step larger than the sub-tabs
+         below it (14.4 px), and still smaller than the logo */
+      #main_nav .nav-link { font-size: 17px; }
       /* Foldable guide boxes (native <details>, open by default) */
       details.guide-box {
         background-color: #f0faf7; border-left: 4px solid #78c2ad;
@@ -96,8 +101,8 @@ ui <- fluidPage(
       }
       details.guide-box > summary.guide-summary::-webkit-details-marker { display: none; }
       details.guide-box > summary.guide-summary::before {
-        content: '▸'; display: inline-block; color: #78c2ad;
-        font-size: 0.9em; transition: transform 0.15s ease;
+        content: '▸'; display: inline-block; color: #5aae96;
+        font-size: 1.25em; line-height: 1; transition: transform 0.15s ease;
       }
       details.guide-box[open] > summary.guide-summary::before { transform: rotate(90deg); }
       details.guide-box > .guide-body { margin-top: 8px; }
@@ -327,7 +332,7 @@ ui <- fluidPage(
         margin-bottom: 10px !important;
       }
       .faq-section .faq-item p { margin-bottom: 6px; }
-    "),
+    ")),
     tags$script(HTML("
       document.addEventListener('DOMContentLoaded', function() {
         function watchForCode(id) {
@@ -1120,7 +1125,7 @@ ui <- fluidPage(
                             tags$span(class = "tab-ref-chip", "F0 Analysis tab")
                           ),
                           tags$div(class = "workflow-desc",
-                            "Optionally normalise, then visualise and inspect to flag pitch-tracking errors. Inspection runs on raw f0, so Normalise is not required here."),
+                            "Upload the CSV on the Start page. It removes the rows without f0 by default and flags tokens with too few points with f0. Optionally normalise, then visualise and inspect to flag pitch-tracking errors. Inspection runs on raw f0, so Normalise is not required here."),
                           tags$div(class = "workflow-flow",
                             tags$span(class = "wf-step wf-data", `data-flow-in` = "extracted-f0", HTML("&#128202; f0 .csv")),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
@@ -1142,13 +1147,15 @@ ui <- fluidPage(
                             tags$span(class = "tab-ref-chip", "F0 Processing tab")
                           ),
                           tags$div(class = "workflow-desc",
-                            "Bring the audio and the flagged tokens back together to fix problematic frames by ear."),
+                            "Bring the audio and the flagged tokens back together to fix problematic frames by ear. F0 Correction saves the cleaned CSV directly. For another region or sampling, such as equidistant points, export it from F0 Extraction instead."),
                           tags$div(class = "workflow-flow",
                             tags$span(class = "wf-step wf-data", HTML("&#127908; .wav")),
                             tags$span(class = "wf-or", "+"),
                             tags$span(class = "wf-step wf-data", `data-flow-in` = "flagged-f0", HTML("&#128202; f0 + metadata + flags .csv")),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
                             tags$span(class = "wf-step wf-app", "F0 Correction"),
+                            tags$span(class = "wf-arrow", HTML("&#10132;")),
+                            tags$span(class = "wf-step wf-app wf-opt", "F0 Extraction (export)"),
                             tags$span(class = "wf-arrow", HTML("&#10132;")),
                             tags$span(class = "wf-step wf-result", `data-flow-out` = "cleaned-f0", HTML("&#128202; cleaned f0 .csv"))
                           )
@@ -1780,6 +1787,9 @@ ui <- fluidPage(
                                            # Discarded-token (token_dropped) exclusion,
                                            # shown only when the upload carries the column
                                            uiOutput("ui_dropped_tokens"),
+                                           # Data screening: the screen's columns
+                                           # and boxes (start_ui.R)
+                                           uiOutput("ui_f0_screen"),
                                            # Horizontal line ----
                                            tags$hr(),
                                            uiOutput("ui_dataset_name"),
@@ -1816,6 +1826,8 @@ ui <- fluidPage(
                                                ),
                                                uiOutput("instruction_text"),
                                                tags$div(id = "f0a-data-preview-anchor",
+                                                 # Report of the rows without f0 (start_ui.R)
+                                                 uiOutput("f0_screen_report"),
                                                  h4(textOutput("preview_title")),
                                                  uiOutput("man_example")
                                                ),
@@ -1835,7 +1847,10 @@ ui <- fluidPage(
                                       tabPanel("Visualise",
                                                uiOutput("visualise_guide"),
                                                uiOutput("vis_tone_warning"),
-                                               tags$div(class = "plot-spinner-wrap",
+                                               uiOutput("vis_align_warning"),
+                                               # The plot is drawn 800 px or more wide: on a
+                                               # narrow screen it scrolls sideways in its box.
+                                               tags$div(class = "plot-spinner-wrap", style = "overflow-x: auto;",
                                                  plotOutput("ggplot_output",height = "auto", width = "auto"),
                                                  tags$div(class = "plot-spinner")
                                                ),
@@ -1856,6 +1871,7 @@ ui <- fluidPage(
                                                uiOutput("curate_log_block")),
                                       tabPanel("Model: Polynomials",
                                                uiOutput("model_guide"),
+                                               uiOutput("model_track_edges"),
                                                uiOutput("model_multisyl_note"),
                                                uiOutput("model_timenorm_note"),
                                                tags$div(class = "plot-spinner-wrap",
@@ -1867,6 +1883,7 @@ ui <- fluidPage(
                                                uiOutput("model_r_code")),
                                       tabPanel("Model: GCA",
                                                uiOutput("gca_guide"),
+                                               uiOutput("gca_track_edges"),
                                                uiOutput("gca_multisyl_note"),
                                                uiOutput("gca_timenorm_note"),
                                                tags$div(class = "plot-spinner-wrap",
@@ -1877,6 +1894,7 @@ ui <- fluidPage(
                                                uiOutput("gca_r_code")),
                                       tabPanel("Model: GAMM",
                                                uiOutput("gamm_guide"),
+                                               uiOutput("gamm_track_edges"),
                                                uiOutput("gamm_multisyl_note"),
                                                uiOutput("gamm_timenorm_note"),
                                                tags$div(class = "plot-spinner-wrap",
@@ -1888,6 +1906,7 @@ ui <- fluidPage(
                                                uiOutput("gamm_r_code")),
                                       tabPanel("Summarise",
                                                uiOutput("summarise_guide"),
+                                               uiOutput("sum_track_edges"),
                                                tags$div(class = "plot-spinner-wrap",
                                                  uiOutput("summarise_summary"),
                                                  plotOutput("summarise_plot", height = "auto", width = "auto"),

@@ -9,7 +9,8 @@ resolve_time_norm(
   time,
   token,
   time_normalised = c("auto", "no", "yes"),
-  quiet = FALSE
+  quiet = FALSE,
+  f0 = NULL
 )
 }
 \arguments{
@@ -26,23 +27,57 @@ that interval are an error).}
 
 \item{quiet}{Suppress the message emitted when auto-detection decides the
 column is already normalised. Default \code{FALSE}.}
+
+\item{f0}{Name of the f0 column, or \code{NULL} (the default). With \code{f0}, the
+rescale runs from each token's first f0 to its last; without it, from
+each token's first row to its last.}
 }
 \value{
 A list with \code{time_norm} (numeric vector, one value per row of
-\code{data}) and \code{prenormalised} (logical: was the column used as-is?).
+\code{data}) and \code{prenormalised} (logical: was the column used as-is?). A
+missing \code{time}, \code{token} or \code{f0} column is an error.
 }
 \description{
 Builds the \verb{[0, 1]} time axis the modelling functions fit on. By default
-(\code{time_normalised = "auto"}) the column is inspected with
+(\code{time_normalised = "auto"}) the column and its name are passed to
 \code{\link[=time_already_normalised]{time_already_normalised()}}: a column that is already proportional is used
-as-is (clamped to \verb{[0, 1]}), anything else is min-max rescaled to \verb{[0, 1]}
-within each token exactly as before.
+as-is (clamped to \verb{[0, 1]}); anything else is rescaled to \verb{[0, 1]} within
+each token, from its first f0 to its last when \code{f0} is given.
 }
 \details{
-In the rescaling path, a token whose time has zero range (a single sample,
-or all-identical times) gets \code{0.5} for every row, and \code{NA} times inside an
-otherwise valid token propagate as \code{NA} — matching the behaviour the
-modelling functions have always had.
+In the rescaling path with \code{f0}, each token runs from its first f0 (0) to
+its last f0 (1), as in \code{\link[=normalise_time_token]{normalise_time_token()}}. Rows have f0 as there:
+a row has f0 when its \code{f0} value is a number, and in a column in Hz (one
+that \code{\link[=hz_f0_columns]{hz_f0_columns()}} finds) 0 is no f0. A column with negative markers,
+such as -1, is not read as Hz, so those values count as f0: set them to
+\code{NA} first (see \code{\link[=suggest_unvoiced]{suggest_unvoiced()}}). Rows before the first f0 or after the
+last get \code{NA}, so rows without f0 at a token's edges do not move the axis,
+and removing them changes nothing. A token whose f0 is all at one time
+gets \code{0.5} on the rows at that time, and a token with no f0 gets \code{NA}.
+Rows with an \code{NA} token form one token of their own, as in the rescale
+without \code{f0}. \code{\link[=fit_gca]{fit_gca()}}, \code{\link[=fit_gamm]{fit_gamm()}}, \code{\link[=fit_polynomial]{fit_polynomial()}} and
+\code{\link[=compute_mean_contour]{compute_mean_contour()}} pass their f0 column.
+
+Without \code{f0}, each token runs from its first row with a time to its last,
+rows without f0 included. A token whose times are all the same gets
+\code{0.5} on every row, rows with no time included. Other \code{NA} times stay
+\code{NA}. On data with no rows without f0 at the token edges, the two
+rescales are the same.
+
+In \code{"auto"} mode, a \verb{<tier>_t01}, \code{token_t01} or \code{time_prop} column whose
+values all lie in \verb{[0, 1]} is used as it is, whatever rows it has left, so
+removing rows does not switch it to the rescale. Columns made by
+\code{\link[=normalise_time_token]{normalise_time_token()}} and \code{\link[=normalise_time_landmarks]{normalise_time_landmarks()}} already run
+from the first f0 to the last. On \code{time_prop}, a column made by an older
+version or a subset taken after a column was made, the f0 may not reach
+0 or 1. A \verb{<tier>_tseq} or \verb{<tier>_tbound} column is judged by its
+values only, so one that spans several segments is rescaled per token
+here; for tokens with the same number of segments the boundaries then
+sit at 1/n, 2/n and so on. A token whose first or last segment has no
+values on the axis is stretched: its other segments fill 0 to 1. On a
+\verb{<tier>_tseq} that is a segment with f0 at fewer than two times; on a
+\verb{<tier>_tbound}, one with no f0. (\code{\link[=fit_gamm]{fit_gamm()}} keeps a \verb{<tier>_tseq} or
+\verb{<tier>_tbound} on its own scale instead.)
 }
 \seealso{
 \code{\link[=time_already_normalised]{time_already_normalised()}} for the detection rule.

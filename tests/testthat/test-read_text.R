@@ -366,3 +366,120 @@ test_that("the app's R code snippets read a CSV as the Start tab does", {
                                      na.strings = c("NA", "--undefined--")))
   expect_identical(run$dat, app)
 })
+
+# With the Start-page settings (server.R's start_settings()), the code also
+# repeats the discarded-token exclusion, the metadata join, the duration
+# columns and the screen of rows without f0, so running it gives the rows the
+# app's tabs read. The server runs in shiny::testServer() (helper-app-start.R).
+test_that("read_data_code() repeats the Start-page steps in dataset()'s order", {
+  fx <- start_padded_fixture()
+  fx$token_dropped <- fx$token == "S2_c"
+  f <- start_write_csv(fx)
+  s <- start_server()
+  shiny::testServer(s$server, {
+    session$setInputs(uploadfile = start_upload(f, "padded.csv"))
+    # Metadata from the token names, then a duration column
+    session$setInputs(meta_source = "derive", meta_key = "token", meta_sep = "_",
+                      meta_colnames = "spk word")
+    session$setInputs(meta_apply = 1)
+    session$setInputs(dur_unit = "__token__", dur_token = "token", dur_time = "time",
+                      dur_f0 = "f0")
+    session$setInputs(dur_apply = 1)
+    expect_true(all(c("spk", "word", "token_f0_dur", "voiced_run") %in% names(dataset())))
+    expect_false("S2_c" %in% dataset()$token)
+    code <- s$env$read_data_code(f, start_settings())
+    steps <- c("packageVersion", "zero_hz_to_na", "token_dropped", "strsplit",
+               "contour_duration", "screen_f0_rows", "drop_rows_without_f0")
+    at <- vapply(steps, function(p) grep(p, code, fixed = TRUE)[1], integer(1))
+    expect_false(anyNA(at))
+    expect_false(is.unsorted(at))
+    expect_true(any(grepl(sprintf('>= "%s"', utils::packageVersion("shinytone")), code, fixed = TRUE)))
+    run <- new.env()
+    eval(parse(text = code), run)
+    expect_identical(run$dat, dataset())
+    # Removal unticked: the code keeps the rows
+    session$setInputs(screen_remove = FALSE)
+    code2 <- s$env$read_data_code(f, start_settings())
+    expect_false(any(grepl("drop_rows_without_f0", code2, fixed = TRUE)))
+    run2 <- new.env()
+    eval(parse(text = code2), run2)
+    expect_identical(run2$dat, dataset())
+    # The toast for the duration column counts the same data as the column
+    expect_true(any(vapply(s$rec$toasts, function(t) grepl("Added token_f0_dur for 3 token", t$text), logical(1))))
+  })
+})
+
+test_that("read_data_code() drops a token_dropped column that marks no token, as the app does", {
+  # all_correctedf0.csv when nothing was discarded: token_dropped = FALSE on
+  # every row. The app drops the column (the box is on), so the code must too.
+  fx <- start_padded_fixture()
+  fx$token_dropped <- FALSE
+  f <- start_write_csv(fx)
+  s <- start_server()
+  shiny::testServer(s$server, {
+    session$setInputs(uploadfile = start_upload(f, "padded.csv"))
+    expect_false("token_dropped" %in% names(dataset()))
+    code <- s$env$read_data_code(f, start_settings())
+    expect_true(any(grepl("(token_dropped = TRUE: no token is marked)", code, fixed = TRUE)))
+    expect_true(any(grepl("dat$token_dropped <- NULL", code, fixed = TRUE)))
+    run <- new.env()
+    eval(parse(text = code), run)
+    expect_identical(run$dat, dataset())
+    # Kept when the user unticks the box (it is not drawn for this file, but
+    # the choice holds as for any file)
+    session$setInputs(exclude_dropped = FALSE)
+    expect_true("token_dropped" %in% names(dataset()))
+    code2 <- s$env$read_data_code(f, start_settings())
+    expect_false(any(grepl("token_dropped <- NULL", code2, fixed = TRUE)))
+    run2 <- new.env()
+    eval(parse(text = code2), run2)
+    expect_identical(run2$dat, dataset())
+  })
+})
+
+test_that("read_data_code() repeats the screen of the bundled sample", {
+  sample <- system.file("app", "www", "dc21f0_test.csv", package = "shinytone")
+  skip_if(!nzchar(sample), "sample not found")
+  s <- start_server()
+  shiny::testServer(s$server, {
+    session$setInputs(uploadfile = start_upload(sample))
+    code <- s$env$read_data_code(sample, start_settings())
+    expect_true(any(grepl("# Every row has f0 in column f0_Hz; nothing to remove", code, fixed = TRUE)))
+    run <- new.env()
+    eval(parse(text = code, encoding = "UTF-8"), run)
+    expect_identical(run$dat, dataset())
+  })
+})
+
+test_that("read_data_code() repeats a metadata CSV join", {
+  f <- start_write_csv(start_padded_fixture())
+  meta <- data.frame(file = c("S1_a.wav", "s1_b.wav", "S2_a.WAV", "S2_b.wav"),
+                     age = c(30, 30, 41, 41), group = c("x", "x", "y", "y"))
+  mf <- start_write_csv(meta)
+  s <- start_server()
+  shiny::testServer(s$server, {
+    session$setInputs(uploadfile = start_upload(f, "padded.csv"))
+    # The name is the full path here, so the code can read the file
+    session$setInputs(meta_source = "csv", meta_file = start_upload(mf, mf),
+                      meta_key = "token", meta_join_meta = "file", meta_strip_ext = TRUE)
+    session$setInputs(meta_apply = 1)
+    expect_true(all(c("age", "group") %in% names(dataset())))
+    expect_equal(sum(is.na(dataset()$age)), sum(dataset()$token == "S2_c"))
+    code <- s$env$read_data_code(f, start_settings())
+    expect_true(any(grepl("file_path_sans_ext", code, fixed = TRUE)))
+    run <- new.env()
+    eval(parse(text = code), run)
+    expect_identical(run$dat, dataset())
+  })
+})
+
+test_that("read_data_code() without Start settings is the read and zero_hz_to_na() only", {
+  global <- system.file("app", "global.R", package = "shinytone")
+  skip_if(!nzchar(global), "app not found")
+  env <- new.env()
+  for (e in Filter(function(e) is.call(e) && identical(e[[1]], as.name("<-")),
+                   as.list(parse(global, keep.source = FALSE, encoding = "UTF-8")))) eval(e, env)
+  expect_identical(env$read_data_code("f0.csv"), env$read_data_code("f0.csv", start = NULL))
+  expect_length(env$read_data_code("f0.csv"), 5)
+  expect_identical(env$read_data_code("f0.csv")[5], "dat <- shinytone::zero_hz_to_na(dat)")
+})

@@ -64,11 +64,13 @@ more confounding between smooths) when it can be computed.
 The ACF is computed \strong{per token} (the residuals are split by token and
 the within-token lag products are pooled, in the spirit of
 \code{\link[itsadug:acf_resid]{itsadug::acf_resid()}}) so that token boundaries do not contaminate the
-low lags — important because f0 tokens are short. When the fit used an
-AR1 correction the residuals are first whitened within each token
-(\verb{e_i - rho * e_\{i-1\}}, reset at each token start), so the ACF then
-shows whether the AR1 term actually removed the autocorrelation rather
-than the pre-correction picture. \code{acf_grouped} / \code{acf_whitened} record
+low lags, which matters because f0 tokens are short. When the fit used
+an AR1 correction the residuals are first whitened
+(\verb{e_i - rho * e_\{i-1\}}). The whitening restarts at each \code{AR.start} in
+the model, as \code{\link[mgcv:bam]{mgcv::bam()}} does, and \code{\link[=fit_gamm]{fit_gamm()}} puts one on each
+token's first fitted row. So the ACF then shows whether the AR1 term
+actually removed the autocorrelation rather than the pre-correction
+picture. \code{acf_grouped} / \code{acf_whitened} record
 which path was taken (a plain concatenated ACF is used only as a
 fallback if residuals cannot be aligned to tokens).
 }

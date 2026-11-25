@@ -4,21 +4,30 @@
 \alias{flag_f0_gaps}
 \title{Flag tokens whose f0 has gaps inside the measured region}
 \usage{
-flag_f0_gaps(df, token = "token", f0 = "f0", time = "time")
+flag_f0_gaps(df, token = "token", f0 = "f0", time = "time", run = "voiced_run")
 }
 \arguments{
 \item{df}{Long-format f0 data frame.}
 
-\item{token, f0, time}{Column names. Defaults \code{"token"}, \code{"f0"}, \code{"time"}.}
+\item{token, f0, time}{Column names. Defaults \code{"token"}, \code{"f0"}, \code{"time"}.
+Without the \code{time} column, rows are taken in their order in \code{df} and
+only rows without f0 mark a gap.}
+
+\item{run}{Name of a column that numbers the runs of f0 within each token,
+such as \code{voiced_run}. Used only when the column is present; \code{NULL}
+ignores it.}
 }
 \value{
-\code{df} with the \code{n_missing} and \code{has_gap} columns added.
+\code{df} with the \code{n_missing} and \code{has_gap} columns added. Columns of
+these names already in \code{df} are replaced, keeping their values for the
+tokens with no rows without f0 (see Details).
 }
 \description{
 Adds two token-level columns so unvoiced stretches are visible in the
 exported data rather than being silently scattered \code{NA}s: \code{n_missing},
 the number of that token's rows with no f0, and \code{has_gap}, \code{TRUE} when
-at least one of those rows sits \emph{between} two rows that do have f0.
+the token's voicing is interrupted somewhere between its first and last
+f0.
 }
 \details{
 The distinction matters because a missing value at the edge of a region
@@ -28,11 +37,31 @@ voiceless stop, a creaky patch, or a tracking failure). Only the latter
 sets \code{has_gap}, so \code{has_gap} marks the tokens worth looking at in F0
 Correction. Run this on the native frames rather than on a resampled
 grid: resampling can fill a short dropout from its nearer frame, leaving
-no \code{NA} behind for this to find.
+no \code{NA} behind for this to find, and its equal time steps show no gap
+either.
+
+A gap is one of these:
+\itemize{
+\item rows without f0 between two rows with f0;
+\item a time step longer than 1.5 times the token's usual step, so the gaps
+still show once the rows without f0 are removed. This needs a regular
+frame grid and a \code{time} column;
+\item a change in the \code{run} column (\code{voiced_run}), when the data have one.
+}
+
+Once the rows without f0 are removed, \code{n_missing} can no longer count
+them. So for a token with no rows without f0, the values the data already
+hold in \code{n_missing} and \code{has_gap} are kept, as they may record rows removed
+earlier. \code{has_gap} is also set to \code{TRUE} there when the token has a gap
+(above). Other tokens get both columns afresh. On data cleaned beforehand
+that hold neither column and no \code{run} column, on a grid that is not
+regular, no gap can be seen: such a token gets \code{n_missing = 0} and
+\code{has_gap = FALSE}.
 
 A token with no f0 at all gets \code{has_gap = FALSE}: there is no interior to
-speak of. Existing columns of either name are replaced.
+speak of.
 }
 \seealso{
-\code{\link[=resample_f0_equal]{resample_f0_equal()}}, \code{\link[=trim_to_voiced]{trim_to_voiced()}}.
+\code{\link[=resample_f0_equal]{resample_f0_equal()}}, \code{\link[=trim_to_voiced]{trim_to_voiced()}}; \code{\link[=screen_f0_rows]{screen_f0_rows()}} for
+the gaps counted per token without changing the data.
 }

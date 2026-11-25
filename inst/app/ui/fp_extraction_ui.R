@@ -59,14 +59,18 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       tags$hr(),
       # ---- Landmarks from TextGrid (optional) ----
       h5("Landmarks from TextGrid"),
-      tags$p(style = "color: #777; font-size: 0.8rem; margin-bottom: 6px;",
+      # nows(): no space before the commas and full stops after the codes
+      tags$p(style = "color: #777; font-size: 0.8rem; margin-bottom: 6px;", nows(
         "If you uploaded ", tags$code(".TextGrid"), " files, choose interval tier(s) to read ",
         "boundaries from. Each adds ", tags$code("<tier>"), ", ", tags$code("<tier>_start"),
         ", ", tags$code("<tier>_end"), ", ", tags$code("<tier>_i"),
         " columns (the segment label, its start and end in seconds, and its index) to every ",
-        "f0 frame, so the Visualise tab can align contours by these landmarks. ",
+        "f0 frame, so Visualise can align contours by these landmarks, and Normalise can build ",
+        tags$code("<tier>_t01"), ", ", tags$code("<tier>_tseq"), " and ", tags$code("<tier>_tbound"),
+        ". On the first two, the boundaries only say ",
+        "which frames belong to which segment: each segment's time runs from its first f0 to its last. ",
         "Column names keep the tier name's letters and digits in any script; other characters ",
-        "become ", tags$code("_"), ", and a name already in use gets ", tags$code("_2"), "."),
+        "become ", tags$code("_"), ", and a name already in use gets ", tags$code("_2"), ".")),
       uiOutput("fp_landmark_picker"),
       tags$hr(),
       # ---- Metadata (optional) ----
@@ -145,7 +149,8 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       checkboxInput("fp_drop_unvoiced", "Drop rows without f0", value = FALSE),
       tags$div(style = "color: #888; font-size: 0.75rem; font-style: italic; margin-top: -8px; margin-bottom: 8px;",
         "Leading and trailing silence is already outside a Whole token region; this also ",
-        "removes the unvoiced gaps inside it. ", tags$code("has_gap"), " and ",
+        "removes the rows without f0 inside it, and a ", tags$code("voiced_run"), " column ",
+        "marks where they were. ", tags$code("has_gap"), " and ",
         tags$code("n_missing"), " still flag those tokens. With equidistant points, a token ",
         "with a gap then keeps fewer than N points."),
       tags$hr(),
@@ -473,8 +478,11 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
             "<code>&lt;tier&gt;_start</code>, <code>&lt;tier&gt;_end</code> and <code>&lt;tier&gt;_i</code> ",
             "columns. Column names keep the tier name's letters and digits in any script; other characters ",
             "become <code>_</code>, and a name already in use gets <code>_2</code>. ",
-            "The <strong>Visualise</strong> tab can then align contours by them, syllable by ",
-            "syllable for multi-syllable words.")))
+            "The <strong>Visualise</strong> tab can then align contours by them, and <strong>Normalise</strong> ",
+            "can build <code>&lt;tier&gt;_t01</code>, <code>&lt;tier&gt;_tseq</code> and ",
+            "<code>&lt;tier&gt;_tbound</code>. On the first two, the boundaries only ",
+            "decide which frames belong to which syllable; each syllable&#39;s time runs from its first f0 to ",
+            "its last, so a voiceless onset takes no room.")))
         ),
 
         tags$strong("F0 Data Export:"),
@@ -503,7 +511,9 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                 "<em>Equidistant points</em>: N points across the region (21 = every 5%, 11 = every ",
                 "10%). This is time normalisation at the sampling stage, so every token lands on the ",
                 "same 0 to 100% axis. It adds <code>point</code> (1 to N) and <code>time_prop</code> ",
-                "(0 to 1), which the Model tabs recognise as an already-normalised time axis."))))),
+                "(0 to 1), which the Model tabs use as it is. 0 and 1 are the first and last frames of ",
+                "the region: over <em>Whole token (voiced region)</em>, the voiced region&#39;s first and ",
+                "last frames; over a TextGrid interval, its edges, which may have no f0."))))),
           tags$li(HTML(paste0(
             "<strong>Value at each point</strong> works the same as Praat&#39;s ",
             "<code>Pitch: Get value at time...</code> command, with the same two interpolation ",
@@ -523,9 +533,11 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
             "interpolated across, exactly as Praat would."))),
           tags$li(HTML(paste0(
             "<strong>Drop rows without f0</strong> removes the frames (or points) left empty inside ",
-            "the region, for tools that expect measured values only. Off by default: kept, an ",
-            "empty row shows where voicing broke, and a plot draws a gap instead of a straight line ",
-            "across it. It is applied last, so resampling still sees the gap."))),
+            "the region. Off by default. A <code>voiced_run</code> column then numbers the ",
+            "stretches with f0 in each token: 1 up to the first gap, 2 after it, and so on. ",
+            "In shinytone, Curate and Visualise break the line at each gap either way. Other ",
+            "plotting tools join the line across the removed rows unless they also group by ",
+            "<code>voiced_run</code>. It is applied last, so resampling still sees the gap."))),
           tags$li(HTML("<strong>Two checks run on every export.</strong>"),
             tags$ul(class = "gsub",
               tags$li(HTML(paste0(
@@ -602,8 +614,10 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
               tags$div(class = "msg-swhy",
                 HTML(paste0(
                   "Keep the default here too, and align by landmarks rather than by percentage: tick the ",
-                  "<code>syllable</code> tier under <strong>Landmarks from TextGrid</strong>, then build the ",
-                  "<code>&lt;tier&gt;_tseq</code> axis in <span class=\"msg-tab\">Normalise</span>."))))
+                  "<code>syllable</code> tier under <strong>Landmarks from TextGrid</strong>, then build ",
+                  "<code>&lt;tier&gt;_tseq</code> (syllables in sequence), <code>&lt;tier&gt;_tbound</code> ",
+                  "(in sequence, gap kept) or <code>token_t01</code> (the whole ",
+                  "word, syllable ratio kept) in <span class=\"msg-tab\">Normalise</span>."))))
           ),
           tags$div(class = "msg-tip",
             icon("lightbulb"),
@@ -735,7 +749,7 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     if (is.null(mode)) mode <- "wrassp"
     if (mode == "csv") {
       tags$div(style = "color: #888; font-size: 0.78rem; font-style: italic;",
-        "f0 data loads automatically once you choose a CSV and the columns are mapped.")
+        "f0 data loads automatically once you choose a CSV and pick its token, time and f0 variables.")
     } else {
       actionButton("fp_extract_run", "Run extraction", icon = icon("play"))
     }
@@ -1104,8 +1118,12 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     # short dropout can leave no NA in the resampled grid even though voicing
     # really was interrupted. resample_f0_equal() carries these token-constant
     # columns through, so the flags describe the voicing either way.
-    out <- tryCatch(flag_f0_gaps(out), error = function(e) out)
+    # A TextGrid interval region reads gaps from the rows only (see
+    # export_flag_gaps()).
+    interval <- identical(input$fp_region, "interval")
+    out <- tryCatch(export_flag_gaps(out, rows_only = interval), error = function(e) out)
 
+    resampled <- FALSE
     if (identical(input$fp_sampling_mode, "equal") && nrow(out) > 0) {
       n <- suppressWarnings(as.integer(input$fp_sampling_n))
       if (is.na(n) || n < 2) {
@@ -1120,11 +1138,12 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         } else {
           sets <- landmark_sets(names(out))
           out <- rs
+          resampled <- TRUE
           dropped <- attr(out, "dropped_columns")
           if (is.null(dropped)) dropped <- character(0)
           # Landmark boundaries change within a multisyllabic token, so the
           # new grid cannot carry them; say so where it will be seen, since
-          # without them Normalise has no <tier>_tseq to build.
+          # without them Normalise has no <tier>_tseq or <tier>_tbound to build.
           lost <- names(sets)[paste0(names(sets), "_start") %in% dropped]
           if (length(lost) > 0) {
             notes <- c(notes, sprintf(paste(
@@ -1155,23 +1174,75 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
       notes <- c(notes, sprintf("%d token(s) discarded in F0 Correction are excluded.",
                                 n_discarded))
     }
-    # Optional: drop the rows without a measured f0 (NA or 0 Hz). Last, so the
+    # Optional: drop the rows without f0 and mark the gaps they leave in
+    # voiced_run (export_drop_rows_without_f0() below). Last, so the
     # resampler above still saw the unvoiced frames (it never averages across
     # them) and has_gap / n_missing were measured on the full region.
     n_unvoiced <- 0L
+    run_gaps   <- 0L
     if (isTRUE(input$fp_drop_unvoiced) && nrow(out) > 0) {
-      fv <- suppressWarnings(as.numeric(out$f0))
-      measured   <- !is.na(fv) & fv > 0
-      n_unvoiced <- sum(!measured)
-      out <- out[measured, , drop = FALSE]
-      rownames(out) <- NULL
-      if (nrow(out) == 0) return(NULL)
+      dr <- tryCatch(export_drop_rows_without_f0(out, rows_only = resampled || interval),
+                     error = function(e) e)
+      if (inherits(dr, "error")) {
+        notes <- c(notes, paste("Could not drop the rows without f0, so the export keeps them:",
+                                conditionMessage(dr)))
+      } else {
+        out        <- dr$data
+        n_unvoiced <- dr$n
+        run_gaps   <- dr$gaps
+        rownames(out) <- NULL
+        if (nrow(out) == 0) return(NULL)
+      }
     }
     list(data = out,
          region = if (is.null(input$fp_region)) "voiced" else input$fp_region,
          sampling = input$fp_sampling_mode,
-         notes = notes, dropped = dropped, n_unvoiced = n_unvoiced)
+         notes = notes, dropped = dropped, n_unvoiced = n_unvoiced,
+         run_gaps = run_gaps)
   })
+
+  # "Drop rows without f0" for the export: drop_rows_without_f0() on the
+  # export's token, time and f0 columns, so the file carries voiced_run. It
+  # numbers the stretches with f0 in each token (1 up to the first gap, 2
+  # after it, and so on), so the gaps stay marked once the rows are gone.
+  # A row has no f0 here when its f0 is NA or not above 0 Hz, as everywhere
+  # in this tab. drop_rows_without_f0() reads only NA as no f0, so those
+  # values become NA first; the rows kept are returned as they were. Any
+  # voiced_run already in `out` is left out, so the new one is computed from
+  # this export alone. Returns list(data, n, gaps): the rows kept, the number
+  # of rows dropped, and the gaps voiced_run marks.
+  # `rows_only = TRUE` marks only the gaps the dropped rows leave, not the
+  # gaps read from the time steps. Use it for equidistant points, where every
+  # point is there before the drop (with 5 points or fewer, an even step in a
+  # long token can look like a gap next to the file's usual step), and for a
+  # TextGrid interval region, where the time jumps between intervals.
+  export_drop_rows_without_f0 <- function(out, rows_only = FALSE) {
+    fv <- suppressWarnings(as.numeric(out$f0))
+    out$f0[is.na(fv) | fv <= 0] <- NA
+    out$voiced_run <- NULL
+    res  <- drop_rows_without_f0(out, token = "token", time = "time", f0 = "f0",
+                                 gap_ratio = if (isTRUE(rows_only)) Inf else 1.5)
+    info <- attr(res, "rows_without_f0")
+    attr(res, "rows_without_f0") <- NULL
+    list(data = res, n = as.integer(info$removed),
+         gaps = as.integer(info$gaps_rows + info$gaps_time_only + info$gaps_run))
+  }
+
+  # n_missing and has_gap for the export (flag_f0_gaps()). A TextGrid
+  # interval region keeps only the chosen intervals, so the time jumps where
+  # the rows between two of them were left out (the consonant between two
+  # vowels). That is not a gap in the voicing. With `rows_only = TRUE` only
+  # rows without f0 mark a gap: flag_f0_gaps() gets the rows in time order
+  # and no time column, so it reads no gaps from the time steps.
+  export_flag_gaps <- function(out, rows_only = FALSE) {
+    if (!isTRUE(rows_only) || nrow(out) == 0) return(flag_f0_gaps(out))
+    o  <- order(match(out$token, unique(out$token)),
+                suppressWarnings(as.numeric(out$time)))
+    fl <- flag_f0_gaps(out[o, , drop = FALSE], time = NULL)
+    fl <- fl[order(o), , drop = FALSE]
+    rownames(fl) <- NULL
+    fl
+  }
 
   # One-line description of what the Download button will write.
   output$fp_export_summary <- renderUI({
@@ -1205,6 +1276,10 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     if (isTRUE(res$n_unvoiced > 0)) {
       cap <- paste0(cap, sprintf(" Dropped %s row(s) without f0.",
                                  format(res$n_unvoiced, big.mark = ",")))
+    }
+    if (isTRUE(res$run_gaps > 0)) {
+      cap <- paste0(cap, sprintf(" The voiced_run column marks %s gap(s) inside tokens.",
+                                 format(res$run_gaps, big.mark = ",")))
     }
     tagList(
       tags$div(style = "color: #666; font-size: 0.75rem; font-style: italic; margin-top: 6px;", cap),
@@ -1279,12 +1354,12 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     if (!has_csv) {
       placeholder <- c("Upload a CSV first" = "")
       return(tagList(
-        selectInput("fp_f0_col_token", "Token / filename column:",
+        selectInput("fp_f0_col_token", "Token / filename variable:",
                     choices = placeholder, selected = "", selectize = FALSE),
         token_match_note,
-        selectInput("fp_f0_col_time", "Time column:",
+        selectInput("fp_f0_col_time", "Time variable:",
                     choices = placeholder, selected = "", selectize = FALSE),
-        selectInput("fp_f0_col_f0", "f0 column:",
+        selectInput("fp_f0_col_f0", "f0 variable:",
                     choices = placeholder, selected = "", selectize = FALSE)
       ))
     }
@@ -1301,12 +1376,12 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     f0_default   <- auto_match(c("f0", "f0_hz", "f0_Hz", "pitch",
                                  "frequency", "freq"))
     tagList(
-      selectInput("fp_f0_col_token", "Token / filename column:",
+      selectInput("fp_f0_col_token", "Token / filename variable:",
                   choices = cols, selected = tok_default, selectize = FALSE),
       token_match_note,
-      selectInput("fp_f0_col_time", "Time column:",
+      selectInput("fp_f0_col_time", "Time variable:",
                   choices = cols, selected = time_default, selectize = FALSE),
-      selectInput("fp_f0_col_f0", "f0 column:",
+      selectInput("fp_f0_col_f0", "f0 variable:",
                   choices = cols, selected = f0_default, selectize = FALSE)
     )
   })
@@ -1382,11 +1457,14 @@ fp_extraction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     # added. Keep them, so the next downloads write them out again without
     # re-attaching (the landmark step skips tiers already present, and the
     # metadata join skips identical columns). The export's f0-derived columns
-    # are left out; they are recomputed on the way out. Only for resumed files:
-    # another CSV's extra columns may be derived from the uncorrected f0.
+    # are left out; they are recomputed on the way out. voiced_run is one of
+    # them: "Drop rows without f0" computes it afresh for the new export.
+    # Only for resumed files: another CSV's extra columns may be derived from
+    # the uncorrected f0.
     if (resumed) {
       carry <- setdiff(names(df), c(names(out), tcol, scol, fcol, icol, pair,
-                                    "n_missing", "has_gap", "point", "time_prop"))
+                                    "n_missing", "has_gap", "point", "time_prop",
+                                    "voiced_run"))
       for (cl in carry) out[[cl]] <- df[[cl]]
     }
     have_wav <- audio$basename[!is.na(audio$wav_path)]

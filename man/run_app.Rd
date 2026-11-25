@@ -7,7 +7,7 @@
 run_app(...)
 }
 \arguments{
-\item{...}{Additional arguments forwarded to \code{\link[shiny:runApp]{shiny::runApp()}} — e.g.
+\item{...}{Additional arguments forwarded to \code{\link[shiny:runApp]{shiny::runApp()}}, e.g.
 \code{port = 4321}, \code{launch.browser = FALSE}, \code{host = "0.0.0.0"}.}
 }
 \value{

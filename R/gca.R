@@ -3,7 +3,8 @@
 #
 # Thin convenience wrapper around lme4::lmer() that prepares the data the way
 # citation-tone GCA typically wants:
-#   * time normalised to [0, 1] within each token
+#   * time normalised to [0, 1] within each token, from its first f0 to its
+#     last
 #   * orthogonal polynomials of the requested degree on normalised time
 #   * fixed effects: (ot1 + ... + otK) * tone
 #   * conventional random effects on speaker and item
@@ -35,15 +36,28 @@
 #' @details
 #' ## What the function does internally
 #'
-#' 1. Within each token, normalise the time axis to `[0, 1]`. If the time
+#' 1. Within each token, normalise the time axis to `[0, 1]`, from its first
+#'    f0 (0) to its last f0 (1). If the time
 #'    column is *already* normalised (e.g. `token_t01` from
 #'    [normalise_time_token()]), it is detected with
 #'    [time_already_normalised()] and used as-is, so tokens whose samples do
 #'    not span the full unit interval are not stretched a second time;
-#'    override with `time_normalised`.
-#' 2. Build orthogonal polynomial terms `ot1`, `ot2`, ..., `otK` on the
-#'    normalised time using [stats::poly()], caching the basis
-#'    coefficients so that [predict_gca()] can reuse them.
+#'    override with `time_normalised`. A `<tier>_tseq` (syllables in
+#'    sequence) or `<tier>_tbound` (in sequence, gap kept) is rescaled per
+#'    token too: a token whose first or last
+#'    syllable has no values on the axis (on a `<tier>_tseq`, f0 at fewer
+#'    than two times; on a `<tier>_tbound`, no f0) is stretched, and its
+#'    other syllables fill 0 to 1.
+#' 2. Keep the rows the model fits: a finite normalised time, f0 (a
+#'    finite value, above 0 in a column in Hz that [hz_f0_columns()]
+#'    finds) and a tone, and a speaker and item where the model has a term
+#'    for them. Build orthogonal polynomial terms
+#'    `ot1`, `ot2`, ..., `otK` on the normalised time of these rows using
+#'    [stats::poly()], caching the basis coefficients so that
+#'    [predict_gca()] can reuse them. Rows without f0 inside a token then
+#'    leave the coefficients unchanged, and rows with no time (a landmark
+#'    axis outside its tier, or outside a segment's first-to-last f0) are
+#'    left out.
 #' 3. Construct an `lmer` formula of the form
 #'    `f0 ~ (ot1 + ... + otK) * tone + (random effects)` using the
 #'    options below to decide which random effects to include.
@@ -103,6 +117,12 @@
 #'   tables).
 #' * `time_prenormalised`: logical; was the time column used as-is
 #'   because it was already normalised to `[0, 1]`?
+#' * `time_coverage`: per tone, the first and last normalised time over the
+#'   rows the model fits, as a data frame with `tone`, `t_first` and
+#'   `t_last`. On a rescaled axis every tone runs from 0 to 1. On a time
+#'   column used as it is, such as `time_prop` with no f0 at an end point, a
+#'   tone can stop short of 0 or 1, and [predict_gca()] then extrapolates
+#'   its curve to the ends.
 #' * `convergence_warning`: `NULL` or the captured warning message.
 #'
 #' @seealso
@@ -177,11 +197,37 @@ fit_gca <- function(data,
   }
 
   # --- Data prep: time normalisation to [0, 1] -------------------------------
-  # Per-token min-max rescale, unless the column is already normalised
-  # (detected, or declared via time_normalised) — then it is used as-is.
-  ts  <- resolve_time_norm(data, time, token, time_normalised)
+  # Per-token rescale from the token's first f0 (0) to its last (1), unless
+  # the column is already normalised (detected, or declared via
+  # time_normalised); then it is used as it is.
+  ts  <- resolve_time_norm(data, time, token, time_normalised, f0 = f0)
   dat <- data
   dat$.time_norm <- ts$time_norm
+
+  # Keep the rows the model fits. The axis above runs from each token's first
+  # f0 to its last, so rows without f0 do not move it. poly() below builds
+  # its basis on the rows it is given: rows lmer() leaves out would shift the
+  # basis, and so the coefficients, and NA time (rows before a token's first
+  # f0 or after its last, or a landmark axis outside its tier) would stop
+  # poly(). lmer() leaves out a row with no f0, no time or no tone, and
+  # a row with no speaker or item only when the model has a term for that
+  # column (the random effects below; with none chosen, the model gets
+  # (1 | item)). A missing value in a column the model does not use keeps
+  # the row, as before.
+  uses_speaker <- random_slope_speaker || random_intercept_speaker
+  uses_item    <- random_slope_item || random_intercept_item || !uses_speaker
+  fit_rows <- is.finite(dat$.time_norm) &
+    is.finite(suppressWarnings(as.numeric(dat[[f0]]))) &
+    f0_rows(dat, f0) &                 # 0 in a column in Hz is no f0
+    !is.na(dat[[tone]])
+  if (uses_speaker) fit_rows <- fit_rows & !is.na(dat[[speaker]])
+  if (uses_item)    fit_rows <- fit_rows & !is.na(dat[[item]])
+  if (!all(fit_rows)) dat <- dat[fit_rows, , drop = FALSE]
+  if (length(unique(dat$.time_norm)) <= degree) {
+    stop("Too few rows to fit: a degree ", degree, " curve needs at least ",
+         degree + 1, " distinct time points among the rows with f0, time, ",
+         "tone, and the speaker and item the model uses.", call. = FALSE)
+  }
 
   # Orthogonal polynomials; cache coefs so predict_gca() can reuse the basis.
   poly_matrix <- stats::poly(dat$.time_norm, degree)
@@ -195,6 +241,7 @@ fit_gca <- function(data,
   dat$.tone    <- tone_factor(dat[[tone]])   # Chinese tone names in order
   dat$.speaker <- as.factor(dat[[speaker]])
   dat$.item    <- as.factor(dat[[item]])
+  time_coverage <- tone_time_coverage(dat$.time_norm, dat$.tone)
 
   # --- Formula construction --------------------------------------------------
   ot_terms   <- paste(ot_names, collapse = " + ")
@@ -255,6 +302,7 @@ fit_gca <- function(data,
       col_names           = list(f0 = f0, time = time, token = token,
                                  tone = tone, speaker = speaker, item = item),
       time_prenormalised  = ts$prenormalised,
+      time_coverage       = time_coverage,
       convergence_warning = warn_msg
     ),
     class = "shinytone_gca"
@@ -290,7 +338,11 @@ fit_gca <- function(data,
 #'   [fit_gca()].
 #' @param n Number of time points across `[0, 1]`. Default `100`.
 #'
-#' @return A data frame with columns `time`, `f0_predicted`, `tone`.
+#' @return A data frame with columns `time`, `f0_predicted`, `tone`. The
+#'   attribute `time_coverage` is the fit's `time_coverage`: where each
+#'   tone's fitted rows start and end on the time axis, so a curve that is
+#'   extrapolated to 0 or 1 can be spotted (`NULL` for a fit made by an
+#'   earlier version).
 #'
 #' @seealso [fit_gca()] for the model fit. [contour_to_chao()] for
 #'   converting the predicted contours to Chao numerals.
@@ -336,10 +388,12 @@ predict_gca <- function(gca_obj, n = 100) {
                                           re.form = NA,
                                           allow.new.levels = TRUE)
 
-  data.frame(
+  out <- data.frame(
     time         = newdata$.time_norm,
     f0_predicted = newdata$f0_predicted,
     tone         = as.character(newdata$.tone),
     stringsAsFactors = FALSE
   )
+  attr(out, "time_coverage") <- gca_obj$time_coverage
+  out
 }

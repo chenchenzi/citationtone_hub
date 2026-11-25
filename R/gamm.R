@@ -3,8 +3,9 @@
 #
 # Thin convenience wrapper around mgcv::bam() that prepares the data the way
 # citation-tone GAMM analysis typically wants:
-#   * time normalised to [0, 1] within each token (a sequential landmark
-#     axis, <tier>_tseq, keeps its own 0-to-n-segments scale)
+#   * time normalised to [0, 1] within each token, from its first f0 to its
+#     last (a sequential landmark axis, <tier>_tseq or <tier>_tbound, keeps
+#     its own 0-to-n-segments scale)
 #   * tone-by-time smooths (separate or reference-plus-difference)
 #   * optional speaker random smooths (Soskuthy 2021 strategies)
 #   * optional AR1 autocorrelation correction
@@ -18,7 +19,7 @@
 #' Fits a Generalised Additive Mixed Model with smooth (non-polynomial)
 #' tone-by-time interactions. GAMMs are an increasingly common
 #' alternative to GCA for dynamic speech analysis because they capture
-#' arbitrary smooth contour shapes without requiring the analyst to
+#' arbitrary smooth contour shapes without requiring the user to
 #' choose a polynomial degree (Wood 2017; Sóskuthy 2021;
 #' Xu & Zhang 2024).
 #'
@@ -31,17 +32,17 @@
 #' @details
 #' ## What the function does internally
 #'
-#' 1. Normalise time to `[0, 1]` per token. If the time column is
-#'    *already* normalised (e.g. `token_t01` from
-#'    [normalise_time_token()]), it is detected with
-#'    [time_already_normalised()] and used as-is, so tokens whose samples
-#'    do not span the full unit interval are not stretched a second time;
-#'    override with `time_normalised`. A sequential landmark axis
-#'    (`<tier>_tseq` from [normalise_time_landmarks()], where segment `i`
-#'    spans `[i - 1, i]`) is recognised by name and also used as-is, on its
-#'    own `0`-to-`n` scale: a per-token rescale would squeeze each token's
-#'    first-to-last frame onto `[0, 1]`, so the segment boundaries would no
-#'    longer line up across tokens.
+#' 1. Normalise time to `[0, 1]` per token, from its first f0 (0) to its
+#'    last f0 (1), so rows without f0 at a token's edges do not move it (see
+#'    [resolve_time_norm()]). If the time column is *already* normalised
+#'    (e.g. `token_t01` from [normalise_time_token()]), it is detected with
+#'    [time_already_normalised()] and used as it is; override with
+#'    `time_normalised`. A sequential landmark axis (`<tier>_tseq` or
+#'    `<tier>_tbound` from [normalise_time_landmarks()], where segment `i`
+#'    runs from `i - 1` to `i`) is recognised by name and also used as it
+#'    is, on its own `0`-to-`n` scale, so the segment boundaries stay at
+#'    whole numbers. A per-token rescale would put them at 1/n, 2/n, ...,
+#'    and would stretch a token whose first or last segment has no f0.
 #' 2. Coerce `tone`, `speaker`, `item`, and (for difference smooths) an
 #'    ordered `tone_ord` to factors with treatment contrasts.
 #' 3. Build the formula based on `smooth_type` and `random_smooth`.
@@ -51,7 +52,32 @@
 #'    of the residuals computed *within* tokens (pooling only genuine
 #'    within-token neighbours, not across token boundaries), then refit
 #'    with that `rho` plus per-token `AR.start` to correct for
-#'    within-token correlation.
+#'    within-token correlation. `AR.start` marks each token's first row
+#'    that is fitted, so rows without f0 at its start do not hide it.
+#'    Inside a token the AR1 series does not restart at a gap: [mgcv::bam()]
+#'    leaves out the rows without f0, so the samples on either side of a
+#'    gap count as neighbours, whether or not those rows are kept.
+#'
+#' Rows are put in order of token and normalised time. Rows at the same
+#' time keep their order in `data`, so give the rows of each token in time
+#' order: the AR1 correction runs along that order.
+#'
+#' ## On `<tier>_tseq`, an f0 jump at each boundary
+#'
+#' On a `<tier>_tseq` from [normalise_time_landmarks()], a stretch without
+#' f0 between two syllables takes no room: syllable 1's last f0 and
+#' syllable 2's first f0 are both at 1. A falling syllable followed by a
+#' high level one jumps in f0 there, with no time to make the jump. One
+#' smooth per tone cannot follow such a jump, and raising `k` does not
+#' help: the curve runs through the middle of the jump and misses both
+#' syllables near the boundary. To model the whole word, use
+#' `<tier>_tbound`: it keeps the stretch without f0 at each boundary, so
+#' the two sides of a jump are a gap apart and one smooth can follow it,
+#' and the boundaries still sit at whole numbers. `token_t01` from
+#' [normalise_time_token()] keeps the stretch too (and the syllables'
+#' duration ratio), but the boundary falls at a different point in each
+#' token. Or model each syllable on its own, with one token per syllable on
+#' `<tier>_t01` and a label for its tone pattern and place.
 #'
 #' ## Choosing `smooth_type`
 #'
@@ -99,8 +125,9 @@
 #' @param use_ar1 Logical. If `TRUE`, fit once, estimate `rho` from the
 #'   residuals' lag-1 autocorrelation, then refit with that `rho`.
 #' @param time_normalised One of `"auto"` (default: detect an
-#'   already-normalised `[0, 1]` time column, or a `<tier>_tseq` column,
-#'   and use it as-is), `"no"` (always rescale to `[0, 1]` within each
+#'   already-normalised `[0, 1]` time column, or a `<tier>_tseq` or
+#'   `<tier>_tbound` column, and use it as-is), `"no"` (always rescale to
+#'   `[0, 1]` within each
 #'   token), `"yes"` (declare the column already normalised to `[0, 1]`),
 #'   or `"sequential"` (declare a sequential landmark axis running from 0
 #'   to the number of segments, whatever its name). See
@@ -119,9 +146,17 @@
 #'   landmark axis)?
 #' * `time_axis`: `"unit"` for a `[0, 1]` axis, or `"sequential"` for a
 #'   landmark axis kept on its `0`-to-`n` scale.
-#' * `time_range`: the observed range of the fitted time axis, which
-#'   [predict_gamm()] predicts across; `c(0, 1)` on a unit axis.
-#' * `n_segments`: segments on a sequential axis (`1` on a unit axis).
+#' * `time_range`: the range of the time axis over the rows the model
+#'   fits (rows with f0), which [predict_gamm()] predicts across;
+#'   `c(0, 1)` on a unit axis.
+#' * `n_segments`: segments on a sequential axis, counted over the rows
+#'   the model fits (`1` on a unit axis).
+#' * `time_coverage`: per tone, the first and last time on the axis over
+#'   the rows the model fits, as a data frame with `tone`, `t_first` and
+#'   `t_last`. On a rescaled axis every tone runs from 0 to 1. On a time
+#'   column used as it is, such as `time_prop` with no f0 at an end point, a
+#'   tone can stop short of 0 or 1, and [predict_gamm()] then extrapolates
+#'   its curve to the ends.
 #'
 #' @seealso
 #' * [predict_gamm()] for per-tone prediction on a time grid.
@@ -202,13 +237,14 @@ fit_gamm <- function(data,
   }
 
   # --- Data prep -----------------------------------------------------------
-  # Time to [0, 1]: per-token min-max rescale, unless the column is already
-  # normalised (detected, or declared via time_normalised) — then it is used
-  # as-is (see resolve_time_norm() in time_norm.R). A sequential landmark
-  # axis (<tier>_tseq: segment i spans [i - 1, i]) is used as-is on its own
-  # scale; rescaling it per token would move the segment boundaries.
+  # Time to [0, 1]: a per-token rescale from the first f0 (0) to the last
+  # (1), unless the column is already normalised (detected, or declared via
+  # time_normalised); then it is used as it is (see resolve_time_norm() in
+  # time_norm.R). A sequential landmark axis (<tier>_tseq or
+  # <tier>_tbound: segment i runs from i - 1 to i) is used as it is on its
+  # own scale, so the segment boundaries stay at whole numbers.
   sequential <- time_normalised == "sequential" ||
-    (time_normalised == "auto" && grepl("_tseq$", time))
+    (time_normalised == "auto" && grepl("_(tseq|tbound)$", time))
   if (sequential) {
     tv  <- as_time_numeric(data[[time]], time)
     fin <- tv[is.finite(tv)]
@@ -218,18 +254,13 @@ fit_gamm <- function(data,
            "time_normalised = \"no\" to rescale per token instead.",
            call. = FALSE)
     }
+    # Counted over all rows here; recounted below over the rows bam() fits.
     n_segments <- max(1L, as.integer(ceiling(max(fin) - 1e-8)))
-    if (time_normalised == "auto") {
-      message("Time column '", time, "' is a sequential landmark axis; ",
-              "using it as-is (0 to ", n_segments, ") so segment boundaries ",
-              "stay at whole numbers. Pass time_normalised = \"no\" to force ",
-              "per-token rescaling.")
-    }
     ts <- list(time_norm = tv, prenormalised = TRUE)
     time_axis  <- "sequential"
     time_range <- range(fin)
   } else {
-    ts <- resolve_time_norm(data, time, token, time_normalised)
+    ts <- resolve_time_norm(data, time, token, time_normalised, f0 = f0)
     time_axis  <- "unit"
     time_range <- c(0, 1)
     n_segments <- 1L
@@ -238,16 +269,18 @@ fit_gamm <- function(data,
   dat$.time_norm <- ts$time_norm
 
   dat$.f0      <- dat[[f0]]
+  # 0 in a column in Hz is no f0, as on the time axis: bam() leaves it out.
+  dat$.f0[!f0_rows(data, f0)] <- NA
   dat$.tone    <- tone_factor(dat[[tone]])   # Chinese tone names in order
   dat$.speaker <- as.factor(dat[[speaker]])
   dat$.item    <- as.factor(dat[[item]])
   dat$.token   <- as.factor(dat[[token]])
   if (!is.null(duration)) dat$.duration <- as.numeric(dat[[duration]])
 
-  dat <- as.data.frame(dat[order(dat$.token, dat$.time_norm), ])
-
-  # Start-event marker for AR1.
-  dat$.start_event <- !duplicated(dat$.token)
+  # Token, then time. Rows at the same time (one syllable's last f0 and the
+  # next one's first on a <tier>_tseq) keep their input order, so the AR1
+  # series does not depend on how the sort breaks ties.
+  dat <- as.data.frame(dat[order(dat$.token, dat$.time_norm, seq_len(nrow(dat))), ])
 
   if (smooth_type == "difference") {
     dat$.tone_ord <- ordered(dat$.tone, levels = levels(dat$.tone))
@@ -293,6 +326,36 @@ fit_gamm <- function(data,
   formula_str <- paste0(fixed_part, dur_term)
   if (length(random_parts) > 0) {
     formula_str <- paste0(formula_str, " + ", paste(random_parts, collapse = " + "))
+  }
+
+  # Start-event marker for AR1, on each token's first row that bam() fits.
+  # bam() leaves out rows that lack a model variable, such as rows without
+  # f0 at the edges of a padded track. A marker on such a row is lost with
+  # it, and the AR1 correction then runs on from one token into the next.
+  fitted_row <- stats::complete.cases(
+    dat[intersect(all.vars(stats::as.formula(formula_str)), names(dat))])
+  first_fit  <- which(fitted_row)
+  first_fit  <- first_fit[!duplicated(dat$.token[first_fit])]
+  dat$.start_event <- seq_len(nrow(dat)) %in% first_fit
+
+  # A sequential axis is predicted across the span bam() fits, so rows
+  # without f0 at the edges do not stretch the prediction grid past the data.
+  # On a <tier>_tseq or <tier>_tbound from normalise_time_landmarks() that
+  # span is 0 to n.
+  # Its segments are counted over the same rows, so a segment with no f0 at
+  # all does not count.
+  if (sequential) {
+    fit_t <- dat$.time_norm[fitted_row & is.finite(dat$.time_norm)]
+    if (length(fit_t) > 0) {
+      time_range <- range(fit_t)
+      n_segments <- max(1L, as.integer(ceiling(max(fit_t) - 1e-8)))
+    }
+    if (time_normalised == "auto") {
+      message("Time column '", time, "' is a sequential landmark axis; ",
+              "using it as-is (0 to ", n_segments, ") so segment boundaries ",
+              "stay at whole numbers. Pass time_normalised = \"no\" to force ",
+              "per-token rescaling.")
+    }
   }
 
   display_formula <- build_gamm_display_formula(
@@ -352,6 +415,8 @@ fit_gamm <- function(data,
       time_axis           = time_axis,
       time_range          = time_range,
       n_segments          = n_segments,
+      time_coverage       = tone_time_coverage(dat$.time_norm[fitted_row],
+                                               dat$.tone[fitted_row]),
       data_for_predict    = dat
     ),
     class = "shinytone_gamm"
@@ -382,8 +447,9 @@ build_gamm_display_formula <- function(smooth_type, random_smooth,
   } else if (random_smooth == "speaker_tone") {
     randoms <- sprintf('s(%s, %s.%s, bs = "fs", m = 1, k = %d)', time, speaker, tone, k)
   } else if (random_smooth == "speaker_by_tone") {
+    # by the plain tone factor with either smooth type, as fit_gamm() fits it
     randoms <- sprintf('s(%s, %s, by = %s, bs = "fs", m = 1, k = %d)',
-                       time, speaker, tone_display, k)
+                       time, speaker, tone, k)
   } else if (random_smooth == "ref_diff") {
     randoms <- c(
       sprintf('s(%s, %s, bs = "fs", m = 1, k = %d)', time, speaker, k),
@@ -416,10 +482,16 @@ build_gamm_display_formula <- function(smooth_type, random_smooth,
 #'
 #' 1. Build a per-tone time grid with `n` evenly-spaced points across
 #'    `[0, 1]`, or, for a fit on a sequential landmark axis
-#'    (`<tier>_tseq`), across the observed range of that axis, so the
-#'    curves keep the segment boundaries at whole numbers and are not
-#'    extrapolated into stretches no token was measured in (a voiceless
-#'    onset, say).
+#'    (`<tier>_tseq` or `<tier>_tbound`), across the part of that axis the
+#'    model was fitted to (rows with f0), so the curves keep the segment
+#'    boundaries at whole numbers and are not extrapolated into stretches no
+#'    token was measured in. On a `<tier>_tseq` or `<tier>_tbound` from
+#'    [normalise_time_landmarks()] that part is normally `0` to `n`: it is
+#'    less only when no token has f0 in its first or last segment (on a
+#'    `<tier>_tseq`, f0 at two times). On a `[0, 1]` axis the grid always runs
+#'    from 0 to 1, so a tone whose fitted rows stop short of 0 or 1 (on a
+#'    time column used as it is) is extrapolated there; the `time_coverage`
+#'    attribute shows where each tone's rows start and end.
 #' 2. Set random-effect columns (speaker, item, and any random-smooth
 #'    grouping factors) to the first level of their respective factors;
 #'    these reference values are placeholders that don't affect the
@@ -439,8 +511,10 @@ build_gamm_display_formula <- function(smooth_type, random_smooth,
 #' @param n Number of time points across the time axis. Default `200`.
 #'
 #' @return A data frame with columns `time`, `f0_predicted`, `se`,
-#'   `tone`, carrying the fit's `time_axis` (`"unit"` or `"sequential"`)
-#'   and `n_segments` as attributes of the same names.
+#'   `tone`, carrying the fit's `time_axis` (`"unit"` or `"sequential"`),
+#'   `n_segments` and `time_coverage` (where each tone's fitted rows start
+#'   and end on the time axis; `NULL` for a fit made by an earlier version)
+#'   as attributes of the same names.
 #'
 #' @seealso [fit_gamm()] for the model fit. [contour_to_chao()] for
 #'   converting the predicted contours to Chao numerals.
@@ -467,12 +541,22 @@ predict_gamm <- function(gamm_obj, n = 200) {
   duration      <- gamm_obj$col_names$duration
   dat           <- gamm_obj$data_for_predict
 
-  tone_levels <- levels(dat$.tone)
+  # The tones, the reference speaker and item, and the duration mean come
+  # from the rows bam() fits, as the time range does. A tone, speaker or item
+  # that only rows without f0 carry has no smooth or effect in the model, so
+  # it is not predicted and is not the reference.
+  fit_vars   <- intersect(all.vars(stats::formula(model)), names(dat))
+  dat        <- dat[stats::complete.cases(dat[fit_vars]), , drop = FALSE]
+  fit_levels <- function(x) levels(droplevels(x))
+
+  tone_levels <- fit_levels(dat$.tone)
   # Fits saved before time_range existed were always on [0, 1].
   time_range  <- if (is.null(gamm_obj$time_range)) c(0, 1) else gamm_obj$time_range
   time_seq    <- seq(time_range[1], time_range[2], length.out = n)
-  ref_speaker <- levels(dat$.speaker)[1]
-  ref_item    <- levels(dat$.item)[1]
+  speaker_levels <- fit_levels(dat$.speaker)
+  item_levels    <- fit_levels(dat$.item)
+  ref_speaker <- speaker_levels[1]
+  ref_item    <- item_levels[1]
 
   # Random-effect terms to exclude from prediction (population-average).
   exclude_terms <- character(0)
@@ -492,8 +576,8 @@ predict_gamm <- function(gamm_obj, n = 200) {
     tone_i <- tone_levels[i]
     nd <- data.frame(
       .time_norm = time_seq,
-      .speaker   = factor(rep(ref_speaker, n), levels = levels(dat$.speaker)),
-      .item      = factor(rep(ref_item,    n), levels = levels(dat$.item)),
+      .speaker   = factor(rep(ref_speaker, n), levels = speaker_levels),
+      .item      = factor(rep(ref_item,    n), levels = item_levels),
       stringsAsFactors = FALSE
     )
     if (smooth_type == "separate") {
@@ -510,7 +594,7 @@ predict_gamm <- function(gamm_obj, n = 200) {
         as.character(interaction(nd$.speaker,
                                  factor(rep(tone_i, n), levels = tone_levels),
                                  drop = FALSE)),
-        levels = levels(dat$.speaker_tone))
+        levels = fit_levels(dat$.speaker_tone))
     }
     if (!is.null(duration)) {
       nd$.duration <- rep(mean(dat$.duration, na.rm = TRUE), n)
@@ -529,32 +613,34 @@ predict_gamm <- function(gamm_obj, n = 200) {
   out <- do.call(rbind, plot_rows)
   attr(out, "time_axis")  <- if (is.null(gamm_obj$time_axis)) "unit" else gamm_obj$time_axis
   attr(out, "n_segments") <- if (is.null(gamm_obj$n_segments)) 1L else gamm_obj$n_segments
+  attr(out, "time_coverage") <- gamm_obj$time_coverage
   out
 }
 
 
-# Back-map the internal dotted term names (.time_norm, .tone_ord, .speaker, ...)
-# used inside the fitted model onto the user's original column names, so
-# diagnostic tables read in the same vocabulary as the rest of the app. Order
-# matters: the compound tokens (.tone_ord, .speaker_tone) must be substituted
-# before their prefixes (.tone, .speaker). Internal helper for diagnose_gamm().
 # Per-token residual autocorrelation, the way dynamic-speech GAMM workflows
 # want it (cf. itsadug::acf_resid). Plain stats::acf() on the fitted residuals
 # would treat the whole dataset as one series and let every token boundary
-# contaminate the low lags — badly so for short tokens. Instead we split the
+# contaminate the low lags, badly so for short tokens. Instead we split the
 # residuals by token and pool the within-token lag products, so only genuinely
 # adjacent frames contribute. When the model was fit with an AR1 correction we
-# first whiten each token series (e_i - rho * e_{i-1}, reset at each token
-# start, exactly as bam's AR.start does), so the plot shows whether the AR1
-# term actually removed the autocorrelation. Internal helper for
-# diagnose_gamm().
-grouped_acf <- function(res, tok, rho = NULL, max_lag = 40) {
-  groups <- split(res, tok)
-  if (!is.null(rho) && is.finite(rho)) {
-    groups <- lapply(groups, function(e) {
-      if (length(e) < 2) e else c(e[1], e[-1] - rho * e[-length(e)])
-    })
+# first whiten the residuals (e_i - rho * e_{i-1}), so the plot shows whether
+# the AR1 term actually removed the autocorrelation. The whitening restarts
+# where bam() restarted it: at each TRUE in `starts` (the model's AR.start,
+# one per residual) and at the first residual. Without `starts` it restarts at
+# each token. Internal helper for diagnose_gamm().
+grouped_acf <- function(res, tok, rho = NULL, max_lag = 40, starts = NULL) {
+  whiten <- function(e) {
+    if (length(e) < 2) e else c(e[1], e[-1] - rho * e[-length(e)])
   }
+  whitened <- !is.null(rho) && is.finite(rho)
+  if (whitened && !is.null(starts)) {
+    # Runs between starts are contiguous, so unlist() keeps the row order.
+    run <- cumsum((starts %in% TRUE) | seq_along(res) == 1L)
+    res <- unlist(lapply(split(res, run), whiten), use.names = FALSE)
+  }
+  groups <- split(res, tok)
+  if (whitened && is.null(starts)) groups <- lapply(groups, whiten)
   res2 <- unlist(groups, use.names = FALSE)
   gm   <- mean(res2)
   den  <- sum((res2 - gm)^2)
@@ -575,6 +661,11 @@ grouped_acf <- function(res, tok, rho = NULL, max_lag = 40) {
 }
 
 
+# Back-map the internal dotted term names (.time_norm, .tone_ord, .speaker, ...)
+# used inside the fitted model onto the user's original column names, so
+# diagnostic tables read in the same vocabulary as the rest of the app. Order
+# matters: the compound tokens (.tone_ord, .speaker_tone) must be substituted
+# before their prefixes (.tone, .speaker). Internal helper for diagnose_gamm().
 backmap_gamm_terms <- function(x, col_names) {
   x <- gsub("\\.time_norm",    col_names$time,                                x)
   x <- gsub("\\.tone_ord",     paste0(col_names$tone, ".ord"),                x)
@@ -625,11 +716,13 @@ backmap_gamm_terms <- function(x, col_names) {
 #' The ACF is computed **per token** (the residuals are split by token and
 #' the within-token lag products are pooled, in the spirit of
 #' [itsadug::acf_resid()]) so that token boundaries do not contaminate the
-#' low lags — important because f0 tokens are short. When the fit used an
-#' AR1 correction the residuals are first whitened within each token
-#' (`e_i - rho * e_{i-1}`, reset at each token start), so the ACF then
-#' shows whether the AR1 term actually removed the autocorrelation rather
-#' than the pre-correction picture. `acf_grouped` / `acf_whitened` record
+#' low lags, which matters because f0 tokens are short. When the fit used
+#' an AR1 correction the residuals are first whitened
+#' (`e_i - rho * e_{i-1}`). The whitening restarts at each `AR.start` in
+#' the model, as [mgcv::bam()] does, and [fit_gamm()] puts one on each
+#' token's first fitted row. So the ACF then shows whether the AR1 term
+#' actually removed the autocorrelation rather than the pre-correction
+#' picture. `acf_grouped` / `acf_whitened` record
 #' which path was taken (a plain concatenated ACF is used only as a
 #' fallback if residuals cannot be aligned to tokens).
 #'
@@ -749,9 +842,14 @@ diagnose_gamm <- function(gamm_obj) {
   }
   whiten_rho <- if (!is.null(gamm_obj$rho) && is.finite(gamm_obj$rho))
                   gamm_obj$rho else NULL
+  # Whiten along the same series bam() did: it restarts at each AR start in
+  # the model frame, which fit_gamm() puts on each token's first fitted row.
+  ar_start <- if (!is.null(whiten_rho)) model$model[["(AR.start)"]]
+  if (length(ar_start) != n_resid) ar_start <- NULL
 
   if (!is.null(tok) && length(tok) == n_resid && !anyNA(res_dev)) {
-    acf_df       <- grouped_acf(res_dev, tok, rho = whiten_rho)
+    acf_df       <- grouped_acf(res_dev, tok, rho = whiten_rho,
+                                starts = ar_start)
     acf_grouped  <- TRUE
     acf_whitened <- !is.null(whiten_rho)
   } else {

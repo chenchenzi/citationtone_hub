@@ -1167,7 +1167,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
     note <- attr(df, "encoding_note")
     if (!is.null(note)) showNotification(note, type = "warning", duration = 10)
     fp_flagged_raw(df)
-    showNotification(sprintf("Loaded CSV: %d rows, %d columns. Pick the token column below.",
+    showNotification(sprintf("Loaded CSV: %d rows, %d columns. Pick the token variable below.",
                              nrow(df), ncol(df)),
                      type = "message", duration = 4)
   })
@@ -1181,10 +1181,10 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                else cols[1]
     tagList(
       selectInput("fp_corr_flagged_col",
-                  "Token column (match key)",
+                  "Token ID variable (match key)",
                   choices = cols, selected = default, width = "100%"),
       tags$div(style = "color: #888; font-size: 0.75rem; margin-top: -8px; margin-bottom: 6px; font-style: italic;",
-        "Values in this column must match the audio file basenames ",
+        "Values of this variable must match the audio file basenames ",
         "(e.g. ", tags$code("S01_T1_001"), " for ", tags$code("S01_T1_001.wav"), ")."),
       checkboxInput("fp_corr_strip_ext",
                     "Strip file extensions when matching",
@@ -1201,7 +1201,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                              names(df), ignore.case = TRUE)]
     default <- if (length(guess)) guess[1] else ""
     selectInput("fp_corr_speaker_col",
-                "Speaker column (optional)",
+                "Speaker variable (optional)",
                 choices = cols, selected = default, width = "100%")
   })
 
@@ -1226,7 +1226,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                              names(df), ignore.case = TRUE)]
     default <- if (length(guess)) guess[1] else ""
     selectInput("fp_corr_tone_col",
-                "Tone column (optional)",
+                "Tone category variable (optional)",
                 choices = cols, selected = default, width = "100%")
   })
 
@@ -1312,7 +1312,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                      icon = icon("table-cells"), class = "btn-sm",
                      title = paste("Discarded share of the corpus: total and",
                                    "by speaker / tone (needs the speaker /",
-                                   "tone columns picked in the filter",
+                                   "tone variables picked in the filter",
                                    "drawer)"))
     )
   })
@@ -3299,7 +3299,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
                       tags$strong("Filter by speaker, tone, or potential f0 artefacts"),
                       " drawer in the sidebar."),
               tags$li("Upload the CSV. Pick the speaker / tone / token ",
-                      "columns from the dropdowns."),
+                      "variables from the dropdowns."),
               tags$li("Filters become live, and tokens with frame-level ",
                       "artefact flags get a ",
                       tags$strong("●"),
@@ -4049,7 +4049,7 @@ fp_correction_ui <- function(input, output, session, fp_audio_data, fp_f0_data,
         tags$p(style = "color: #888; font-size: 0.8rem; font-style: italic;",
           paste("To break this down by speaker and tone, upload a",
                 "flagged-token CSV in the filter drawer and pick its",
-                "speaker / tone columns."))))
+                "speaker / tone variables."))))
     }
 
     idx <- match(make_corr_key(toks, isTRUE(input$fp_corr_strip_ext)),

@@ -27,8 +27,8 @@ and \code{assignments} (the per-k k-means cluster vectors).
 }
 \description{
 Runs k-means across a range of \code{k} and reports the elbow (total
-within-cluster sum of squares), average silhouette width, and -- when the
-\code{cluster} / \code{mclust} packages are available -- the gap statistic and the
+within-cluster sum of squares), average silhouette width, and, when the
+\code{cluster} / \code{mclust} packages are available, the gap statistic and the
 GMM/BIC-preferred \code{k}. No single index is authoritative; use the spread to
 read off a plausible \emph{range} for the number of tones.
 }

@@ -3,7 +3,8 @@
 ###############################################
 
 summarise_ui <- function(input, output, session, dataset, normalised_data, gca_pred_data, gamm_pred_data, curated_data = NULL,
-                         curated_norm_data = NULL) {
+                         curated_norm_data = NULL,
+                         start_cols = NULL, data_version = NULL, start_settings = NULL) {
 
   # classify_contour() and compute_mean_contour() are now package-level
   # functions (R/chao.R), available in the global namespace via global.R.
@@ -39,6 +40,62 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
     ".none"
   }
 
+  # --- Column defaults ---
+  # The Start page's token and f0 columns (start_col(), global.R) are the
+  # defaults when the data has them; otherwise the names are guessed as
+  # before. Normalised f0 columns keep their priority over the Hz column.
+  # Time, tone and speaker defaults are unchanged.
+  token_patterns <- c("^token", "^item", "^segment", "^id")
+  hz_patterns    <- c("^f0$", "^f0_", "^pitch", "^F0")
+  time_patterns  <- c("^time", "^t$", "^timepoint", "^measurement")
+  tone_patterns  <- c("^tone", "^category", "^tonecat")
+  norm_patterns  <- c("^f0_st$", "^f0_zscore$", "^f0_lz$", "^f0_normalised$", "^f0_norm")
+  from_start <- function(key, vars) {
+    v <- start_col(start_cols, key)
+    if (!is.null(v) && v %in% vars) v else NULL
+  }
+  default_token <- function(vars) {
+    v <- from_start("token", vars)
+    if (is.null(v)) guess_var(vars, token_patterns, 1) else v
+  }
+  default_hz_f0 <- function(vars) {
+    v <- from_start("f0", vars)
+    if (is.null(v)) guess_var(vars, hz_patterns, 2) else v
+  }
+  default_norm_f0 <- function(vars) {
+    for (pat in norm_patterns) {
+      m <- grep(pat, vars, ignore.case = TRUE, value = TRUE)
+      if (length(m) > 0) return(m[1])
+    }
+    v <- from_start("f0", vars)
+    if (is.null(v)) guess_var(vars, c("^f0$", "^f0_"), 2) else v
+  }
+
+  # The columns of the curated route, which has no pickers: the Start-page
+  # token and f0 (else the token used in Curate, else a guess), the tone used
+  # in Curate (e.g. `cluster`), and the usual time and speaker guesses.
+  curated_cols <- function(d) {
+    cv   <- names(d)
+    used <- attr(d, "curate_vars")
+    tok  <- from_start("token", cv)
+    if (is.null(tok)) tok <- if (!is.null(used$token) && used$token %in% cv) used$token
+                             else guess_var(cv, token_patterns, 1)
+    list(token   = tok,
+         f0      = default_hz_f0(cv),
+         time    = guess_var(cv, time_patterns, 3),
+         tone    = if (!is.null(used$tone) && used$tone %in% cv) used$tone
+                   else guess_var(cv, tone_patterns, 4),
+         speaker = guess_speaker(cv))   # ".none" (one speaker) if no speaker column
+  }
+
+  # A picker keeps the user's own pick while it is still among the choices,
+  # until the user picks the default again (column_picker(), global.R). A
+  # picker on its default follows a new default (say, another Start-page
+  # column).
+  pick <- column_picker(input, c("sum_source",
+    paste0("sum_raw_", c("token", "f0", "time", "tone", "speaker"), "_var"),
+    paste0(rep(c("sum_norm_", "sum_cn_"), each = 4), c("token", "f0", "time", "tone"), "_var")))
+
   # --- Guide text ---
   output$summarise_guide <- renderUI({
     code_style <- "color: #2c5f4f; background: #dcefe7; padding: 1px 3px; border-radius: 3px;"
@@ -57,6 +114,15 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
                      .noWS = "inside")
     tagList(
       guide_box("Chao tone numeral guide",
+        tags$p(style = "margin-bottom: 8px;", nows(
+          tags$strong("One syllable per token."),
+          " Each numeral describes one syllable's tone, as in citation tones. ",
+          "For multisyllabic words, use ", code("<syllable_tier>_t01"), " from Normalise, which runs from each ",
+          "syllable's first f0 (0) to its last f0 (1). Make each syllable its own token (the token ID plus ",
+          code("<syllable_tier>_i"), ", its number in the word), and label its tone with the word's tone pattern ",
+          "and its place (e.g. ", code("T1T3_1"), ", ", code("T1T3_2"), "). Each syllable then gets its own numeral, ",
+          "all on one range."
+        )),
         tags$p(style = "margin-bottom: 8px;", nows(
           "Chao numerals describe a tone on a 5-level scale (1 = lowest, 5 = highest): Mandarin T1 ", code("55"),
           ", T2 ", code("35"), ", T3 ", code("214"), ", T4 ", code("51"), ". Each is also shown in IPA tone letters, e.g. ",
@@ -107,8 +173,9 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
         ),
         tags$p(style = note_style,
           HTML(paste("<strong>Timing:</strong> the digits do not show when a tone moves. For a rise or fall of at least 0.5",
-                     "with no turning point, <em>Timing</em> gives the share of the movement done at the middle of the tone:",
-                     "early above 0.75, late below 0.25, mid in between."))
+                     "with no turning point, <em>Timing</em> gives the share of the movement done at the middle of the tone,",
+                     "halfway between its first and last f0 (0.5 on the time axis): early above 0.75, late below 0.25,",
+                     "mid in between."))
         ),
         tags$strong("Data source:"),
         tags$ul(style = "margin-bottom: 0; padding-left: 18px;",
@@ -144,7 +211,7 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
     if (has_cur)  src_choices <- c(src_choices, "Curated f0 (converted to LZ here)" = "curated")
     if (length(src_choices) == 0) src_choices <- c("No data available" = "none")
 
-    # Default: best available
+    # Default: best available. The user's own pick stays while it is offered.
     default_src <- if (has_gamm) "gamm" else if (has_gca) "gca" else if (has_cn) "curated_norm" else if (has_norm) "normalised" else if (has_data) "raw_hz" else "none"
 
     # Column info for raw data
@@ -154,12 +221,14 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
     raw_types <- if (!is.null(raw_data)) sapply(raw_data, class) else rep("NA", length(raw_vars))
     raw_labels <- paste0(raw_vars, " {", raw_types, "}")
 
-    # Smart defaults for raw data
-    raw_token_default <- guess_var(raw_vars, c("^token", "^item", "^segment", "^id"), 1)
-    raw_f0_default    <- guess_var(raw_vars, c("^f0$", "^f0_", "^pitch", "^F0"), 2)
-    raw_time_default  <- guess_var(raw_vars, c("^time", "^t$", "^timepoint", "^measurement"), 3)
-    raw_tone_default  <- guess_var(raw_vars, c("^tone", "^category", "^tonecat"), 4)
-    raw_speaker_default <- guess_speaker(raw_vars)
+    # Defaults for raw data: the Start-page token and f0 when the data has
+    # them, otherwise a guess (see default_token() above). pick() keeps the
+    # user's own picks.
+    raw_token_default <- pick("sum_raw_token_var", raw_vars, default_token(raw_vars))
+    raw_f0_default    <- pick("sum_raw_f0_var", raw_vars, default_hz_f0(raw_vars))
+    raw_time_default  <- pick("sum_raw_time_var", raw_vars, guess_var(raw_vars, time_patterns, 3))
+    raw_tone_default  <- pick("sum_raw_tone_var", raw_vars, guess_var(raw_vars, tone_patterns, 4))
+    raw_speaker_default <- pick("sum_raw_speaker_var", c(".none", raw_vars), guess_speaker(raw_vars))
 
     # Variable selectors for normalised data (from the Normalise tab, or the
     # curated + normalised data): one set per source, shown by its condition.
@@ -169,19 +238,21 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
       ch   <- setNames(vars, paste0(vars, " {", if (!is.null(d)) sapply(d, class) else "NA", "}"))
       cv   <- attr(d, "curate_vars")   # curated + normalised: the tone used in Curate
       tone_default <- if (!is.null(cv$tone) && cv$tone %in% vars) cv$tone
-                      else guess_var(vars, c("^tone", "^category", "^tonecat"), 4)
+                      else guess_var(vars, tone_patterns, 4)
+      id <- function(x) paste0(prefix, "_", x, "_var")
       conditionalPanel(sprintf("input.sum_source == '%s'", source),
-        selectInput(paste0(prefix, "_token_var"), "Token ID variable:", choices = ch,
-                    selected = guess_var(vars, c("^token", "^item", "^segment", "^id"), 1)),
-        selectInput(paste0(prefix, "_f0_var"), "f0 variable:", choices = ch,
-                    selected = guess_var(vars, c("^f0_st$", "^f0_zscore$", "^f0_lz$", "^f0_normalised$", "^f0_norm", "^f0$", "^f0_"), 2)),
+        selectInput(id("token"), "Token ID variable:", choices = ch,
+                    selected = pick(id("token"), vars, default_token(vars))),
+        selectInput(id("f0"), "f0 variable:", choices = ch,
+                    selected = pick(id("f0"), vars, default_norm_f0(vars))),
+        uiOutput(paste0(prefix, "_f0_note")),
         conditionalPanel(sprintf("/zscore/i.test(input.%s_f0_var || '')", prefix),
           tags$div(style = sum_note_style, icon("circle-info"),
                    " z-scores are linear in Hz. Chao numerals are usually read on a log scale (semitones or LZ), and the scale can move a digit near a boundary.")),
-        selectInput(paste0(prefix, "_time_var"), "Time variable:", choices = ch,
-                    selected = guess_var(vars, c("^time", "^t$", "^timepoint"), 3)),
-        selectInput(paste0(prefix, "_tone_var"), "Tone variable:", choices = ch,
-                    selected = tone_default)
+        selectInput(id("time"), "Time variable:", choices = ch,
+                    selected = pick(id("time"), vars, guess_var(vars, c("^time", "^t$", "^timepoint"), 3))),
+        selectInput(id("tone"), "Tone variable:", choices = ch,
+                    selected = pick(id("tone"), vars, tone_default))
       )
     }
     sum_note_style <- "font-size: 0.75rem; color: #6b5a1e; background: #fff8e1; border-radius: 4px; padding: 5px 8px; margin: -6px 0 10px 0;"
@@ -193,7 +264,7 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
       wellPanel(
         # --- Data source ---
         selectInput("sum_source", "Data source:",
-                    choices = src_choices, selected = default_src),
+                    choices = src_choices, selected = pick("sum_source", src_choices, default_src)),
         conditionalPanel("input.sum_source == 'raw_hz'",
           tags$div(style = sum_note_style, icon("lightbulb"),
                    HTML(paste(" Converted to LZ by speaker here. Recommended: normalise first",
@@ -204,7 +275,8 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
                    HTML(paste(" Converted to LZ by speaker here. Recommended: normalise the curated data",
                               "(<strong>Normalise</strong> tab, data source <strong>Curated data</strong>),",
                               "then choose <strong>Curated + normalised f0</strong>, so Chao numerals and",
-                              "your models share one scale.")))),
+                              "your models share one scale."))),
+          uiOutput("sum_cur_f0_note")),
 
         # --- Variable selectors for raw Hz ---
         conditionalPanel("input.sum_source == 'raw_hz'",
@@ -214,6 +286,7 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
           selectInput("sum_raw_f0_var", "f0 variable:",
                       choices = setNames(raw_vars, raw_labels),
                       selected = raw_f0_default),
+          uiOutput("sum_raw_f0_note"),
           selectInput("sum_raw_time_var", "Time variable:",
                       choices = setNames(raw_vars, raw_labels),
                       selected = raw_time_default),
@@ -266,15 +339,79 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
   sum_result <- reactiveVal(NULL)
   sum_norm_contours <- reactiveVal(NULL)
   sum_params <- reactiveVal(NULL)
-  observeEvent(input$uploadfile, {   # new file: clear the old conversion
+  # A new file, or new rows from the Start page (data_version, server.R):
+  # clear the old conversion, as it was made from the old rows.
+  observeEvent({ input$uploadfile; if (!is.null(data_version)) data_version() }, {
     sum_result(NULL); sum_norm_contours(NULL); sum_params(NULL)
-  }, ignoreInit = TRUE)
+  }, ignoreInit = TRUE, ignoreNULL = FALSE)
+
+  # A note under each f0 picker when it is not the column the Start page
+  # screens and still has rows without f0 (screened_f0_note(), global.R).
+  output$sum_raw_f0_note <- renderUI(
+    screened_f0_note(dataset(), input$sum_raw_f0_var, start_cols))
+  output$sum_norm_f0_note <- renderUI(
+    screened_f0_note(normalised_data(), input$sum_norm_f0_var, start_cols))
+  output$sum_cn_f0_note <- renderUI(
+    if (!is.null(curated_norm_data))
+      screened_f0_note(curated_norm_data(), input$sum_cn_f0_var, start_cols))
+  output$sum_cur_f0_note <- renderUI({
+    d <- if (!is.null(curated_data)) curated_data()
+    if (is.null(d)) return(NULL)
+    screened_f0_note(d, curated_cols(d)$f0, start_cols)
+  })
 
   # compute_mean_contour() is now in R/chao.R (package-level).
+
+  # The amber notice (edge_f0_line()): tokens whose f0 does not reach 0 or 1
+  # on a time column used as it is. Never on the real time column, token_t01
+  # or <tier>_t01 made by this version. Only for the mean contours: the model
+  # tabs show it for the fitted data, and the table below marks a tone whose
+  # fitted rows miss 0 or 1 (the fit's time_coverage).
+  output$sum_track_edges <- renderUI({
+    src <- input$sum_source
+    if (is.null(src)) return(NULL)
+    if (src %in% c("normalised", "curated_norm")) {
+      d <- if (src == "normalised") normalised_data()
+           else if (!is.null(curated_norm_data)) curated_norm_data()
+      pre <- if (src == "normalised") "sum_norm" else "sum_cn"
+      sel <- function(x) input[[paste0(pre, "_", x, "_var")]]
+      edge_f0_line(d, sel("token"), sel("f0"), sel("time"))
+    } else if (src == "raw_hz") {
+      edge_f0_line(dataset(), input$sum_raw_token_var, input$sum_raw_f0_var,
+                   input$sum_raw_time_var)
+    } else if (src == "curated" && !is.null(curated_data)) {
+      d <- curated_data()
+      if (is.null(d)) return(NULL)
+      cc <- curated_cols(d)   # columns as the conversion below resolves them
+      edge_f0_line(d, cc$token, cc$f0, cc$time)
+    } else {
+      NULL
+    }
+  })
 
   # --- Core conversion ---
   observeEvent(input$sum_button, {
     src <- input$sum_source
+    # A failed conversion clears the last result, so the table and plot never
+    # show one made with other settings.
+    clear_result <- function() {
+      sum_result(NULL); sum_norm_contours(NULL); sum_params(NULL)
+    }
+    # An error here would close the session, and warnings only reach the R
+    # console, so show both as notifications, and the message that rows at
+    # the same time are averaged as a warning (averaged_ties_toast() in
+    # global.R). NULL means stop.
+    shown <- function(expr, fail) tryCatch(
+      withCallingHandlers(expr, warning = function(w) {
+        showNotification(conditionMessage(w), type = "warning", duration = 10)
+        invokeRestart("muffleWarning")
+      }, message = averaged_ties_toast),
+      error = function(e) {
+        showNotification(paste0(fail, ": ", conditionMessage(e)),
+                         type = "error", duration = 10)
+        clear_result()
+        NULL
+      })
 
     if (is.null(src) || src == "none") {
       showNotification("No data available. Upload a CSV file first.",
@@ -286,6 +423,7 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
     src_data <- NULL
     raw_token <- raw_f0 <- raw_tone <- NULL
     lz_info <- NULL
+    mean_cols <- NULL   # the columns of the mean contours, for the R code
 
     if (src == "gca") {
       contour_data <- gca_pred_data()
@@ -300,9 +438,9 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
           isTRUE(n_seg > 1)) {
         showNotification(
           sprintf(paste("Chao numerals describe one syllable's contour, and this",
-                        "GAMM was fit across %d segments on a sequential time axis.",
-                        "Use a monosyllabic batch (or one segment's rows) for Chao",
-                        "numerals."), n_seg),
+                        "GAMM was fit across %d segments in sequence.",
+                        "For one numeral per syllable, model each syllable as its own",
+                        "token on <syllable_tier>_t01 (see the guide)."), n_seg),
           type = "warning", duration = 10)
         return()
       }
@@ -319,17 +457,16 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
         raw_spk   <- input$sum_raw_speaker_var
       } else {
         # Curated data is structurally identical to the raw dataset (tone column
-        # holds the relabels, excluded tokens dropped); resolve columns by name.
+        # holds the relabels, excluded tokens dropped). It has no pickers: the
+        # Start-page token and f0, and the tone used in Curate (curated_cols()).
         src_data <- curated_data()
         req(src_data)
-        cv <- names(src_data)
-        used <- attr(src_data, "curate_vars")   # tone used in Curate, e.g. `cluster`
-        raw_token <- guess_var(cv, c("^token", "^item", "^segment", "^id"), 1)
-        raw_f0    <- guess_var(cv, c("^f0$", "^f0_", "^pitch", "^F0"), 2)
-        raw_tone  <- if (!is.null(used$tone) && used$tone %in% cv) used$tone
-                     else guess_var(cv, c("^tone", "^category", "^tonecat"), 4)
-        raw_time  <- guess_var(cv, c("^time", "^t$", "^timepoint", "^measurement"), 3)
-        raw_spk   <- guess_speaker(cv)   # ".none" (one speaker) if no speaker column
+        cc <- curated_cols(src_data)
+        raw_token <- cc$token
+        raw_f0    <- cc$f0
+        raw_tone  <- cc$tone
+        raw_time  <- cc$time
+        raw_spk   <- cc$speaker
       }
 
       # Averaging Hz across speakers mixes higher and lower voices, so first
@@ -338,7 +475,7 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
       f0_vals <- suppressWarnings(as.numeric(src_data[[raw_f0]]))
       if (any(f0_vals < 0, na.rm = TRUE)) {
         showNotification(paste("The f0 variable has negative values, so it looks",
-                               "normalised already. Choose the f0 column in Hz,",
+                               "normalised already. Choose the f0 variable in Hz,",
                                "or use the Normalised f0 source."),
                          type = "warning", duration = 8)
         return()
@@ -354,6 +491,7 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
         error = function(e) {
           showNotification(paste("LZ conversion failed:", conditionMessage(e)),
                            type = "error", duration = 8)
+          clear_result()
           NULL
         })
       if (is.null(lz_data)) return()
@@ -363,11 +501,12 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
                       n_speakers = length(unique(lz_data[[raw_spk]])))
       src_data <- lz_data
       raw_f0 <- "f0_lz"
-      contour_data <- compute_mean_contour(
+      contour_data <- shown(compute_mean_contour(
         src_data,
         token = raw_token, f0 = raw_f0,
         time  = raw_time, tone = raw_tone
-      )
+      ), "Mean contours failed")
+      if (is.null(contour_data)) return()
     } else if (src %in% c("normalised", "curated_norm")) {
       src_data <- if (src == "normalised") normalised_data()
                   else if (!is.null(curated_norm_data)) curated_norm_data()
@@ -378,11 +517,13 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
       raw_token <- sel("token")
       raw_f0    <- sel("f0")
       raw_tone  <- sel("tone")
-      contour_data <- compute_mean_contour(
+      mean_cols <- list(token = raw_token, f0 = raw_f0, time = sel("time"), tone = raw_tone)
+      contour_data <- shown(compute_mean_contour(
         src_data,
         token = raw_token, f0 = raw_f0,
         time  = sel("time"), tone = raw_tone
-      )
+      ), "Mean contours failed")
+      if (is.null(contour_data)) return()
     } else {
       contour_data <- NULL
     }
@@ -400,11 +541,12 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
     turn_th <- input$sum_turn_threshold
     if (!is.numeric(turn_th) || length(turn_th) != 1 || is.na(turn_th) || turn_th < 0)
       turn_th <- 0.5
-    chao <- contour_to_chao(
+    chao <- shown(contour_to_chao(
       contour_data,
       tone_col  = "tone", time_col = "time", f0_col = "f0_predicted",
       threshold = turn_th
-    )
+    ), "Chao conversion failed")
+    if (is.null(chao)) return()
     f0_min <- attr(chao, "f0_min")
     f0_max <- attr(chao, "f0_max")
 
@@ -425,6 +567,16 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
     boundary_tol <- input$sum_boundary_tol
     if (!is.numeric(boundary_tol) || length(boundary_tol) != 1 ||
         is.na(boundary_tol) || boundary_tol < 0) boundary_tol <- 0.1
+
+    # A model's time_coverage (fit_gca(), fit_gamm()): per tone, the first and
+    # last time of the rows it fits. NULL for mean contours, and for a fit
+    # made by an earlier version.
+    cov <- if (src %in% c("gca", "gamm")) attr(contour_data, "time_coverage")
+    cov_of <- function(tone, col) {
+      if (!is.data.frame(cov) || !all(c("tone", col) %in% names(cov))) return(NA_real_)
+      v <- cov[[col]][match(as.character(tone), as.character(cov$tone))]
+      if (length(v) == 1) as.numeric(v) else NA_real_
+    }
 
     rows <- lapply(seq_len(nrow(chao)), function(i) {
       r            <- chao[i, ]
@@ -448,9 +600,11 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
       near <- size > 0 && abs(size - turn_th) <= boundary_tol
       alt  <- NA_character_
       if (near) {
-        a <- contour_to_chao(contour_data, tone_col = "tone", time_col = "time",
-                             f0_col = "f0_predicted",
-                             threshold = max(0, if (n_samples == 3) size + 1e-6 else size - 1e-6))
+        # Its warnings were shown for the conversion above.
+        a <- suppressWarnings(
+          contour_to_chao(contour_data, tone_col = "tone", time_col = "time",
+                          f0_col = "f0_predicted",
+                          threshold = max(0, if (n_samples == 3) size + 1e-6 else size - 1e-6)))
         a <- a[a$tone == r$tone, , drop = FALSE]
         if (nrow(a) == 1) alt <- paste0(a$refline, " / ", a$interval)
         # Flag only when the other side of the threshold changes the numerals
@@ -489,6 +643,13 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
         progress          = r$progress,
         timing            = r$timing,
         timing_near       = timing_near,
+        # Where the tone's contour has f0 on the time axis (F5), and for
+        # model predictions where its fitted rows start and end (the fit's
+        # time_coverage): the curve beyond them is extrapolated.
+        t_first           = r$t_first,
+        t_last            = r$t_last,
+        fit_first         = cov_of(r$tone, "t_first"),
+        fit_last          = cov_of(r$tone, "t_last"),
         stringsAsFactors  = FALSE
       )
 
@@ -519,6 +680,7 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
     sum_params(list(
       source       = src,
       lz           = lz_info,
+      cols         = mean_cols,
       boundary_tol = boundary_tol,
       turn_threshold = turn_th,
       f0_min       = f0_min,
@@ -626,14 +788,54 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
         tags$ul(style = "margin: 4px 0 0 0; padding-left: 18px;", lines))
     }
 
+    # Tones whose contour, or whose fitted rows (model predictions), do not
+    # reach 0 or 1 on the time axis (F5): a dagger after the tone, and a note
+    # below the table. On the real time column, token_t01 and <tier>_t01 the
+    # contour runs from the first f0 (0) to the last (1), so this happens only
+    # on a time column used as it is.
+    miss_at <- function(first, last)
+      (!is.na(first) & first > 1e-8) | (!is.na(last) & last < 1 - 1e-8)
+    miss_contour <- if (all(c("t_first", "t_last") %in% names(result)))
+      miss_at(result$t_first, result$t_last) else rep(FALSE, nrow(result))
+    miss_fit <- if (all(c("fit_first", "fit_last") %in% names(result)))
+      miss_at(result$fit_first, result$fit_last) else rep(FALSE, nrow(result))
+    edge_i <- which(miss_contour | miss_fit)
+    edge_note <- if (length(edge_i) > 0) {
+      pred <- params$source %in% c("gca", "gamm")
+      tags$div(style = "margin-top: 10px; font-size: 0.8rem; color: #6b5a1e;",
+        tags$strong("Contours that do not reach 0 or 1 (\u2020):"),
+        tags$ul(style = "margin: 4px 0 0 0; padding-left: 18px;",
+          lapply(edge_i, function(i) tags$li(
+            if (miss_fit[i])
+              sprintf("Tone %s: the rows the model fits run from %.2f to %.2f on the time axis.",
+                      result$tone[i], result$fit_first[i], result$fit_last[i])
+            else
+              sprintf("Tone %s runs from %.2f to %.2f.", result$tone[i],
+                      result$t_first[i], result$t_last[i])))),
+        tags$p(style = "margin: 4px 0 0 0;", paste(
+          if (pred)
+            paste("The model's curve beyond them is extrapolated, and the onset and offset digits",
+                  "and Timing are read from that curve.")
+          else
+            paste("Their onset and offset digits are read at the nearest measured point, and Timing",
+                  "at 0.5 of the axis."),
+          "This happens on a time variable used as it is, such as time_prop or a 0\u20131",
+          "column made by an older version. The real time variable, or token_t01 from Normalise, runs",
+          "each token from its first f0 (0) to its last (1).")))
+    }
+
     body_rows <- lapply(seq_len(nrow(result)), function(i) {
+      miss <- i %in% edge_i
       # Highlight where the two methods disagree
       any_disagree <- result$refline[i] != result$interval[i]
       hl_ref <- if (any_disagree) "background-color: #e8f0fe;" else ""
       hl_int <- if (any_disagree) "background-color: #fff3cd;" else ""
 
       cells <- list(
-        tags$td(style = paste0(td_style, " font-weight: bold; border-right: 1px solid #ddd;"), result$tone[i]),
+        tags$td(style = paste0(td_style, " font-weight: bold; border-right: 1px solid #ddd;"), result$tone[i],
+                if (miss) tags$span(style = "color:#b07d00; margin-left:2px;",
+                                    title = "Its contour does not reach 0 or 1 on the time axis; see the note below the table.",
+                                    "\u2020")),
         tags$td(style = paste0(td_style_mono, " background-color: #f8fbff;"), HTML(result$ref_scaled_values[i])),
         tags$td(style = paste0(td_style_bold, " background-color: #f8fbff; ", hl_ref), result$refline[i]),
         tags$td(class = "tone-letters", style = paste0(td_style_letters, " background-color: #f8fbff; border-right: 1px solid #ddd; ", hl_ref), result$ref_letters[i]),
@@ -685,7 +887,8 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
           tags$tbody(body_rows)
         ),
         turn_note,
-        drop_note
+        drop_note,
+        edge_note
       )
     )
   })
@@ -823,30 +1026,66 @@ summarise_ui <- function(input, output, session, dataset, normalised_data, gca_p
     req(sum_params())
 
     params <- sum_params()
+    src    <- params$source
 
-    # Raw and curated f0: show the LZ step that builds pred.
+    # dat: the uploaded file, read and prepared as the Start page does
+    # (read_data_code(), global.R), so it has the rows the app used.
+    ds_name <- if (!is.null(input$dataset_name) && nzchar(input$dataset_name))
+                 paste0(input$dataset_name, ".csv")
+               else "your_data.csv"
+    code_read <- paste0(paste(read_data_code(ds_name, start = if (is.null(start_settings)) NULL
+                                                             else start_settings()),
+                              collapse = "\n"), "\n\n")
+
+    # Step 0 builds pred, the per-tone contours, from dat. Raw and curated f0:
+    # the LZ step. Normalised f0: the mean contours of the chosen column.
+    # Model predictions: a pointer to that tab's fit.
     lz <- params$lz
+    mc <- params$cols
     dq <- function(x) deparse(x)
+    curate_note <- paste0(
+      '# Curated data: apply the Curate tab\'s relabels and exclusions to dat here,\n',
+      '# or read its "Curated CSV (analysis-ready)" download in place of the file\n',
+      '# above (it has them, and the Start-page steps)\n')
     code_lz <- if (!is.null(lz)) {
       spk <- if (is.na(lz$speaker)) ".speaker" else lz$speaker
       paste0(
+        if (identical(src, "curated")) curate_note else "",
         '# Step 0: Convert each speaker\'s f0 to LZ (log z-score, Zhu 1999), so that\n',
         '# higher and lower voices are averaged on a common scale, then take the\n',
         '# per-tone mean contours\n',
-        '# dat: your f0 data, one row per f0 sample\n',
         if (is.na(lz$speaker)) 'dat$.speaker <- "all"   # no speaker variable: one speaker\n' else "",
         'dat <- normalise_f0(dat, f0 = ', dq(lz$f0), ', speaker = ', dq(spk), ',\n',
         '                    tone = ', dq(lz$tone), ', method = "lz")\n',
         'pred <- compute_mean_contour(dat, token = ', dq(lz$token), ', f0 = "f0_lz",\n',
         '                             time = ', dq(lz$time), ', tone = ', dq(lz$tone), ')\n',
         '\n')
-    } else paste0(
-      '# pred is a data frame with columns: time, f0_predicted, tone\n',
-      '# (from GCA/GAMM predictions or per-tone mean contours)\n\n')
+    } else if (!is.null(mc)) {
+      paste0(
+        if (identical(src, "curated_norm")) paste0(curate_note,
+          '# Step 0: Normalise dat as the Normalise tab does with data source Curated\n',
+          '# data (its settings are in that tab), then take the per-tone mean contours\n',
+          '# of ', mc$f0, '\n')
+        else paste0(
+          '# Step 0: Normalise dat as the Normalise tab does (its settings are in that\n',
+          '# tab), then take the per-tone mean contours of ', mc$f0, '\n'),
+        'pred <- compute_mean_contour(dat, token = ', dq(mc$token), ', f0 = ', dq(mc$f0), ',\n',
+        '                             time = ', dq(mc$time), ', tone = ', dq(mc$tone), ')\n',
+        '\n')
+    } else {
+      fit_fun <- if (identical(src, "gamm")) "gamm" else "gca"
+      paste0(
+        '# Step 0: pred is the ', toupper(fit_fun), ' tab\'s predicted contours, with columns\n',
+        '# time (0-1), f0_predicted and tone. Fit the model to dat as that tab\'s R code\n',
+        '# does. For a model fit with shinytone::fit_', fit_fun, '():\n',
+        '# pred <- shinytone::predict_', fit_fun, '(fit, n = ',
+        if (fit_fun == "gamm") 200 else 100, ')\n\n')
+    }
 
     code_text <- paste0(
-      if (!is.null(lz)) 'library(shinytone)\n' else "",
+      if (!is.null(lz) || !is.null(mc)) 'library(shinytone)\n' else "",
       'library(ggplot2)\n\n',
+      code_read,
       code_lz,
       '# Step 1: Define pitch range\n',
       'f0_min <- min(pred$f0_predicted, na.rm = TRUE)\n',

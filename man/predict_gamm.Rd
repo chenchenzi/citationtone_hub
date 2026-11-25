@@ -14,8 +14,10 @@ predict_gamm(gamm_obj, n = 200)
 }
 \value{
 A data frame with columns \code{time}, \code{f0_predicted}, \code{se},
-\code{tone}, carrying the fit's \code{time_axis} (\code{"unit"} or \code{"sequential"})
-and \code{n_segments} as attributes of the same names.
+\code{tone}, carrying the fit's \code{time_axis} (\code{"unit"} or \code{"sequential"}),
+\code{n_segments} and \code{time_coverage} (where each tone's fitted rows start
+and end on the time axis; \code{NULL} for a fit made by an earlier version)
+as attributes of the same names.
 }
 \description{
 Generates per-tone population-average smooth curves from a fitted
@@ -28,10 +30,16 @@ Internally:
 \enumerate{
 \item Build a per-tone time grid with \code{n} evenly-spaced points across
 \verb{[0, 1]}, or, for a fit on a sequential landmark axis
-(\verb{<tier>_tseq}), across the observed range of that axis, so the
-curves keep the segment boundaries at whole numbers and are not
-extrapolated into stretches no token was measured in (a voiceless
-onset, say).
+(\verb{<tier>_tseq} or \verb{<tier>_tbound}), across the part of that axis the
+model was fitted to (rows with f0), so the curves keep the segment
+boundaries at whole numbers and are not extrapolated into stretches no
+token was measured in. On a \verb{<tier>_tseq} or \verb{<tier>_tbound} from
+\code{\link[=normalise_time_landmarks]{normalise_time_landmarks()}} that part is normally \code{0} to \code{n}: it is
+less only when no token has f0 in its first or last segment (on a
+\verb{<tier>_tseq}, f0 at two times). On a \verb{[0, 1]} axis the grid always runs
+from 0 to 1, so a tone whose fitted rows stop short of 0 or 1 (on a
+time column used as it is) is extrapolated there; the \code{time_coverage}
+attribute shows where each tone's rows start and end.
 \item Set random-effect columns (speaker, item, and any random-smooth
 grouping factors) to the first level of their respective factors;
 these reference values are placeholders that don't affect the

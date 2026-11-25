@@ -9,7 +9,8 @@ flag_outliers(
   f0 = "f0",
   token = "token",
   speaker = "speaker",
-  z_threshold = 3
+  z_threshold = 3,
+  time = NULL
 )
 }
 \arguments{
@@ -24,6 +25,11 @@ flag_outliers(
 \item{z_threshold}{Signed z-score cutoff: a token is flagged when its
 per-token max exceeds \code{+z_threshold} (too high) or its min falls below
 \code{-z_threshold} (too low). Default \code{3}.}
+
+\item{time}{Column name of time, or \code{NULL} (the default). Used only to
+break a tie between two speaker values that are equally frequent
+within a token: the one that comes first in time wins. \code{\link[=inspect_f0]{inspect_f0()}}
+passes its \code{time}, so it picks the same speaker as \code{\link[=fit_polynomial]{fit_polynomial()}}.}
 }
 \value{
 A token-level data frame (one row per token) with columns:
@@ -42,9 +48,14 @@ analysis (Xu & Zhang 2024).
 \details{
 \subsection{What the function does internally}{
 \enumerate{
-\item Drop samples where \code{f0} is \code{NA} or \code{0} (pitch trackers commonly
-output 0 for unvoiced frames).
-\item Compute the per-token maximum, minimum, mean, and SD of \code{f0}.
+\item Drop the rows without f0. A row has f0 when its value is above 0 Hz,
+so \code{NA}, 0 (pitch trackers commonly output 0 for unvoiced frames) and
+negative markers such as -1 are all left out.
+\item Compute the per-token maximum, minimum, mean, and SD of \code{f0}. Each
+token's speaker is the most frequent non-empty value of \code{speaker} on
+its rows with f0. A tie goes to the value that comes first in \code{time}
+(when given), then to the first in alphabetical (C-locale) order, so
+neither the row order nor the rows without f0 change it.
 \item Within each speaker, z-score the per-token maxima against each
 other and the per-token minima against each other (so a speaker
 with consistently high f0 isn't flagged as an outlier of the corpus).
@@ -60,10 +71,10 @@ Because the maxima and minima are pooled across all of a speaker's tones,
 the opposite tails are occupied by legitimate tone identity rather than
 error (a low ceiling is what a genuine low tone looks like; a high floor
 is what a genuine high tone looks like), so they are deliberately not
-flagged here. The rarer artefacts that do sit in those tails --- a
-truncated (abnormally low) maximum or a floored (abnormally high) minimum
---- are deferred to the finer screens \code{\link[=flag_level_outliers]{flag_level_outliers()}} (within
-speaker and tone) and \code{\link[=flag_pitch_jumps]{flag_pitch_jumps()}} (frame level).
+flagged here. The rarer artefacts that do sit in those tails (a
+truncated, abnormally low maximum or a floored, abnormally high minimum)
+are left to the finer screens \code{\link[=flag_level_outliers]{flag_level_outliers()}} (within speaker
+and tone) and \code{\link[=flag_pitch_jumps]{flag_pitch_jumps()}} (sample level).
 }
 
 \subsection{Choosing \code{z_threshold}}{

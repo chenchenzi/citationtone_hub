@@ -87,63 +87,63 @@ fp_start_ui <- function(input, output, session, fp_audio_data) {
   output$fp_start_guide <- renderUI({
     tagList(
       h2("Welcome!"),
-      tags$p("Upload your audio files to get started. Each .wav should be a recording of a single syllable or word. Optional ",
+      tags$p(nows("Upload your audio files to get started. Each .wav should be a recording of a single syllable or word. Optional ",
              tags$strong(".TextGrid"), ", ", tags$strong(".Pitch"),
              ", and ", tags$strong(".PitchTier"),
-             " files exported from Praat can be uploaded alongside the audio."),
+             " files exported from Praat can be uploaded alongside the audio.")),
+      # A note set off by a soft yellow bar on the left, with no fill
       tags$div(
-        style = "background-color: #fff8e1; border-left: 4px solid #e0a800; padding: 10px 14px; margin-bottom: 12px; border-radius: 4px; font-size: 0.88rem; color: #555;",
-        tags$strong("Companion files:"),
-        " Use a common ", tags$em("basename"),
-        " across companion files. For example, ",
-        tags$code("ma1.wav"), ", ", tags$code("ma1.TextGrid"),
-        ", and ", tags$code("ma1.Pitch"),
-        " are treated as one token."
+        style = "border-left: 3px solid #f0c75e; padding: 4px 0 4px 12px; margin-bottom: 12px; color: #555;",
+        tags$div(nows(tags$strong("Companion files:"),
+          " Use a common ", tags$em("basename"),
+          " across companion files. For example, ",
+          tags$code("ma1.wav"), ", ", tags$code("ma1.TextGrid"),
+          ", and ", tags$code("ma1.Pitch"),
+          " are treated as one token.")),
+        tags$div(style = "margin-top: 4px;", nows(tags$strong("Multisyllabic words:"),
+          " a ", tags$code(".TextGrid"), " with a syllable tier is highly recommended, so the ",
+          "analysis can line up the syllables across tokens."))
       ),
       if (is.null(fp_audio_data())) {
         tags$p("Once uploaded, a per-token file summary will appear below.")
       },
-      tags$div(
-        style = "color: #555; font-size: 0.85rem; margin-top: -4px; margin-bottom: 12px;",
-        tags$p(style = "margin: 0 0 2px 0; font-weight: 600;",
-               "Already have f0 extracted with another tool?"),
+      # Folded, as on the F0 Analysis Start page's F0 Correction box
+      guide_box("Already have f0 extracted with another tool?", open = FALSE,
         tags$p(style = "margin: 0;",
                HTML(paste0(
                  "You can load it directly as a CSV (with ",
                  "<code>token</code> / <code>filename</code>, <code>time</code>, <code>f0</code> ",
                  "columns) from the <strong>F0 Extraction</strong> tab to proceed to ",
-                 "<strong>F0 Correction</strong>.")))
-      ),
+                 "<strong>F0 Correction</strong>.")))),
       tags$hr(),
       h4("What each tab does"),
-      tags$ul(
-        tags$li(HTML("&#128194; "),
-                tags$strong(style = "color: #78c2ad;", "Start"),
-                " Upload your audio files (.wav) and optional companion files (.TextGrid, .Pitch, .PitchTier) and preview their specifications."),
-        tags$li(HTML("&#128195; "),
-                tags$strong(style = "color: #78c2ad;", "Measure f0 with Praat"),
-                " Offline alternative: a downloadable Praat script that batch-extracts f0 from a folder of .wav files. Output (.Pitch + CSV) feeds back into the in-app workflow."),
-        tags$li(HTML("&#127908; "),
-                tags$strong(style = "color: #78c2ad;", "F0 Extraction"),
-                " Pick a source for f0 data: run ",
-                tags$code("wrassp::ksvF0()"), " on the uploaded .wav, parse already-computed ",
-                ".Pitch / .PitchTier files from Praat, or upload a pre-extracted f0 CSV. ",
-                "Optionally attaches metadata (upload CSV or derive from filename) and downloads a tidy result."),
-        tags$li(HTML("&#128295; "),
-                tags$strong(style = "color: #78c2ad;", "F0 Correction"),
-                " Interactively review and correct extraction errors (octave jumps, halving, spurious frames, voiced/unvoiced boundaries), listening to any stretch of the recording or of its synthesised f0 contour.")
+      # As on the F0 Analysis Start page: one Font Awesome icon per tab on a
+      # pale circle coloured by the stage of the work (tab_item() and
+      # tab_list() in global.R)
+      tab_list(
+        tab_item("folder-open", "Start", "data",
+                 "Upload your audio files (.wav) and optional companion files (.TextGrid, .Pitch, .PitchTier) and preview their specifications."),
+        tab_item("file-code", "Measure f0 with Praat", "prep",
+                 "Offline alternative: a downloadable Praat script that batch-extracts f0 from a folder of .wav files. Output (.Pitch + CSV) feeds back into the in-app workflow."),
+        tab_item("wave-square", "F0 Extraction", "prep",
+                 "Pick a source for f0 data: run ",
+                 tags$code("wrassp::ksvF0()"), " on the uploaded .wav, parse already-computed ",
+                 ".Pitch / .PitchTier files from Praat, or upload a pre-extracted f0 CSV. ",
+                 "Optionally attaches metadata (upload CSV or derive from filename) and downloads a tidy result."),
+        tab_item("wrench", "F0 Correction", "expl",
+                 "Interactively review and correct extraction errors (octave jumps, halving, spurious frames, voiced/unvoiced boundaries), listening to any stretch of the recording or of its synthesised f0 contour.")
       ),
       tags$hr(),
 
       # --- Short reminder; full guide lives in Data Collection -> Filename ---
       h4("Recommended filename convention"),
-      tags$p("A consistent filename pattern (e.g., ",
+      tags$p(nows("A consistent filename pattern (e.g., ",
              tags$code("yue_S01_T2_ma_r01.wav"),
              ") lets ", tags$strong("F0 Extraction"),
              " split each filename into metadata columns. ",
              tags$strong("F0 Correction"), " and ", tags$strong("F0 Analysis"),
              " can then filter, group, or facet by those columns. ",
-             "A separate metadata CSV can be uploaded alongside for richer per-speaker information."),
+             "A separate metadata CSV can be uploaded alongside for richer per-speaker information.")),
       tags$p(
         tags$a(href = "#", style = "color: #2c5f4f; font-weight: 600;",
                onclick = "Shiny.setInputValue('about_nav_target', 'Data Collection|Filename', {priority:'event'}); return false;",

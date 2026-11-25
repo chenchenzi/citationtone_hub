@@ -15,7 +15,7 @@ assign_tier_landmarks(times, t1, t2, labels)
 }
 \value{
 A data.frame with one row per \code{times} value: \code{label}, \code{start}, \code{end},
-and \code{idx} — the 1-based ordinal of the interval among non-empty-labelled
+and \code{idx}, the 1-based ordinal of the interval among non-empty-labelled
 intervals (NA inside empty/unlabelled intervals or outside the tier's span).
 }
 \description{

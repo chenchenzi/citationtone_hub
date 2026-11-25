@@ -27,10 +27,10 @@ cross-speaker comparison.}
 \item{time}{Column name of time within each token. Default \code{"time"}.}
 
 \item{speaker}{Column name of speaker ID, carried through to the
-output. Default \code{"speaker"}.}
+output (see "Speaker and tone" below). Default \code{"speaker"}.}
 
 \item{tone}{Column name of tone category, carried through to the
-output. Default \code{"tone"}.}
+output (see "Speaker and tone" below). Default \code{"tone"}.}
 
 \item{degree}{Polynomial degree. One of \code{1}, \code{2}, or \code{3}. Default \code{2}.}
 
@@ -59,13 +59,19 @@ classifiers and regression models (Mirman 2014; Xu & Zhang 2024).
 
 For each token:
 \enumerate{
-\item Compute the per-token range of \code{time} and rescale it linearly to
-the interval \verb{[-1, 1]}, which is where Legendre polynomials are
-orthogonal. If the time column is \emph{already} normalised to \verb{[0, 1]}
+\item Rescale each token's \code{time} linearly to \verb{[-1, 1]}, from its first f0
+(-1) to its last f0 (1), which is where Legendre polynomials are
+orthogonal. Rows without f0 at a token's edges do not move it. If the
+time column is \emph{already} normalised to \verb{[0, 1]}
 (detected with \code{\link[=time_already_normalised]{time_already_normalised()}}, or declared via
 \code{time_normalised}), the fixed map \code{2 * t - 1} is used instead, so
 tokens whose samples do not span the full unit interval are not
-stretched a second time.
+stretched a second time. A \verb{<tier>_tseq} (syllables in sequence) or
+\verb{<tier>_tbound} (in sequence, gap kept) is rescaled per token too: a
+token whose first or last syllable has
+no values on the axis (on a \verb{<tier>_tseq}, f0 at fewer than two times;
+on a \verb{<tier>_tbound}, no f0) is stretched, and its other syllables
+fill the axis.
 \item Build the Legendre basis up to the requested \code{degree}.
 \item Solve the ordinary least-squares problem with \code{\link[stats:lm.fit]{stats::lm.fit()}} to
 recover the coefficients.
@@ -89,10 +95,23 @@ contours.
 \subsection{Edge cases}{
 
 Samples with a missing or infinite f0 or time are skipped (\code{-Inf} comes
-from taking the log of 0 Hz). Tokens with fewer than \code{degree + 1} valid
-samples receive \code{NA} for all coefficients. Tokens with a single unique
-time point keep \code{c0} as the mean of their finite f0 values and set the
-higher-order coefficients to \code{NA}.
+from taking the log of 0 Hz), and so are 0 values in a column in Hz (one
+that \code{\link[=hz_f0_columns]{hz_f0_columns()}} finds), which have no f0. The checks below count
+only the samples that remain, so rows without f0 do not change them. A
+token whose samples all share one time point keeps \code{c0} as the mean of
+their f0 and sets the higher-order coefficients to \code{NA}. Any other token
+with fewer than \code{degree + 1} samples gets \code{NA} for all coefficients. So
+does a token with no samples.
+}
+
+\subsection{Speaker and tone}{
+
+\code{speaker} and \code{tone} are read once per token. Each token takes the most
+frequent non-empty value among its rows with f0 (a finite f0, and above 0
+in a column in Hz, as in "Edge cases"). A tie goes to the value that comes
+first in time. So a label column that changes within
+a token, such as a tone tier from a TextGrid with \code{""} in the silences,
+gives the same result in any row order, with or without rows without f0.
 }
 }
 \examples{

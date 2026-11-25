@@ -39,17 +39,25 @@ working on lexical tone production.
 
 - 🎙️ **F0 processing**: extract f0 from `.wav` files with `wrassp` or
   Praat, including a downloadable Praat script tailored to your settings.
-- 🔍 **Inspect**: token-level outlier flags (by-speaker z-score) and
-  sample-level artefact detection (octave jumps, rate-of-change
-  violations, carryover frames; Steffman & Cole 2022).
+- 🧹 **Data screening (Start page)**: on upload, finds the rows without f0
+  (NA or 0 Hz) at the start, at the end and inside each token, and removes
+  them by default (untick to keep them). It also reads gaps from the time
+  steps, so a file saved without those rows still shows them. A
+  `voiced_run` column numbers the stretches with f0 in each token.
+- 🔍 **Inspect**: token-level outlier flags (by-speaker z-score, and by
+  speaker and tone) and sample-level artefact detection (octave jumps,
+  rate-of-change violations, carryover frames; Steffman & Cole 2022).
+  Each sample is compared with the next sample that has f0, so the flags
+  are the same with or without the rows without f0.
 - 📏 **Normalise**: by-speaker semitone, z-score or log z-score (LZ)
-  normalisation, with simple or weighted speaker means.
+  normalisation, with simple or weighted speaker means, and 0-1 time from
+  each token's or syllable's first f0 to its last.
 - 📈 **Visualise**: f0 contours coloured by tone, with optional
   faceting by speaker.
 - 📊 **Model**: per-token Legendre polynomials, growth-curve analysis
   (GCA) on orthogonal polynomials, and generalised additive mixed
   models (GAMM) with AR1 correction (on by default in the app) and
-  one-click model diagnostics — basis-dimension check, residual
+  one-click model diagnostics: basis-dimension check, residual
   panels, per-token residual ACF, and concurvity.
 - 🧮 **Summarise**: convert contours into Chao tone numerals using
   two FOR methods (reference-line and interval).

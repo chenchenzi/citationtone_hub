@@ -3,20 +3,33 @@
 ###############################################
 
 gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_data = NULL, curated_data = NULL, cluster_data = NULL,
-                   curated_norm_data = NULL) {
+                   curated_norm_data = NULL,
+                   start_cols = NULL, data_version = NULL, start_settings = NULL) {
+
+  # The app tests bind this body to their own reactives, without these three
+  # arguments in older tests: then they count as left out (NULL).
+  for (nm in c("start_cols", "data_version", "start_settings"))
+    if (!exists(nm, inherits = TRUE)) assign(nm, NULL)
+
+  # A landmark axis with several parts per token: a <set>_tseq or
+  # <set>_tbound (the parts in sequence), or a <set>_t01 that restarts at 0 in each part. The parts are counted in the data
+  # (t01_parts(), global.R), not read from the name: a tier with one part per
+  # token (a word, rhyme or vowel tier) is a whole-token axis, like
+  # token_t01. Parts that cannot be counted (the set's columns are missing)
+  # count as several.
+  gca_multi_axis <- function(tv, tok, df) {
+    is.character(tv) && length(tv) == 1 && grepl("_(t01|tseq|tbound)$", tv) &&
+      !identical(tv, "token_t01") && !identical(t01_parts(df, tv, tok), 1L)
+  }
 
   # On a landmark (multisyllabic) time axis, GCA's interpretable low-order terms
-  # stop meaning much, so just nudge to GAMM. The _t01-vs-_tseq distinction is
-  # handled on the GAMM tab, where the right column actually matters.
+  # stop meaning much, so just nudge to GAMM. Which of _t01, _tseq and
+  # _tbound to use is handled on the GAMM tab, where it actually matters.
   output$gca_multisyl_note <- renderUI({
     tv <- input$gca_time_var
-    if (is.null(tv) || !grepl("_(tseq|t01)$", tv)) return(NULL)
-    # normalise_time_token() writes exactly "token_t01" (whole-token
-    # proportional time, a perfectly good axis); normalise_time_landmarks()
-    # writes "<set>_t01", which resets at every segment boundary. Keyed on the
-    # name the producer guarantees, not on a companion column that a trimmed
-    # re-upload may have lost.
-    if (identical(tv, "token_t01")) return(NULL)
+    if (is.null(tv) || !grepl("_(tseq|tbound|t01)$", tv)) return(NULL)
+    if (!gca_multi_axis(tv, input$gca_token_var,
+                        tryCatch(active_data(), error = function(e) NULL))) return(NULL)
     tags$div(
       style = paste("background-color:#fff8e1; border-left:4px solid #e0a800;",
                     "padding:10px 14px; margin:8px 0; border-radius:4px;",
@@ -25,26 +38,81 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
       " Are you modelling a multisyllabic time axis? Polynomial/GCA coefficients here summarise single-syllable shapes; for multisyllabic words, consider GAMM for these contours.")
   })
 
-  # Value-based check: a time column that is already proportional ([0, 1] per
-  # token) is used as-is by fit_gca() rather than rescaled again — say so
-  # before the user clicks Fit.
+  # The amber notice (edge_f0_line(), global.R): tokens whose f0 does not
+  # reach 0 or 1 on a time column the fit uses as it is. Never on the real
+  # time column, which the fit rescales from each token's first f0 to its
+  # last. One reactive, shared by the notice and the blue note below.
+  gca_edges <- reactive({
+    edge_f0_line(tryCatch(active_data(), error = function(e) NULL),
+                 input$gca_token_var, input$gca_f0_var, input$gca_time_var)
+  })
+
+  # The fit's own check (resolve_time_norm()): a time column that is already
+  # proportional ([0, 1] per token) is used as-is by fit_gca() rather than
+  # rescaled again, so say so before the user clicks Fit. *_t01 and
+  # time_prop are recognised by name (with every value in [0, 1]), so
+  # removing rows does not flip this note. A <set>_t01, <set>_tseq or
+  # <set>_tbound with several parts per token gets the nudge above instead.
   output$gca_timenorm_note <- renderUI({
     tv  <- input$gca_time_var
     tok <- input$gca_token_var
-    if (is.null(tv) || is.null(tok) || grepl("_tseq$", tv)) return(NULL)
+    if (is.null(tv) || is.null(tok)) return(NULL)
     df <- tryCatch(active_data(), error = function(e) NULL)
     if (is.null(df) || !all(c(tv, tok) %in% names(df))) return(NULL)
-    # A landmark set's within-segment <set>_t01 gets the multisyllabic nudge
-    # above, not this note; only the whole-token token_t01 falls through.
-    if (grepl("_t01$", tv) && !identical(tv, "token_t01")) return(NULL)
-    if (!time_already_normalised(df[[tv]], df[[tok]])) return(NULL)
+    if (gca_multi_axis(tv, tok, df)) return(NULL)
+    if (!time_already_normalised(df[[tv]], df[[tok]], name = tv)) return(NULL)
+    by_name <- grepl("_t01$", tv) || tv == "time_prop"
+    why <- if (by_name) "its name marks a 0&ndash;1 axis, and every value lies in that range"
+           else "every value lies in that range and a typical token covers most of it; some tokens may cover less"
     tags$div(
       style = paste("background-color:#e8f5f0; border-left:4px solid #78c2ad;",
                     "padding:10px 14px; margin:8px 0; border-radius:4px;",
                     "color:#2a7a5a; font-size:0.9rem;"),
       icon("circle-info"),
-      HTML(sprintf(" <code>%s</code> looks already normalised to [0, 1] (every value lies in that range and a typical token covers most of it; some tokens may cover less). The fit will use it as-is instead of rescaling per token, so tokens that cover only part of the interval keep their position. To force per-token rescaling, call <code>fit_gca(..., time_normalised = \"no\")</code> in R.", tv)))
+      HTML(sprintf(" <code>%s</code> %s already on 0&ndash;1 (%s). The fit uses it as it is, so 0 and 1 stay where the column puts them%s. To rescale each token from its first f0 to its last instead, call <code>fit_gca(..., time_normalised = \"no\")</code> in R.",
+                 tv, if (by_name) "is" else "looks", why,
+                 t01_where(tv, !is.null(gca_edges())))))
   })
+
+  output$gca_track_edges <- renderUI(gca_edges())
+
+  # Where 0 and 1 fall on a column used as it is, for the blue note. Only
+  # when the amber notice is not shown: then every token's (or part's) f0
+  # reaches 0 and 1. With the notice, the note points to it instead.
+  t01_where <- function(tv, edge) {
+    if (isTRUE(edge)) return(" (see the notice above)")
+    if (identical(tv, "token_t01"))
+      return(": on <code>token_t01</code> from Normalise, each token&rsquo;s first and last f0")
+    if (grepl("_t01$", tv))
+      return(sprintf(": on <code>%s</code> from Normalise, each %s&rsquo;s first and last f0",
+                     tv, sub("_t01$", "", tv)))
+    if (identical(tv, "time_prop"))
+      return(": on <code>time_prop</code>, the first and last frames of the extracted region")
+    ""
+  }
+
+  # The Normalise step in the exported code's data-source note. The time
+  # columns there need the f0 (Hz) and token columns that tab used, since
+  # each token, or each part of a tier, runs from its first f0 to its last.
+  # A time column the data had before Normalise gets the general line.
+  norm_time_lines <- function(time_var, token_var, before = NULL) {
+    q <- function(x) encodeString(x, quote = '"')
+    made <- !time_var %in% names(before)
+    if (made && identical(time_var, "token_t01")) {
+      c("# token_t01, made with the time, token and f0 (Hz) columns that tab used:",
+        sprintf('#   dat <- shinytone::normalise_time_token(dat, "<time>", %s,', q(token_var)),
+        '#                                          f0 = "<f0 (Hz)>")')
+    } else if (made && grepl("_(t01|tseq|tbound)$", time_var)) {
+      c(sprintf("# %s, made with the time, token and f0 (Hz) columns that tab used:", time_var),
+        sprintf('#   dat <- shinytone::normalise_time_landmarks(dat, "<time>", %s,',
+                q(sub("_(t01|tseq|tbound)$", "", time_var))),
+        sprintf('#                                              f0 = "<f0 (Hz)>", token = %s)',
+                q(token_var)))
+    } else {
+      c("# if it made a time column, normalise_time_token() or normalise_time_landmarks()",
+        "# with the f0 (Hz) and token columns that tab used (f0 =, token =).")
+    }
+  }
 
   # --- Guide text ---
   output$gca_guide <- renderUI({
@@ -57,9 +125,14 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
           tags$li(tags$strong("f0:"), " An f0-related variable. Normalised f0 (e.g. semitone, z-score or log z-score) is recommended for more interpretable and comparable coefficients across speakers.",
             " Use the ", tags$strong("Normalise"), " tab first, then select ", tags$em("Normalised data"),
             " (or, after Curate, ", tags$em("Curated + normalised data"), ") from the dataset dropdown to access ", tags$code(style = code_style, "f0_st"), ", ", tags$code(style = code_style, "f0_zscore"), " or ", tags$code(style = code_style, "f0_lz"), "."),
-          tags$li(tags$strong("Time:"), " The time variable that orders f0 samples within each token. Will be normalised to [0, 1] per token before fitting. A column that is already normalised (e.g. ",
-            tags$code(style = code_style, "token_t01"), " from the Normalise tab, or ",
-            tags$code(style = code_style, "time_prop"), " from equal-point extraction) is detected and used as-is, so partial-span tokens are not stretched."),
+          tags$li(tags$strong("Time:"),
+            " The time variable that orders f0 samples within each token. Each token is rescaled to [0, 1]",
+            " from its first f0 to its last before fitting, so rows without f0 at its edges do not move it.",
+            " A column already on 0\u20131 is used as it is: ",
+            tags$code(style = code_style, "token_t01"),
+            " from the Normalise tab (0 = each token's first f0, 1 = its last), or ",
+            tags$code(style = code_style, "time_prop"),
+            " from equal-point extraction (0 and 1 = the first and last frames of the extracted region)."),
           tags$li(tags$strong("Speaker:"), " Grouping variable for by-speaker random effects."),
           tags$li(tags$strong("Item:"), " The word or syllable type (e.g. different segmental compositions). Grouping variable for by-item random effects."),
           tags$li(tags$strong("Tone category:"), " Fixed effect factor interacted with time polynomial terms.")
@@ -102,6 +175,28 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
   })
 
   pick_dataset <- source_picker()   # selects Curated + normalised data once, when it appears
+
+  # --- Column defaults (Start page, D8) ---
+  # Token: the Start page's token column. f0: a normalised column first (the
+  # f0_st, f0_zscore, f0_lz and f0_norm* columns that var_patterns$f0 ranks
+  # first), then the column the Start page screens (f0_corrected, say, not
+  # the raw f0), then the usual guess. Time and the other roles: as before.
+  gca_token_default <- function(vars) {
+    tok <- start_col(start_cols, "token")
+    if (!is.null(tok) && tok %in% vars) tok else guess_var(vars, var_patterns$token, 1)
+  }
+  gca_f0_default <- function(vars) {
+    g   <- guess_var(vars, var_patterns$f0, 2)
+    scr <- start_col(start_cols, "f0")
+    if (grepl("^f0_(st|zscore|lz)$|^f0_norm", g, ignore.case = TRUE) ||
+        is.null(scr) || !scr %in% vars) g else scr
+  }
+  # A column picker keeps the user's own pick while the data still has it,
+  # until the user picks the default again (column_picker(), global.R). A
+  # picker on its default follows the new default, so a change of column on
+  # the Start page reaches it.
+  gca_pick <- column_picker(input, c("gca_token_var", "gca_f0_var", "gca_time_var",
+                                     "gca_speaker_var", "gca_tone_var", "gca_item_var"))
 
   # --- Helper: get active dataset based on selector ---
   active_data <- reactive({
@@ -153,6 +248,9 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
     vars <- if (!is.null(active)) names(active) else c("No dataset available")
     data_types <- if (!is.null(active)) sapply(active, class) else rep("NA", length(vars))
     var_types <- paste0(vars, " {", data_types, "}")
+    # The time default reads the data with this token: a <tier>_tseq only
+    # when some token has several parts of the tier (guess_time_var()).
+    tok_sel <- gca_pick("gca_token_var", vars, gca_token_default(vars))
 
     tagList(
       wellPanel(
@@ -161,22 +259,26 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
         curated_reminder("gca_dataset"),
         selectInput("gca_token_var", "Select Token ID variable:",
                     choices = setNames(vars, var_types),
-                    selected = guess_var(vars, var_patterns$token, 1)),
+                    selected = tok_sel),
         selectInput("gca_f0_var", "Select f0 variable (normalised f0 recommended):",
                     choices = setNames(vars, var_types),
-                    selected = guess_var(vars, var_patterns$f0, 2)),
+                    selected = gca_pick("gca_f0_var", vars, gca_f0_default(vars))),
+        uiOutput("gca_f0_note"),
         selectInput("gca_time_var", "Select Time variable:",  # auto-prefers <tier>_tseq
                     choices = setNames(vars, var_types),
-                    selected = guess_time_var(vars, 3)),
+                    selected = gca_pick("gca_time_var", vars,
+                                        guess_time_var(vars, 3, d = active, token = tok_sel))),
         selectInput("gca_speaker_var", "Select Speaker variable:",
                     choices = setNames(vars, var_types),
-                    selected = role_var(active, "speaker", vars, var_patterns$speaker, 4)),
+                    selected = gca_pick("gca_speaker_var", vars,
+                                        role_var(active, "speaker", vars, var_patterns$speaker, 4))),
         selectInput("gca_tone_var", "Select Tone category variable:",
                     choices = setNames(vars, var_types),
-                    selected = role_var(active, "tone", vars, var_patterns$tone, 5)),
+                    selected = gca_pick("gca_tone_var", vars,
+                                        role_var(active, "tone", vars, var_patterns$tone, 5))),
         selectInput("gca_item_var", "Select Item variable (word/syllable type):",
                     choices = setNames(vars, var_types),
-                    selected = guess_var(vars, var_patterns$item, 6)),
+                    selected = gca_pick("gca_item_var", vars, guess_var(vars, var_patterns$item, 6))),
         tags$hr(),
         radioButtons("gca_degree", "Polynomial degree:",
                      choices = list("1 (linear)" = 1,
@@ -217,6 +319,13 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
     )
   })
 
+  # A note under the f0 picker when the chosen column is not the one the
+  # Start page screens and still has rows without f0.
+  output$gca_f0_note <- renderUI({
+    screened_f0_note(tryCatch(active_data(), error = function(e) NULL),
+                     input$gca_f0_var, start_cols)
+  })
+
   # --- Result storage ---
   gca_model <- reactiveVal(NULL)
   gca_fixef_table <- reactiveVal(NULL)
@@ -226,10 +335,11 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
   gca_formula_str <- reactiveVal(NULL)
   gca_tone_estimates <- reactiveVal(NULL)
   gca_pairwise <- reactiveVal(NULL)
-  observeEvent(input$uploadfile, {   # new file: clear the old fit
+  # A new file, or new rows from the Start page (data_version): clear the old fit
+  observeEvent({ input$uploadfile; if (!is.null(data_version)) data_version() }, {
     for (rv in list(gca_model, gca_fixef_table, gca_convergence_warning, gca_plot_data,
                     gca_obs_data, gca_formula_str, gca_tone_estimates, gca_pairwise)) rv(NULL)
-  }, ignoreInit = TRUE)
+  }, ignoreInit = TRUE, ignoreNULL = FALSE)
   gca_pairwise_visible <- reactiveVal(FALSE)
 
   observeEvent(input$gca_show_pairwise, {
@@ -645,34 +755,110 @@ gca_ui <- function(input, output, session, dataset, normalised_data, gca_pred_da
                  paste0(input$dataset_name, ".csv")
                else "your_data.csv"
 
+    # The code reads the uploaded file. When this tab used other data, a note
+    # at the top says so, and how to get that data. A source counts only when
+    # its data exists, as in active_data().
+    src      <- input$gca_dataset
+    src_data <- switch(if (is.null(src)) "" else src,
+                       normalised = normalised_data, curated = curated_data,
+                       curated_norm = curated_norm_data, clustered = cluster_data)
+    if (is.null(src_data) || is.null(src_data())) src <- "uploaded"
+    src_note <- switch(src,
+      normalised = c(
+        "# Note: this tab used the Normalised data, not the uploaded file read below.",
+        "# After the lines that read and prepare that file, add the Normalise tab's",
+        "# steps with that tab's settings: shinytone::normalise_f0(), and",
+        norm_time_lines(time_var, token_var, tryCatch(dataset(), error = function(e) NULL))),
+      curated = c(
+        "# Note: this tab used the Curated data, not the uploaded file read below.",
+        "# Read the Curate tab's \"Curated CSV (analysis-ready)\" download in place of",
+        "# that file, and leave out the Start-page steps below: the download has them."),
+      curated_norm = c(
+        "# Note: this tab used the Curated + normalised data, not the uploaded file",
+        "# read below. Read the Curate tab's \"Curated CSV (analysis-ready)\" download",
+        "# in place of that file, and leave out the Start-page steps below: the",
+        "# download has them. Then add the Normalise tab's steps with that tab's",
+        "# settings: shinytone::normalise_f0(), and",
+        norm_time_lines(time_var, token_var,
+                        if (!is.null(curated_data)) tryCatch(curated_data(), error = function(e) NULL))),
+      clustered = c(
+        "# Note: this tab used the Clustered data, not the uploaded file read below.",
+        "# Read the Cluster tab's \"Download clustered CSV\" file in place of that",
+        "# file, and leave out the Start-page steps below: the download has them."))
+    src_note <- if (length(src_note)) paste0(paste(src_note, collapse = "\n"), "\n\n") else ""
+
     # Mirror fit_gca()'s auto-detection so the snippet reproduces the app's
     # fit: an already-normalised [0, 1] time column is used as-is, anything
-    # else gets the per-token min-max rescale.
+    # else is rescaled per token from its first f0 to its last. The name goes
+    # in too, as in resolve_time_norm(), so a token_t01 or time_prop column
+    # keeps its decision after rows without f0 are removed.
     df_now  <- tryCatch(active_data(), error = function(e) NULL)
     prenorm <- !is.null(df_now) && all(c(time_var, token_var) %in% names(df_now)) &&
-      time_already_normalised(df_now[[time_var]], df_now[[token_var]])
+      time_already_normalised(df_now[[time_var]], df_now[[token_var]], name = time_var)
+    # The rescale is resolve_time_norm(f0 =)'s: from each token's first f0 to
+    # its last, over the rows with a time and f0 (0 Hz is NA after
+    # zero_hz_to_na()), so rows without f0 at the token's edges do not move
+    # it, with the rows removed or kept. Rows before the first f0 or after
+    # the last get NA, and a token whose f0 is all at one time point gets
+    # 0.5 there.
     norm_block <- if (prenorm) {
       paste0(
-      '# ', time_var, ' is already normalised to [0, 1] — use it as-is\n',
-      '# (no per-token rescale, so partial-span tokens keep their position)\n',
+      '# ', time_var, ' is already on [0, 1]: use it as it is\n',
+      '# (no per-token rescale: 0 and 1 stay where the column puts them)\n',
       'dat$time_norm <- pmin(pmax(dat$', time_var, ', 0), 1)\n\n')
     } else {
       paste0(
-      '# Normalise time to [0, 1] within each token\n',
+      '# Normalise time to [0, 1] within each token, from its first f0 to its\n',
+      '# last, as the app does. Rows before the first f0 or after the last get\n',
+      '# NA. A token whose f0 is all at one time point sits at 0.5 there.\n',
+      'rescale01 <- function(t, has_f0) {\n',
+      '  ok <- has_f0 & is.finite(t)\n',
+      '  if (!any(ok)) return(rep(NA_real_, length(t)))\n',
+      '  t_min <- min(t[ok])\n',
+      '  t_max <- max(t[ok])\n',
+      '  if (t_max == t_min) return(ifelse(t == t_min, 0.5, NA_real_))\n',
+      '  p <- (t - t_min) / (t_max - t_min)\n',
+      '  p[p < 0 | p > 1] <- NA\n',
+      '  p\n',
+      '}\n',
       'dat <- dat %>%\n',
       '  group_by(', token_var, ') %>%\n',
-      '  mutate(\n',
-      '    time_norm = (', time_var, ' - min(', time_var, ')) / \n',
-      '                (max(', time_var, ') - min(', time_var, '))\n',
-      '  ) %>%\n',
+      '  mutate(time_norm = rescale01(', time_var, ', is.finite(', f0_var, '))) %>%\n',
       '  ungroup()\n\n')
     }
+
+    # The rows fit_gca() keeps before poly() (Part A5): a finite time and f0,
+    # a tone, and a speaker and item only where the model has a term for
+    # them (with no random effect chosen, the model gets (1 | item)). poly()
+    # then builds its basis on the rows lmer() fits, so rows without f0 do
+    # not shift it and NA time never reaches it.
+    uses_speaker <- isTRUE(rs_speaker) || isTRUE(ri_speaker)
+    uses_item    <- isTRUE(rs_item) || isTRUE(ri_item) || !uses_speaker
+    keep_conds <- unique(c("is.finite(time_norm)",
+                           paste0("is.finite(", f0_var, ")"),
+                           paste0("!is.na(", tone_var, ")"),
+                           if (uses_speaker) paste0("!is.na(", speaker_var, ")"),
+                           if (uses_item) paste0("!is.na(", item_var, ")")))
+    needs <- c("a time", "an f0", "a tone", if (uses_speaker) "a speaker",
+               if (uses_item) "an item")
+    keep_note <- paste0(
+      'Keep the rows the model fits: those with ',
+      paste(utils::head(needs, -1), collapse = ', '), ' and ', utils::tail(needs, 1), '. ',
+      'poly() below builds its basis on these rows, as the app does, so rows ',
+      'without f0 do not shift it.')
+    keep_block <- paste0(
+      paste(strwrap(keep_note, width = 76, prefix = '# '), collapse = '\n'), '\n',
+      'dat <- dat %>%\n',
+      '  filter(', paste(keep_conds, collapse = ', '), ')\n\n')
 
     code_text <- paste0(
       'library(dplyr)\n',
       'library(lme4)\n\n',
-      paste(read_data_code(ds_name), collapse = "\n"), '\n\n',
+      src_note,
+      paste(read_data_code(ds_name, start = if (is.null(start_settings)) NULL else start_settings()),
+            collapse = "\n"), '\n\n',
       norm_block,
+      keep_block,
       '# Generate orthogonal polynomial time terms\n',
       'poly_matrix <- poly(dat$time_norm, ', degree, ')\n',
       paste0(sapply(1:degree, function(k) {

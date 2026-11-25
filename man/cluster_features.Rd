@@ -20,11 +20,31 @@ cluster_features(
 \arguments{
 \item{data}{Long-format data frame, one row per f0 sample.}
 
-\item{f0, token, time}{Column names. \code{time} is normalised per token.}
+\item{f0, token, time}{Column names. Each token is resampled from its
+first f0 to its last on the \code{time} axis, as the 0-1 axes are built:
+in a column in Hz (one that \code{\link[=hz_f0_columns]{hz_f0_columns()}} finds), 0 is no f0 and
+is skipped. At each boundary of a \verb{<tier>_tseq} (syllables in
+sequence), one
+syllable's last f0 and the next one's first f0 share a time (on a
+\verb{<tier>_tbound}, only rows exactly on a boundary can). The next
+syllable's f0 is used there, and the two are never averaged. The
+syllable is read from \verb{<tier>_i} (or, on a \verb{<tier>_tseq},
+\verb{<tier>_t01}), so the row order does not matter; without either
+column, give each token's rows in time order. Other rows of a token at
+the same time, such as two recordings that share a token name, are
+averaged, with a message. A token whose first or last syllable has no
+values on a \verb{<tier>_tseq} or \verb{<tier>_tbound} is stretched: its other
+syllables fill the grid. On a \verb{<tier>_tseq} that is a syllable with
+f0 at fewer than two times; on a \verb{<tier>_tbound}, one with no f0.}
 
-\item{speaker}{Optional speaker column, carried through as metadata.}
+\item{speaker}{Optional speaker column, carried through as metadata.
+Each token takes the most frequent non-empty value among its rows with
+f0, so a label that changes within a token gives the same result in any
+row order, with or without rows without f0. A tie goes to the value that
+comes first in time.}
 
-\item{tone}{Optional tone column, carried through for later validation.}
+\item{tone}{Optional tone column, carried through for later validation.
+Read per token in the same way as \code{speaker}.}
 
 \item{n_points}{Number of points to resample each contour to, spread
 evenly from its first to its last f0 value. Default 21 (one point every

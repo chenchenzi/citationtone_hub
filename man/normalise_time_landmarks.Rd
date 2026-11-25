@@ -4,30 +4,138 @@
 \alias{normalise_time_landmarks}
 \title{Landmark-normalised time columns}
 \usage{
-normalise_time_landmarks(df, time, set)
+normalise_time_landmarks(df, time, set, f0 = "f0", token = "token")
 }
 \arguments{
-\item{df}{Data frame with the \code{time} column and the set's \verb{_start} / \verb{_end}
-(and optionally \verb{_i}) columns, e.g. from \code{\link[=attach_landmarks]{attach_landmarks()}}.}
+\item{df}{Data frame with the \code{time}, \code{f0} and \code{token} columns and the
+set's \verb{<set>_start} and \verb{<set>_end} columns (and usually \verb{<set>_i}), as
+from \code{\link[=attach_landmarks]{attach_landmarks()}}.}
 
-\item{time}{Name of the raw time column (seconds, matching the landmark units).}
+\item{time}{Name of the time column.}
 
-\item{set}{Landmark-set base name (e.g. "syllable").}
+\item{set}{Landmark-set prefix (e.g. \code{"syllable"}).}
+
+\item{f0}{Name of the f0 column that says which rows have f0. Default
+\code{"f0"}. For F0 Correction output, pass \code{f0 = "f0_corrected"}: left at
+the default, the tracked f0 would decide, with a message.}
+
+\item{token}{Name of the token-ID column. Default \code{"token"}. With time
+counted within each token, two tokens can have the same boundary values,
+so segments are always taken within a token.}
 }
 \value{
-\code{df} with the two columns appended. Returned unchanged when the
-required columns are absent.
+\code{df} with \verb{<set>_t01} added (or replaced), and \verb{<set>_tseq} and
+\verb{<set>_tbound} when \code{df} has a \verb{<set>_i} column. Without \verb{<set>_i},
+these two are not added, with a message. A missing column is an error.
 }
 \description{
-Rescales a time column within each segment of a landmark set so multisyllabic
-contours share a syllable-aware time axis. Adds two columns, named from the
-set:
+Puts each segment of a landmark set, such as each syllable, on its own
+0-1 time axis that runs from the segment's first f0 to its last f0, so
+contour shapes can be compared. Adds three columns, named from the set:
+\itemize{
+\item \verb{<set>_t01}: 0 at the segment's first f0 and 1 at its last f0.
+\item \verb{<set>_tseq}: the segments in sequence, \verb{(<set>_i - 1) + <set>_t01}.
+Segment 1's f0 fills 0 to 1, segment 2's fills 1 to 2, and so on. A
+stretch without f0 between two segments, such as a voiceless consonant
+at a syllable boundary, takes no room, so every boundary sits at a
+whole number: segment 1's last f0 and segment 2's first f0 are both at 1.
+\item \verb{<set>_tbound}: the segments in sequence, gap kept: they meet at the
+TextGrid boundaries, and the stretch without f0 between them is kept.
+The boundaries between the
+token's segments are at 1, 2, .... Its first f0 is at 0 and its last
+f0 at \code{n}, the number of segments. A segment with no f0 at all at the
+token's start or end gets \code{NA}, so the token then starts at 1 (or ends
+at \code{n - 1}), and its boundaries still line up with other tokens'. A
+stretch without f0 at a boundary keeps its length, split at the
+boundary between the segments on either side.
+}
 }
 \details{
-\itemize{
-\item \verb{<set>_t01} — time rescaled to 0-1 \emph{within} each segment (segments overlap;
-good for comparing segment shapes against each other).
-\item \verb{<set>_tseq} — \emph{sequential} time, \verb{(<set>_i - 1) + <set>_t01}, so segments
-lie end to end across the word (a word-level time axis that keeps order).
+A segment is one interval of the tier within one token: the rows that
+share the token and the \verb{<set>_start} and \verb{<set>_end} values that
+\code{\link[=attach_landmarks]{attach_landmarks()}} wrote. On \verb{<set>_t01} and \verb{<set>_tseq}, the
+boundaries only say which rows belong to which segment, and the axis
+comes from where f0 is. On \verb{<set>_tbound}, the boundaries between
+segments also set the whole numbers: segment \code{i} runs from \code{i - 1} to
+\code{i}, from its start boundary to its end boundary, except that the
+token's first segment with f0 starts at its first f0 and its last
+segment with f0 ends at its last f0. Only labelled segments count, as in
+\code{\link[=contour_duration]{contour_duration()}} with \code{set}, so rows in an empty-label interval
+(silence), rows outside the tier and rows with no token get \code{NA}.
+
+A row has f0 when its \code{f0} value is a number. In a column in Hz (one that
+\code{\link[=hz_f0_columns]{hz_f0_columns()}} finds), 0 is no f0. A column with negative markers,
+such as -1, is not read as Hz, so those values count as f0: set them to
+\code{NA} first (see \code{\link[=suggest_unvoiced]{suggest_unvoiced()}}). In a signed or normalised column,
+such as semitones or z-scores, 0 and negative values are f0.
+
+Rows without f0 between a segment's first and last f0 keep their place by
+time. Rows before the first f0 or after the last get \code{NA}, not 0 or 1, and
+so does every row of a segment with f0 at fewer than two times. On
+\verb{<set>_tbound} the same holds for the token as a whole: rows before its
+first f0 or after its last get \code{NA}, and so do segments with no f0
+before its first segment with f0 or after its last. A segment with no f0
+between two segments with f0 keeps its place, from boundary to boundary.
+When only one segment of a token has f0, its \verb{<set>_tbound} equals its
+\verb{<set>_tseq}. So removing rows without f0, or reordering the rows, does
+not change any of the three columns.
+
+\strong{Two rows at each boundary.} On \verb{<set>_tseq}, segment 1's last f0 and
+segment 2's first f0 are both at 1, so the axis has two rows at each
+whole number, often with different f0. \code{\link[=compute_mean_contour]{compute_mean_contour()}} and
+\code{\link[=cluster_features]{cluster_features()}} read the next segment's first f0 at the boundary,
+and never average the two. They tell the two rows apart by \verb{<set>_t01}
+(1 on the last f0, 0 on the first) or \verb{<set>_i}, so the row order does
+not matter while either column is kept. For \code{\link[=fit_gamm]{fit_gamm()}}, whose AR1
+correction runs along the rows, keep the rows in time order within each
+token. On \verb{<set>_tbound} the stretch without f0 keeps its room, so a
+whole number has a row only where a row sits exactly on a boundary.
+
+\strong{Modelling a whole word.} One smooth over \verb{<set>_tseq}, as in
+\code{\link[=fit_gamm]{fit_gamm()}}, cannot follow an f0 jump at a boundary: both sides of it
+are at the same time. On \verb{<set>_tbound} the two sides are a gap apart,
+so one smooth can follow the jump, and the boundaries still line up
+across tokens. \code{token_t01} from \code{\link[=normalise_time_token]{normalise_time_token()}} keeps the gap
+too, but the boundary falls at a different point in each token. Or
+model each segment on \verb{<set>_t01}, with one token per segment.
+
+The first and last f0 are taken as they are: a lone sample cut off from
+the rest of the segment's contour by a gap counts. \code{\link[=contour_duration]{contour_duration()}}
+instead anchors its span on runs of at least \code{min_run = 2} samples by
+default, so the two can disagree about such a segment. The Start page's
+option for short edge runs, or \code{drop_rows_without_f0(min_run = 3)},
+removes such samples first, but only at a token's start and end: a lone
+sample next to a boundary inside the token still sets that segment's 0
+or 1.
+
+For \verb{<set>_t01} and \verb{<set>_tseq}, only the order and spacing of \code{time}
+within a segment matter, so the time column does not have to be in the
+TextGrid's units. \verb{<set>_tbound} compares \code{time} with the boundaries, so
+it needs \code{time}, \verb{<set>_start} and \verb{<set>_end} on the same clock: in the
+same units and counted from the same zero, as \code{\link[=attach_landmarks]{attach_landmarks()}}
+writes them. In a token with f0 in two or more segments whose time lies
+outside its own segments' boundaries (by more than a millionth of the
+token's time range), \verb{<set>_tbound} is \code{NA}, with a message.
+
+Columns made by shinytone 1.0.0 ran from each interval's start boundary
+to its end boundary. Make them again with this function.
 }
+\examples{
+# Two syllables, with no f0 at the boundary
+df <- data.frame(token = "w1", time = seq(0.01, 0.10, by = 0.01),
+                 f0 = c(NA, 200, 205, 210, NA, NA, 190, 185, 180, NA),
+                 syllable_start = rep(c(0, 0.05), each = 5),
+                 syllable_end   = rep(c(0.05, 0.11), each = 5),
+                 syllable_i     = rep(1:2, each = 5))
+out <- normalise_time_landmarks(df, "time", "syllable")
+out[, c("time", "f0", "syllable_t01", "syllable_tseq", "syllable_tbound")]
+# Removing the rows without f0 gives the same values
+kept <- !is.na(df$f0)
+identical(normalise_time_landmarks(df[kept, ], "time", "syllable")$syllable_tbound,
+          out$syllable_tbound[kept])
+}
+\seealso{
+\code{\link[=normalise_time_token]{normalise_time_token()}} for the whole token, which for a word
+keeps the gap between syllables and their duration ratio;
+\code{\link[=contour_duration]{contour_duration()}} with \code{set} for the duration of the same segments.
 }

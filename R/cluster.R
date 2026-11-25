@@ -18,15 +18,19 @@
 
 # -----------------------------------------------------------------------------
 # Internal: resample one token's contour to `n` evenly spaced points over its
-# own time range. Returns a length-`n` numeric (NA if too few valid samples).
+# own time range, from its first f0 to its last. Returns a length-`n` numeric
+# (NA if too few valid samples). Two segments' rows at the same time are
+# never averaged (interp_no_blend() in time_norm.R): on <tier>_tseq (or
+# <tier>_tbound), with the syllables in sequence, the next syllable's first
+# f0 holds the boundary, read from `seg` (stack_segments()) whatever the
+# row order.
+# Other rows at one time are averaged.
 # -----------------------------------------------------------------------------
-.interp_contour <- function(t, y, n) {
+.interp_contour <- function(t, y, n, seg = NULL) {
   ok <- is.finite(t) & is.finite(y)
-  t <- t[ok]; y <- y[ok]
-  if (length(t) < 2 || length(unique(t)) < 2) return(rep(NA_real_, n))
-  o <- order(t)
-  xout <- seq(min(t), max(t), length.out = n)
-  stats::approx(t[o], y[o], xout = xout, ties = mean)$y
+  if (sum(ok) < 2 || length(unique(t[ok])) < 2) return(rep(NA_real_, n))
+  xout <- seq(min(t[ok]), max(t[ok]), length.out = n)
+  interp_no_blend(t, y, xout = xout, seg = seg)
 }
 
 # -----------------------------------------------------------------------------
@@ -98,9 +102,29 @@
 #' reflect tone shape and register rather than who has a high voice.
 #'
 #' @param data Long-format data frame, one row per f0 sample.
-#' @param f0,token,time Column names. `time` is normalised per token.
+#' @param f0,token,time Column names. Each token is resampled from its
+#'   first f0 to its last on the `time` axis, as the 0-1 axes are built:
+#'   in a column in Hz (one that [hz_f0_columns()] finds), 0 is no f0 and
+#'   is skipped. At each boundary of a `<tier>_tseq` (syllables in
+#'   sequence), one
+#'   syllable's last f0 and the next one's first f0 share a time (on a
+#'   `<tier>_tbound`, only rows exactly on a boundary can). The next
+#'   syllable's f0 is used there, and the two are never averaged. The
+#'   syllable is read from `<tier>_i` (or, on a `<tier>_tseq`,
+#'   `<tier>_t01`), so the row order does not matter; without either
+#'   column, give each token's rows in time order. Other rows of a token at
+#'   the same time, such as two recordings that share a token name, are
+#'   averaged, with a message. A token whose first or last syllable has no
+#'   values on a `<tier>_tseq` or `<tier>_tbound` is stretched: its other
+#'   syllables fill the grid. On a `<tier>_tseq` that is a syllable with
+#'   f0 at fewer than two times; on a `<tier>_tbound`, one with no f0.
 #' @param speaker Optional speaker column, carried through as metadata.
+#'   Each token takes the most frequent non-empty value among its rows with
+#'   f0, so a label that changes within a token gives the same result in any
+#'   row order, with or without rows without f0. A tie goes to the value that
+#'   comes first in time.
 #' @param tone Optional tone column, carried through for later validation.
+#'   Read per token in the same way as `speaker`.
 #' @param n_points Number of points to resample each contour to, spread
 #'   evenly from its first to its last f0 value. Default 21 (one point every
 #'   5%), as in [resample_f0_equal()] and the app's Cluster tab.
@@ -146,13 +170,25 @@ cluster_features <- function(data,
 
   tok_all <- as.character(data[[token]])
   toks <- unique(tok_all)
+  # Values are read by the axes' rule (0 Hz is no f0 in a column in Hz), so
+  # each token runs from its first f0 to its last, and a 0 inside it is
+  # skipped rather than read as a pitch of 0.
+  f0v <- data[[f0]]
+  f0v[!f0_rows(data, f0)] <- NA
+  tv  <- data[[time]]
+  seg <- stack_segments(data, time, token)
+  has_tok <- !is.na(tok_all)
+  note_averaged_ties(tok_all[has_tok], tv[has_tok], f0v[has_tok], seg[has_tok])
 
-  # Resample every token to n_points.
+  # Resample every token to n_points. Rows with no token give no contour.
   contours <- matrix(NA_real_, nrow = length(toks), ncol = n_points,
                      dimnames = list(toks, NULL))
+  grp  <- match(tok_all, toks)
+  grp[!has_tok] <- NA_integer_
+  rows <- split(seq_along(tok_all), factor(grp, levels = seq_along(toks)))
   for (i in seq_along(toks)) {
-    idx <- tok_all == toks[i]
-    contours[i, ] <- .interp_contour(data[[time]][idx], data[[f0]][idx], n_points)
+    idx <- rows[[i]]
+    contours[i, ] <- .interp_contour(tv[idx], f0v[idx], n_points, seg = seg[idx])
   }
   keep <- apply(contours, 1, function(r) all(is.finite(r)))
   if (!any(keep)) stop("No token had enough valid f0 samples to resample.", call. = FALSE)
@@ -191,14 +227,20 @@ cluster_features <- function(data,
   }
   rownames(feat) <- toks
 
-  # Metadata (first row per token).
+  # Metadata: the most frequent non-empty value among each token's rows with
+  # f0 (see pick_token_values() in polynomial.R), so neither row order nor
+  # rows without f0 change a token's speaker or tone.
   meta <- data.frame(token = toks, stringsAsFactors = FALSE)
-  first_of <- function(col) {
-    vapply(toks, function(tk) as.character(data[[col]][which(tok_all == tk)[1]]),
-           character(1))
+  meta_cols <- c(speaker = speaker, tone = tone)
+  meta_cols <- meta_cols[meta_cols %in% names(data)]
+  if (length(meta_cols)) {
+    md <- data.frame(.token = tok_all, stringsAsFactors = FALSE)
+    for (nm in names(meta_cols)) md[[nm]] <- data[[meta_cols[[nm]]]]
+    vals <- pick_token_values(md, names(meta_cols), ".token",
+                              use = is.finite(f0v), time = data[[time]])
+    hit <- match(toks, vals$.token)
+    for (nm in names(meta_cols)) meta[[nm]] <- as.character(vals[[nm]][hit])
   }
-  if (!is.null(speaker) && speaker %in% names(data)) meta$speaker <- first_of(speaker)
-  if (!is.null(tone)    && tone    %in% names(data)) meta$tone    <- first_of(tone)
 
   list(features = feat, contours = contours, tokens = toks, meta = meta,
        n_points = n_points, register = register, feature_type = features)
@@ -209,8 +251,8 @@ cluster_features <- function(data,
 #'
 #' @description
 #' Runs k-means across a range of `k` and reports the elbow (total
-#' within-cluster sum of squares), average silhouette width, and -- when the
-#' `cluster` / `mclust` packages are available -- the gap statistic and the
+#' within-cluster sum of squares), average silhouette width, and, when the
+#' `cluster` / `mclust` packages are available, the gap statistic and the
 #' GMM/BIC-preferred `k`. No single index is authoritative; use the spread to
 #' read off a plausible *range* for the number of tones.
 #'

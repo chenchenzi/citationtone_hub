@@ -7,7 +7,8 @@
 ###############################################
 
 cluster_ui <- function(input, output, session, dataset, normalised_data,
-                        curated_data = NULL, cluster_data) {
+                        curated_data = NULL, cluster_data,
+                        start_cols = NULL, data_version = NULL, start_settings = NULL) {
 
   has_mclust <- requireNamespace("mclust", quietly = TRUE)
 
@@ -77,6 +78,49 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
         (is.null(ds_choice()) || identical(ds_choice(), "uploaded")))
       ds_choice("normalised")
   }, ignoreNULL = TRUE)
+
+  # The Start-page arguments are NULL when a caller leaves them out. A test may
+  # bind this body to its own reactives without them, so look them up.
+  start_cols   <- get0("start_cols", ifnotfound = NULL)
+  data_version <- get0("data_version", ifnotfound = NULL)
+
+  # --- Column defaults (Start page, D8) ---
+  # Token: the Start page's token column, then the usual guess. f0: a
+  # normalised column first (the f0_st, f0_zscore, f0_lz and f0_norm* columns
+  # that var_patterns$f0 ranks first), then the column the Start page screens
+  # (f0_corrected, say, not the raw f0), then the usual guess. Time and the
+  # other roles: as before.
+  cl_token_default <- function(vars) {
+    tok <- start_col(start_cols, "token")
+    if (!is.null(tok) && tok %in% vars) tok else guess_var(vars, var_patterns$token, 1)
+  }
+  cl_f0_default <- function(vars) {
+    g   <- guess_var(vars, var_patterns$f0, 2)
+    scr <- start_col(start_cols, "f0")
+    if (grepl("^f0_(st|zscore|lz)$|^f0_norm", g, ignore.case = TRUE) ||
+        is.null(scr) || !scr %in% vars) g else scr
+  }
+  # The user's own picks in the variable menus: a value a menu sends that
+  # differs from the default it was drawn with. A re-render keeps a pick while
+  # the data still has the column and the dataset is the same. A menu still
+  # on its default follows the new default, so a change of column on the
+  # Start page reaches it.
+  cl_picked <- list()
+  cl_shown  <- list()
+  cl_src    <- NULL
+  for (cl_id in c("cluster_token_var", "cluster_f0_var", "cluster_time_var",
+                  "cluster_speaker_var", "cluster_tone_var")) local({
+    i <- cl_id
+    observeEvent(input[[i]], {
+      v <- input[[i]]
+      cl_picked[[i]] <<- if (!identical(v, cl_shown[[i]])) v
+    })
+  })
+  cl_pick <- function(id, choices, default) {
+    cl_shown[[id]] <<- default
+    v <- cl_picked[[id]]
+    if (is.character(v) && length(v) == 1 && v %in% choices) v else default
+  }
 
   # --- guide ---
   output$cluster_guide <- renderUI({
@@ -152,8 +196,8 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
         tags$summary(icon("layer-group"), " Clustering multisyllabic words, or just the vowel or rhyme?",
                      tags$span(class = "msg-hint", "(click to expand)")),
         tags$p(class = "msg-intro",
-          "Cluster whatever unit you mark in a TextGrid. Prepare it once, then the time column you pick here decides what gets clustered and how it lines up."),
-        tags$div(class = "cl-illus", HTML('<svg width="100%" viewBox="0 0 680 172" role="img" xmlns="http://www.w3.org/2000/svg"><title>Raw time, landmark _tseq, and landmark _t01 for clustering</title><desc>Raw time leaves boundaries misaligned; _tseq lays a whole word out in sequence; _t01 puts each part in its own 0 to 1 box.</desc><line x1="235" y1="12" x2="259" y2="12" stroke="#3a7ca5" stroke-width="2.5"/><text x="263" y="16" font-size="12" fill="#1f4e6b">token A</text><line x1="335" y1="12" x2="359" y2="12" stroke="#2f9e79" stroke-width="2.5"/><text x="363" y="16" font-size="12" fill="#1c5d47">token B</text><text x="120" y="36" font-size="13" font-weight="600" fill="#2c5d80" text-anchor="middle">Raw time</text><text x="315" y="36" font-size="13" font-weight="600" fill="#2c5d80" text-anchor="middle">&lt;tier&gt;_tseq</text><text x="530" y="36" font-size="13" font-weight="600" fill="#2c5d80" text-anchor="middle">&lt;tier&gt;_t01</text><rect x="40" y="46" width="160" height="82" fill="none" stroke="#b8d2e8" stroke-width="1"/><polyline points="40,104 80,72 120,62 160,98 200,116" fill="none" stroke="#3a7ca5" stroke-width="2.5"/><polyline points="40,108 96,74 152,64 176,100 200,114" fill="none" stroke="#2f9e79" stroke-width="2.5"/><line x1="120" y1="46" x2="120" y2="128" stroke="#3a7ca5" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.7"/><line x1="152" y1="46" x2="152" y2="128" stroke="#2f9e79" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.7"/><text x="120" y="148" font-size="12" fill="#5f6b66" text-anchor="middle">boundaries wander</text><rect x="235" y="46" width="160" height="82" fill="none" stroke="#b8d2e8" stroke-width="1"/><polyline points="235,104 275,72 315,62 355,98 395,116" fill="none" stroke="#3a7ca5" stroke-width="2.5"/><polyline points="235,108 275,75 315,65 355,101 395,114" fill="none" stroke="#2f9e79" stroke-width="2.5"/><line x1="315" y1="46" x2="315" y2="128" stroke="#9fbbd6" stroke-width="1.5" stroke-dasharray="4,3"/><text x="275" y="123" font-size="11" fill="#5f6b66" text-anchor="middle">&#963;1</text><text x="355" y="123" font-size="11" fill="#5f6b66" text-anchor="middle">&#963;2</text><text x="315" y="148" font-size="12" fill="#5f6b66" text-anchor="middle">whole word, in sequence</text><rect x="430" y="46" width="95" height="82" fill="none" stroke="#b8d2e8" stroke-width="1"/><rect x="535" y="46" width="95" height="82" fill="none" stroke="#b8d2e8" stroke-width="1"/><polyline points="430,102 454,84 478,72 502,64 525,60" fill="none" stroke="#3a7ca5" stroke-width="2.5"/><polyline points="430,106 454,88 478,76 502,68 525,64" fill="none" stroke="#2f9e79" stroke-width="2.5"/><polyline points="535,62 559,82 583,98 607,110 630,116" fill="none" stroke="#3a7ca5" stroke-width="2.5"/><polyline points="535,66 559,86 583,101 607,112 630,118" fill="none" stroke="#2f9e79" stroke-width="2.5"/><text x="477" y="123" font-size="11" fill="#5f6b66" text-anchor="middle">&#963;1</text><text x="582" y="123" font-size="11" fill="#5f6b66" text-anchor="middle">&#963;2</text><text x="530" y="148" font-size="12" fill="#5f6b66" text-anchor="middle">each part, own 0&#8211;1</text></svg>')),
+          "Cluster whatever unit you mark in a TextGrid. Prepare it once, then the time variable you pick here decides what gets clustered and how it lines up."),
+        tags$div(class = "cl-illus", HTML('<svg width="100%" viewBox="0 0 680 172" role="img" xmlns="http://www.w3.org/2000/svg"><title>Raw time, landmark _tseq, and landmark _t01 for clustering</title><desc>Raw time (or token_t01) keeps each word&#8217;s syllable ratio, so the boundary falls at a different point in each token; _tseq puts each part&#8217;s f0 in sequence, end to end, so the boundaries line up; _t01 puts each part on its own 0 to 1.</desc><line x1="235" y1="12" x2="259" y2="12" stroke="#3a7ca5" stroke-width="2.5"/><text x="263" y="16" font-size="12" fill="#1f4e6b">token A</text><line x1="335" y1="12" x2="359" y2="12" stroke="#2f9e79" stroke-width="2.5"/><text x="363" y="16" font-size="12" fill="#1c5d47">token B</text><text x="120" y="36" font-size="13" font-weight="600" fill="#2c5d80" text-anchor="middle">Raw time</text><text x="315" y="36" font-size="13" font-weight="600" fill="#2c5d80" text-anchor="middle">&lt;tier&gt;_tseq</text><text x="530" y="36" font-size="13" font-weight="600" fill="#2c5d80" text-anchor="middle">&lt;tier&gt;_t01</text><rect x="40" y="46" width="160" height="82" fill="none" stroke="#b8d2e8" stroke-width="1"/><polyline points="40,104 80,72 120,62 160,98 200,116" fill="none" stroke="#3a7ca5" stroke-width="2.5"/><polyline points="40,108 96,74 152,64 176,100 200,114" fill="none" stroke="#2f9e79" stroke-width="2.5"/><line x1="120" y1="46" x2="120" y2="128" stroke="#3a7ca5" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.7"/><line x1="152" y1="46" x2="152" y2="128" stroke="#2f9e79" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.7"/><text x="120" y="148" font-size="12" fill="#5f6b66" text-anchor="middle">whole word, ratio kept</text><rect x="235" y="46" width="160" height="82" fill="none" stroke="#b8d2e8" stroke-width="1"/><polyline points="235,104 275,72 315,62 355,98 395,116" fill="none" stroke="#3a7ca5" stroke-width="2.5"/><polyline points="235,108 275,75 315,65 355,101 395,114" fill="none" stroke="#2f9e79" stroke-width="2.5"/><line x1="315" y1="46" x2="315" y2="128" stroke="#9fbbd6" stroke-width="1.5" stroke-dasharray="4,3"/><text x="275" y="123" font-size="11" fill="#5f6b66" text-anchor="middle">&#963;1</text><text x="355" y="123" font-size="11" fill="#5f6b66" text-anchor="middle">&#963;2</text><text x="315" y="148" font-size="12" fill="#5f6b66" text-anchor="middle">parts in sequence</text><rect x="430" y="46" width="95" height="82" fill="none" stroke="#b8d2e8" stroke-width="1"/><rect x="535" y="46" width="95" height="82" fill="none" stroke="#b8d2e8" stroke-width="1"/><polyline points="430,102 454,84 478,72 502,64 525,60" fill="none" stroke="#3a7ca5" stroke-width="2.5"/><polyline points="430,106 454,88 478,76 502,68 525,64" fill="none" stroke="#2f9e79" stroke-width="2.5"/><polyline points="535,62 559,82 583,98 607,110 630,116" fill="none" stroke="#3a7ca5" stroke-width="2.5"/><polyline points="535,66 559,86 583,101 607,112 630,118" fill="none" stroke="#2f9e79" stroke-width="2.5"/><text x="477" y="123" font-size="11" fill="#5f6b66" text-anchor="middle">&#963;1</text><text x="582" y="123" font-size="11" fill="#5f6b66" text-anchor="middle">&#963;2</text><text x="530" y="148" font-size="12" fill="#5f6b66" text-anchor="middle">each part, own 0&#8211;1</text></svg>')),
         tags$div(class = "msg-flow",
           tags$div(class = "msg-step",
             tags$div(class = "msg-shead",
@@ -176,14 +220,14 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
               tags$span(class = "msg-stitle", "Normalise time"),
               tags$span(class = "msg-tab", "Normalise")),
             tags$div(class = "msg-swhy",
-              HTML("Normalise by the tier: adds <code>&lt;tier&gt;_t01</code> (each part 0&ndash;1) and <code>&lt;tier&gt;_tseq</code> (whole word)."))),
+              HTML("Normalise by the tier: adds <code>&lt;tier&gt;_t01</code> (each part from its first f0 to its last, 0&ndash;1), <code>&lt;tier&gt;_tseq</code> (the parts in sequence: 0&ndash;1, 1&ndash;2, ...) and <code>&lt;tier&gt;_tbound</code> (the same, with the gap kept at each TextGrid boundary)."))),
           tags$div(class = "msg-arrow", HTML("&#10132;")),
           tags$div(class = "msg-step msg-step-here",
             tags$div(class = "msg-shead",
               tags$span(class = "msg-badge msg-here", HTML("&#9679;")),
               tags$span(class = "msg-stitle", "Cluster")),
             tags$div(class = "msg-swhy",
-              HTML("You are here. Set the <strong>Time variable</strong> to <code>&lt;tier&gt;_tseq</code> for the whole word, or <code>&lt;tier&gt;_t01</code> for a single unit.")))
+              HTML("You are here. Set the <strong>Time variable</strong> to <code>&lt;tier&gt;_tseq</code> or <code>&lt;tier&gt;_tbound</code> to put the syllables in sequence, to the raw time (or <code>token_t01</code>) for the whole word with its syllable ratio, or to <code>&lt;tier&gt;_t01</code> for a single unit.")))
         ),
         tags$div(class = "msg-tip",
           icon("lightbulb"), HTML(" Cluster words with the same number of syllables together (disyllabic apart from trisyllabic), so the boundary lands in the same place."))
@@ -210,6 +254,8 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
 
     ds_label <- names(ds_choices)[match(ds_selected, ds_choices)]
     if (length(ds_label) != 1 || is.na(ds_label)) ds_label <- "uploaded data"
+    # Another dataset starts the variable menus on their defaults again.
+    if (!identical(cl_src, ds_selected)) { cl_picked <<- list(); cl_src <<- ds_selected }
 
     tagList(
       wellPanel(
@@ -225,20 +271,25 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
           tags$div(style = "margin-top:8px;",
             selectInput("cluster_dataset", "Select dataset:", choices = ds_choices, selected = ds_selected),
             selectInput("cluster_token_var", "Token ID variable:",
-                        choices = setNames(vars, var_types), selected = guess_var(vars, var_patterns$token, 1)),
+                        choices = setNames(vars, var_types),
+                        selected = cl_pick("cluster_token_var", vars, cl_token_default(vars))),
             selectInput("cluster_f0_var", "Normalised f0 variable:",
-                        choices = setNames(vars, var_types), selected = guess_var(vars, var_patterns$f0, 2)),
+                        choices = setNames(vars, var_types),
+                        selected = cl_pick("cluster_f0_var", vars, cl_f0_default(vars))),
+            uiOutput("cluster_f0_note"),
             selectInput("cluster_time_var", "Time variable:",
-                        choices = setNames(vars, var_types), selected = guess_var(vars, var_patterns$time, 3)),
+                        choices = setNames(vars, var_types),
+                        selected = cl_pick("cluster_time_var", vars, guess_var(vars, var_patterns$time, 3))),
             tags$div(style = "color:#888; font-size:0.72rem; margin-top:-6px;",
-                     "Normalised time by a tier? Pick that column here (e.g. ",
+                     "Normalised time by a tier? Pick that variable here (e.g. ",
                      tags$code("<tier>_tseq"),
                      "). See the multisyllabic guide for the full workflow."),
             selectInput("cluster_speaker_var", "Speaker variable (optional):",
-                        choices = setNames(vars, var_types), selected = guess_var(vars, var_patterns$speaker, 4)),
+                        choices = setNames(vars, var_types),
+                        selected = cl_pick("cluster_speaker_var", vars, guess_var(vars, var_patterns$speaker, 4))),
             selectInput("cluster_tone_var", "Reference tone labels (optional, for validation):",
                         choices = c("(none)" = "__none__", setNames(vars, var_types)),
-                        selected = "__none__"),
+                        selected = cl_pick("cluster_tone_var", c("__none__", vars), "__none__")),
             tags$div(style = "color:#888; font-size:0.72rem; margin-top:-6px;",
                      "Known categories or your own auditory judgements. Used only to score the clusters, never to build them."))),
         tags$hr(),
@@ -251,7 +302,7 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
           sliderInput("cluster_degree", "Coefficient order:", min = 2, max = 6, value = 4, step = 1)),
         sliderInput("cluster_npoints", "Resample points per contour:", min = 5, max = 41, value = 21, step = 1),
         tags$div(style = "color:#888; font-size:0.72rem; margin-top:-6px;",
-                 "Each contour is resampled to this many equally spaced points, from its first to its last f0 value, so all tokens are comparable. If your f0 is already measured at a fixed number of equidistant points (commonly 11 or 21), use that count: the points then stay as measured, provided each token's first and last points have f0."),
+                 "Each contour is resampled to this many equally spaced points, from its first to its last f0 value, so all tokens are comparable. If your f0 is already measured at a fixed number of equidistant points (commonly 11 or 21), use that count: the points then stay as measured, provided each token's first and last points have f0. Where they do not, the points are spread over the part with f0, whether or not the Start page removed the rows without f0."),
         radioButtons("cluster_register", "Cluster on:",
                      choices = c("Shape + register (height matters)" = "level",
                                  "Shape only (centre each contour)" = "shape"), selected = "level"),
@@ -288,26 +339,36 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
     )
   })
 
+  # A note under the f0 menu when the chosen column is not the one the Start
+  # page screens and still has rows without f0.
+  output$cluster_f0_note <- renderUI(screened_f0_note(active_data(), input$cluster_f0_var, start_cols))
+
   # --- run clustering on demand ---
-  # The Run button sets a trigger; a new upload sets it to NULL, which blanks
-  # the old file's results (eventReactive gives a silent req() on NULL).
+  # The Run button sets a trigger; a new upload, or new rows from the Start
+  # page (data_version), sets it to NULL, which blanks the old results
+  # (eventReactive gives a silent req() on NULL).
   cl_trigger <- reactiveVal(NULL)
   observeEvent(input$cluster_run, cl_trigger(input$cluster_run))
-  observeEvent(input$uploadfile, cl_trigger(NULL), ignoreInit = TRUE)
+  observeEvent({ input$uploadfile; if (!is.null(data_version)) data_version() },
+               cl_trigger(NULL), ignoreInit = TRUE, ignoreNULL = FALSE)
   cl_run <- eventReactive(cl_trigger(), {
     d <- active_data(); req(d)
     tok <- input$cluster_token_var; tm <- input$cluster_time_var; f0 <- input$cluster_f0_var
     spk <- input$cluster_speaker_var; tn <- input$cluster_tone_var
-    validate(need(all(c(tok, tm, f0) %in% names(d)), "Pick valid Token, Time and f0 columns."))
+    validate(need(all(c(tok, tm, f0) %in% names(d)), "Pick valid Token, Time and f0 variables."))
     withProgress(message = "Clustering f0 contours", value = 0, {
       incProgress(0.15, detail = "building contour features")
-      feat <- cluster_features(d, f0 = f0, token = tok, time = tm,
-                               speaker = if (!is.null(spk) && spk %in% names(d)) spk else NULL,
-                               tone = if (!is.null(tn) && tn != "__none__" && tn %in% names(d)) tn else NULL,
-                               n_points = input$cluster_npoints,
-                               features = input$cluster_features,
-                               degree = input$cluster_degree %||% 4,
-                               register = input$cluster_register)
+      # Rows at the same time are averaged: say so in a toast, not only in
+      # the R console (averaged_ties_toast() in global.R)
+      feat <- withCallingHandlers(
+        cluster_features(d, f0 = f0, token = tok, time = tm,
+                         speaker = if (!is.null(spk) && spk %in% names(d)) spk else NULL,
+                         tone = if (!is.null(tn) && tn != "__none__" && tn %in% names(d)) tn else NULL,
+                         n_points = input$cluster_npoints,
+                         features = input$cluster_features,
+                         degree = input$cluster_degree %||% 4,
+                         register = input$cluster_register),
+        message = averaged_ties_toast)
       incProgress(0.30, detail = "estimating the number of tones")
       diag <- choose_k_f0(feat, k_range = 2:input$cluster_kmax)
       k <- if (input$cluster_kmode == "manual") as.integer(input$cluster_k) else {
@@ -673,7 +734,7 @@ cluster_ui <- function(input, output, session, dataset, normalised_data,
     r <- cl_run()
     if (is.null(r$feat$meta$tone)) {
       return(tags$div(style = "color:#888; font-size:0.85rem; font-style:italic;",
-        "No reference tone column selected, so no validation is shown. (Pick one in the sidebar to compare clusters against existing labels.)"))
+        "No reference tone variable selected, so no validation is shown. (Pick one in the sidebar to compare clusters against existing labels.)"))
     }
     ag <- cluster_agreement(final_res()$assignment[r$feat$tokens], r$feat$meta$tone)
     interp <- if (ag$ari >= 0.7) "strong" else if (ag$ari >= 0.4) "moderate"

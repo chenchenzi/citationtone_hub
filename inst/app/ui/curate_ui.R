@@ -18,7 +18,8 @@
 
 curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL,
                       curated_data, inspect_result = NULL, cluster_data = NULL,
-                      curated_norm_data = NULL) {
+                      curated_norm_data = NULL,
+                      start_cols = NULL, data_version = NULL, start_settings = NULL) {
 
   # ---- curation state ----
   rv_relabel   <- reactiveVal(stats::setNames(character(0), character(0)))
@@ -79,7 +80,10 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
     ir <- if (!is.null(inspect_result)) inspect_result() else NULL
     if (is.null(ir)) return(character(0))
     v <- cvar()
-    tokcol <- if (v$token %in% names(ir)) v$token else guess_var(names(ir), var_patterns$token, 1)
+    st <- start_col(start_cols, "token")
+    tokcol <- if (v$token %in% names(ir)) v$token
+              else if (!is.null(st) && st %in% names(ir)) st
+              else guess_var(names(ir), var_patterns$token, 1)
     keep <- if ("flagged_token" %in% names(ir)) ir$flagged_token %in% TRUE else rep(FALSE, nrow(ir))
     unique(as.character(ir[[tokcol]][keep]))
   })
@@ -102,7 +106,7 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
       tags$p(style = "margin: 4px 0 8px 0;", HTML(
         "Re-label tokens whose tone category needs revising, or mark tokens to exclude.",
         "Use this for genuine <strong>linguistic variation</strong>: tone splits or mergers, variant",
-        "readings (colloquial vs. literary, 文白异读), sandhi or sociolinguistic variants, or",
+        "readings (colloquial vs. literary, \u6587\u767d\u5f02\u8bfb), sandhi or sociolinguistic variants, or",
         "mis-elicited tokens. Pitch-tracking errors are best <em>repaired</em> in",
         "<strong>Inspect</strong> and <strong>F0 Correction</strong>, but a token that is beyond",
         "repair can be excluded here (whole-token drop).",
@@ -251,16 +255,108 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
     )
   })
 
+  # ---- column pickers ----
+  # The token picker defaults to the Start page's token column, and the f0
+  # picker to a normalised f0 column when there is one, otherwise to the
+  # Start page's f0 column (D8). The other pickers keep their own guesses.
+  # A picker shows its default until the user picks another column. That
+  # pick then stays while it is still a column of the data, even when the
+  # Start page's columns or the data change. A value that differs from the
+  # default this tab last put in the picker is the user's own pick.
+  cur_pickers <- c("curate_token_var", "curate_tone_var", "curate_speaker_var",
+                   "curate_f0_var", "curate_item_var")
+  picks <- new.env(parent = emptyenv())
+  picks$offered <- list()
+  picks$user    <- list()
+  pick_col <- function(id, choices, default) {
+    picks$offered[id] <- list(default)
+    u <- picks$user[[id]]
+    if (!is.null(u) && u %in% choices) u else default
+  }
+  for (id in cur_pickers) local({
+    i <- id
+    observeEvent(input[[i]], {
+      v <- input[[i]]
+      picks$user[i] <- list(if (identical(v, picks$offered[[i]])) NULL else v)
+    })
+  })
+  # Another data source sets the tone picker afresh: the clustered data's
+  # tone column is `cluster`. (Before the sidebar is drawn again.)
+  picks$source <- NULL
+  observe({
+    src <- active_source()
+    if (!is.null(picks$source) && !identical(src, picks$source))
+      picks$user["curate_tone_var"] <- list(NULL)
+    picks$source <- src
+  }, priority = 10)
+
+  # The default of each picker for data `d` (NULL before an upload).
+  cur_defaults <- function(d) {
+    vars <- if (!is.null(d)) names(d) else "No dataset available"
+    tok  <- start_col(start_cols, "token")
+    scr  <- start_col(start_cols, "f0")
+    norm <- unlist(lapply(c("^f0_st$", "^f0_zscore$", "^f0_lz$", "^f0_norm"), grep,
+                          x = vars, ignore.case = TRUE, value = TRUE))
+    item <- lex_col()
+    list(
+      curate_token_var = if (!is.null(tok) && tok %in% vars) tok
+                         else guess_var(vars, var_patterns$token, 1),
+      curate_tone_var = if (identical(active_source(), "clustered") && "cluster" %in% vars)
+                          "cluster" else guess_var(vars, var_patterns$tone, 5),
+      curate_speaker_var = guess_var(vars, var_patterns$speaker, 4),
+      curate_f0_var = if (length(norm)) norm[1]
+                      else if (!is.null(scr) && scr %in% vars) scr
+                      else guess_var(vars, var_patterns$f0, 2),
+      curate_item_var = if (is.null(item)) "__none__" else item)
+  }
+
+  # The columns' names and types. The sidebar is drawn again only when these
+  # change (or the data source), not when only the rows change (a box on the
+  # Start page), so a change of rows keeps every setting. A reactiveVal
+  # signals only a real change.
+  cur_cols <- reactiveVal(NULL)
+  observe({
+    d <- dataset()
+    cur_cols(if (is.null(d)) NULL else list(vars = names(d), types = sapply(d, class)))
+  }, priority = 1)
+
+  # When the Start page's token or f0 column changes, a picker the user has
+  # not set follows it.
+  if (is.function(start_cols)) {
+    observeEvent(start_cols(), {
+      d <- dataset()
+      if (is.null(d)) return()
+      def <- cur_defaults(d)
+      for (id in c("curate_token_var", "curate_f0_var")) {
+        cur <- input[[id]]
+        u   <- picks$user[[id]]
+        if (is.null(cur) || (!is.null(u) && u %in% names(d))) next
+        picks$offered[id] <- list(def[[id]])
+        if (!identical(cur, def[[id]])) updateSelectInput(session, id, selected = def[[id]])
+      }
+    }, ignoreInit = TRUE)
+  }
+
+  # Under the f0 picker: a note when the column is not the one the Start
+  # page screens and still has rows without f0.
+  output$curate_f0_note <- renderUI({
+    screened_f0_note(dataset(), input$curate_f0_var, start_cols)
+  })
+
   # ---- sidebar: setup + curate actions ----
   output$ui_curate <- renderUI({
-    vars <- if (!is.null(dataset())) names(dataset()) else c("No dataset available")
-    data_types <- if (!is.null(dataset())) sapply(dataset(), class) else rep("NA", length(vars))
+    cols <- cur_cols()
+    vars <- if (!is.null(cols)) cols$vars else c("No dataset available")
+    data_types <- if (!is.null(cols)) cols$types else rep("NA", length(vars))
     var_types <- paste0(vars, " {", data_types, "}")
-    tone_default <- if (identical(active_source(), "clustered") && "cluster" %in% vars)
-                      "cluster" else guess_var(vars, var_patterns$tone, 5)
-    tone_choices <- if (!is.null(dataset()) && tone_default %in% names(dataset()))
-                      sort_tones(as.character(dataset()[[tone_default]]), natural = FALSE) else NULL
-    item_default <- lex_col(); if (is.null(item_default)) item_default <- "__none__"
+    def <- isolate(cur_defaults(dataset()))
+    sel <- function(id, choices = vars) pick_col(id, choices, def[[id]])
+    tone_default <- sel("curate_tone_var")
+    tone_choices <- isolate({
+      d <- dataset()
+      if (!is.null(d) && tone_default %in% names(d))
+        sort_tones(as.character(d[[tone_default]]), natural = FALSE) else NULL
+    })
     src_choices <- c("Uploaded data" = "uploaded")
     if (!is.null(.nd())) src_choices <- c(src_choices, "Normalised data" = "normalised")
     if (!is.null(.cd())) src_choices <- c(src_choices, "Clustered data" = "clustered")
@@ -282,21 +378,23 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
                    icon("wave-square"), " Using your normalised dataset."),
         selectInput("curate_token_var", "Token ID variable:",
                     choices = stats::setNames(vars, var_types),
-                    selected = guess_var(vars, var_patterns$token, 1)),
+                    selected = sel("curate_token_var")),
         selectInput("curate_tone_var", "Tone category variable:",
                     choices = stats::setNames(vars, var_types),
                     selected = tone_default),
         selectInput("curate_speaker_var", "Speaker variable:",
                     choices = stats::setNames(vars, var_types),
-                    selected = guess_var(vars, var_patterns$speaker, 4)),
+                    selected = sel("curate_speaker_var")),
         selectInput("curate_f0_var", "f0 variable:",
                     choices = stats::setNames(vars, var_types),
-                    selected = guess_var(vars, var_patterns$f0, 2)),
+                    selected = sel("curate_f0_var")),
         tags$div(style = "font-size: 0.72rem; color: #999; margin: -8px 0 10px 0;",
-                 "Defaults to your normalised f0 (e.g. semitones, z-score or log z-score) when available."),
+                 paste("Defaults to your normalised f0 (e.g. semitones, z-score or log z-score)",
+                       "when available, otherwise to the f0 variable the Start page screens.")),
+        uiOutput("curate_f0_note"),
         selectInput("curate_item_var", "Item / word variable (for facetting):",
                     choices = c("(none)" = "__none__", stats::setNames(vars, var_types)),
-                    selected = item_default),
+                    selected = sel("curate_item_var", c("__none__", vars))),
         tags$hr(),
         h5("Curate the selection"),
         uiOutput("curate_sel_count"),
@@ -331,7 +429,8 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
             downloadButton("curate_dl_annot", "Annotated CSV (all rows)")),
         tags$div(style = "color: #888; font-size: 0.72rem; margin-top: 4px;",
                  "Download the ", tags$strong("Annotated CSV"),
-                 " to save your curation, then re-upload it below to continue later."),
+                 " to save your curation, then re-upload it below to continue later. ",
+                 "All rows means the rows the Start page kept, excluded tokens included."),
         tags$div(style = "margin-top: 10px;",
           fileInput("curate_resume_file", "Resume from a saved Annotated CSV:",
                     accept = c(".csv", "text/csv"), width = "100%")),
@@ -429,7 +528,7 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
             "an extreme maximum / minimum for the speaker, an unusual overall level for the same speaker and",
             "tone (<em>&ldquo;level too high / low&rdquo;</em>), or frame-level jump artefacts. Level flags",
             "are natural variant candidates; jump and extreme-value flags more often mean pitch-tracking",
-            "errors, which you can repair in <strong>F0 Correction</strong> — or, when a token is beyond",
+            "errors, which you can repair in <strong>F0 Correction</strong>. When a token is beyond",
             "repair, select it here (the <strong>Flagged</strong> button grabs all flagged tokens in view)",
             "and exclude it. Flags are heuristic, so review them: a flagged token may have an atypical yet",
             "valid contour, and flags can miss patterns too."))),
@@ -489,6 +588,14 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
     } else { sub$.x <- sub[[time_guess[1]]]; xlab <- time_guess[1] }
 
     sub$.tok <- as.character(sub[[v$token]])
+    # One line per voiced run, so a token's line breaks at the gaps that
+    # voiced_run marks (where the Start page removed rows without f0, or the
+    # time steps show a gap) instead of joining the samples on either side.
+    # paste(), not interaction(), so a run that is NA stays a group of its own.
+    # Selection, click and hover stay keyed by customdata (the token), never
+    # by curveNumber: the traces can shift when a token's line splits.
+    sub$.grp <- if ("voiced_run" %in% names(sub)) paste(sub$.tok, sub$voiced_run, sep = "\r")
+                else sub$.tok
     flagged <- flagged_tokens(); selected <- rv_selection()
     sub$.status <- ifelse(sub$.tok %in% selected, "selected",
                    ifelse(sub$.tok %in% flagged, "flagged (Inspect)", "other"))
@@ -501,7 +608,7 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
       sub[[v$tone]] <- factor(sub[[v$tone]], levels = sort_tones(sub[[v$tone]], natural = FALSE))
 
     p <- ggplot2::ggplot(sub, ggplot2::aes(x = .data$.x, y = .data[[v$f0]],
-                                           group = .data$.tok, customdata = .data$.tok,
+                                           group = .data$.grp, customdata = .data$.tok,
                                            colour = .data$.status)) +
       ggplot2::geom_line(alpha = 0.7) +
       ggplot2::geom_point(size = 0.7, alpha = 0.45) +
@@ -613,7 +720,7 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
     sel_preview <- ""
     if (length(sel) > 0) {
       sel_preview <- paste(utils::head(sel, 8), collapse = ", ")
-      if (length(sel) > 8) sel_preview <- paste0(sel_preview, ", …")
+      if (length(sel) > 8) sel_preview <- paste0(sel_preview, ", \u2026")
     }
     sel_border <- if (length(sel) > 0) "#d9534f" else "#cfcfcf"
     sel_bg     <- if (length(sel) > 0) "#fdf3f2" else "#f7f7f7"
@@ -682,6 +789,8 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
   # A new upload starts a new curation: relabels and exclusions are keyed by
   # token, so carrying them over would re-apply them to a re-uploaded file
   # (e.g. a curated CSV) and overwrite its <tone>_original column.
+  # A change of rows on the Start page (data_version) keeps them: the tokens
+  # are the same, so the relabels and exclusions still apply.
   observeEvent(input$uploadfile, reset_curation(), ignoreInit = TRUE)
 
   # ---- publish analysis-ready curated data (keeps curate_note) ----
@@ -815,7 +924,7 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
                        type = "error", duration = 6); return() }
     v <- cvar()
     if (!(v$token %in% names(d)) || !(v$tone %in% names(d))) {
-      showNotification("Set the Token and Tone columns first, then resume.",
+      showNotification("Set the Token and Tone variables first, then resume.",
                        type = "error", duration = 6); return() }
 
     # Read the same way the dataset was read in Start (so token strings match).
@@ -853,7 +962,7 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
     in_data <- dd[[tcol]] %in% cur_key
     n_up <- nrow(dd); n_match <- sum(in_data)
     if (n_match == 0) {
-      showNotification(sprintf("None of the %d tokens in that CSV match the current dataset. Did you load the same dataset and pick the same Token column?", n_up),
+      showNotification(sprintf("None of the %d tokens in that CSV match the current dataset. Did you load the same dataset and pick the same Token variable?", n_up),
                        type = "error", duration = 12); return() }
     dd <- dd[in_data, , drop = FALSE]; tok <- dd[[tcol]]
 
@@ -949,7 +1058,9 @@ curate_ui <- function(input, output, session, dataset_in, normalised_data = NULL
           tags$span(class = "cr-btn", icon("download"), " Annotated CSV (all rows)"),
           " from the sidebar. That file is your save file: re-upload it under ",
           tags$span(class = "cr-chip", "Save & resume"),
-          " next time and your relabels, exclusions and notes come back."),
+          " next time and your relabels, exclusions and notes come back. It holds every row ",
+          "the Start page kept (so not the rows without f0 it removed), with the excluded ",
+          "tokens marked rather than left out."),
         tags$div(class = "cr-flow",
           tags$div(class = "cr-card",
             tags$div(class = "cr-card-title", icon("pen-to-square"), " Session 1: curate + save"),

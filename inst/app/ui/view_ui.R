@@ -52,8 +52,11 @@ output$ui_View <- renderUI({
 # Render the data table based on selected variables
 output$dataviewer <- DT::renderDataTable({
   req(input$view_vars)  # Ensure that variables are selected
+  # any_of(): a column can go between two draws of the menu, e.g. voiced_run
+  # when a Start-page box is unticked; the menu is drawn again right after.
   dat <- dataset() %>%
-    dplyr::select(all_of(input$view_vars))  # Subset the data based on selected variables
+    dplyr::select(dplyr::any_of(input$view_vars))  # Subset the data based on selected variables
+  req(ncol(dat) > 0)
 
   # Handle rounding of decimal places
   isInt <- sapply(dat, is.integer)  # Check for integer columns

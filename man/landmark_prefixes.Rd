@@ -8,7 +8,8 @@ landmark_prefixes(
   tier_names,
   all_tiers = tier_names,
   reserved = c("token", "time", "f0", "intensity", "f0_corrected", "f0_original",
-    "edited", "token_dropped", "n_missing", "has_gap", "point", "time_prop")
+    "edited", "token_dropped", "n_missing", "has_gap", "point", "time_prop",
+    "voiced_run")
 )
 }
 \arguments{
@@ -19,8 +20,9 @@ interval tiers of the corpus from \code{\link[=tg_interval_tiers]{tg_interval_ti
 depends only on this set, so pass the same one in every call. Names in
 \code{tier_names} but not in \code{all_tiers} are numbered after it.}
 
-\item{reserved}{Column names a tier must not take. Defaults to the columns
-of the f0 data.}
+\item{reserved}{Column names a tier must not take. Defaults to the
+columns that F0 Extraction, F0 Correction and the Start page write into
+the f0 data, \code{voiced_run} included.}
 }
 \value{
 A character vector of prefixes, named by \code{tier_names}.
@@ -47,7 +49,7 @@ tier whose name is already its own prefix keeps it, and the others are
 numbered in the byte order of their names. So tiers \code{syllable}, \code{Syllable}
 and \verb{syllable!} give \code{syllable}, \code{syllable_2} and \code{syllable_3}, and a tier
 named \code{time} gives \code{time_2}. Columns made later from a prefix (\code{p_t01},
-\code{p_tseq}, \code{p_f0_dur}) are kept apart too.
+\code{p_tseq}, \code{p_tbound}, \code{p_f0_dur}) are kept apart too.
 }
 \examples{
 landmark_prefixes(c("syllable", "Syllable (broad)", "time"))

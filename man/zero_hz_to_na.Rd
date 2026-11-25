@@ -21,8 +21,12 @@ least one; it is an empty integer vector when there were none.
 Pitch trackers write 0 Hz for unvoiced frames, where no pitch was
 measured. A 0 left in the data is read as a very low pitch: it pulls mean
 contours and fits towards 0, and gives \code{-Inf} in semitones. This sets 0 to
-\code{NA} in the f0 columns of \code{df}. The app does this to every CSV uploaded in
-the Start tab.
+\code{NA} in the f0 columns of \code{df}. The app's Start page does this to every
+CSV it reads. Its screen (\code{\link[=screen_f0_rows]{screen_f0_rows()}}) then counts the rows without
+f0 in the chosen f0 column, and a box removes them with
+\code{\link[=drop_rows_without_f0]{drop_rows_without_f0()}}. The box is ticked by default, except for files
+where every token has the same number of points and some token's first
+or last point has no f0.
 }
 \details{
 By default the f0 columns are found by name and by value. A column is
@@ -44,7 +48,11 @@ plausible range for f0 in Hz.
 
 Negative values, which some trackers use for unvoiced frames, are left
 as they are, and a column that has any is not used. Give \code{cols} to choose
-the columns yourself.
+the columns yourself. For a marker such as -1, or 0 in a column in Hz
+that is not found (such as \code{f0_rapt}), \code{\link[=suggest_unvoiced]{suggest_unvoiced()}} finds the
+values, and the \code{unvoiced} argument of \code{\link[=screen_f0_rows]{screen_f0_rows()}} and
+\code{\link[=drop_rows_without_f0]{drop_rows_without_f0()}} reads them as no f0. The Start page offers to
+read them as no f0.
 }
 \examples{
 df <- data.frame(token = "ma1", time = 1:5 / 100,
@@ -56,5 +64,7 @@ out$intensity   # unchanged
 attr(out, "zero_hz")
 }
 \seealso{
-\code{\link[=normalise_f0]{normalise_f0()}}, which also reads f0 of 0 or below as \code{NA}.
+\code{\link[=hz_f0_columns]{hz_f0_columns()}} for the columns used; \code{\link[=normalise_f0]{normalise_f0()}}, which
+also reads f0 of 0 or below as \code{NA}; \code{\link[=screen_f0_rows]{screen_f0_rows()}} and
+\code{\link[=drop_rows_without_f0]{drop_rows_without_f0()}} to run next.
 }

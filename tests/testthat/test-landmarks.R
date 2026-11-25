@@ -65,40 +65,412 @@ test_that("attach_landmarks is a no-op without tiers or token/time columns", {
   expect_identical(attach_landmarks(data.frame(a = 1), audio, "syllable"), data.frame(a = 1))
 })
 
-# ---------- normalise_time_landmarks -----------------------------------------
+# ---------- normalise_time_landmarks / normalise_time_token -----------------
 
-test_that("normalise_time_landmarks adds within-segment and sequential time", {
-  # syllable 1 over [0.0, 0.2], syllable 2 over [0.2, 0.6]
-  df <- data.frame(
-    time           = c(0.05, 0.10, 0.40),
-    syllable_start = c(0.0,  0.0,  0.2),
-    syllable_end   = c(0.2,  0.2,  0.6),
-    syllable_i     = c(1L,   1L,   2L)
-  )
+# Five disyllabic tokens on 10 ms frames: syllable 1 is [0.00, 0.20),
+# syllable 2 is [0.20, 0.40], with an unlabelled interval at each end.
+#   A: a voiceless onset, and a voiceless gap at the middle boundary
+#   B: a gap inside syllable 1
+#   C: syllable 2 has one f0 point
+#   D: syllable 2 has no f0
+#   E: f0 on every frame, also in the unlabelled intervals
+lm_token <- function(tok, f0_fun, na_at = integer(0)) {
+  t  <- round(seq(-0.045, 0.445, by = 0.01), 3)
+  f0 <- f0_fun(t)
+  f0[na_at] <- NA
+  sy <- ifelse(t < 0, 0L, ifelse(t < 0.2, 1L, ifelse(t <= 0.4, 2L, 0L)))
+  st <- c(-0.05, 0.00, 0.20)[sy + 1L]; st[t > 0.4] <- 0.40
+  en <- c(0.00, 0.20, 0.40)[sy + 1L];  en[t > 0.4] <- 0.45
+  lab <- c("", "S1", "S2")[sy + 1L];   lab[t > 0.4] <- ""
+  data.frame(token = tok, time = t, f0 = f0, syllable = lab,
+             syllable_start = st, syllable_end = en,
+             syllable_i = ifelse(lab == "", NA_integer_, sy),
+             stringsAsFactors = FALSE)
+}
+lm_fixture <- function() {
+  t <- round(seq(-0.045, 0.445, by = 0.01), 3)
+  w <- function(a, b) which(t >= a - 1e-9 & t <= b + 1e-9)
+  rbind(
+    lm_token("A", function(t) 200 + 100 * t, c(w(-0.05, 0.06), w(0.16, 0.26), w(0.39, 0.45))),
+    lm_token("B", function(t) 180 - 50 * t, c(w(-0.05, -0.001), w(0.09, 0.11), w(0.40, 0.45))),
+    lm_token("C", function(t) 220 + 0 * t, c(w(-0.05, 0.02), setdiff(w(0.20, 0.45), w(0.295, 0.295)))),
+    lm_token("D", function(t) 150 + 200 * t, c(w(-0.05, 0.03), w(0.17, 0.45))),
+    lm_token("E", function(t) 210 + 30 * sin(10 * t), integer(0)))
+}
+lm_axes <- function(d) {
+  normalise_time_token(normalise_time_landmarks(d, "time", "syllable"), "time", "token")
+}
+
+test_that("normalise_time_landmarks runs each syllable from its first f0 to its last", {
+  df <- data.frame(token = "w1", time = seq(0.01, 0.10, by = 0.01),
+                   f0 = c(NA, 200, 205, 210, NA, NA, 190, 185, 180, NA),
+                   syllable_start = rep(c(0, 0.05), each = 5),
+                   syllable_end   = rep(c(0.05, 0.11), each = 5),
+                   syllable_i     = rep(1:2, each = 5))
   out <- normalise_time_landmarks(df, "time", "syllable")
-  # within-segment 0-1
-  expect_equal(out$syllable_t01, c(0.25, 0.50, 0.50))
-  # sequential: segment 1 keeps 0-1, segment 2 shifted into 1-2
-  expect_equal(out$syllable_tseq, c(0.25, 0.50, 1.50))
+  expect_equal(out$syllable_t01, c(NA, 0, 0.5, 1, NA, NA, 0, 0.5, 1, NA))
+  # Stacked: the voiceless boundary takes no room, so both 1.0s meet there
+  expect_equal(out$syllable_tseq, c(NA, 0, 0.5, 1, NA, NA, 1, 1.5, 2, NA))
+  kept <- !is.na(df$f0)
+  expect_identical(normalise_time_landmarks(df[kept, ], "time", "syllable")$syllable_tseq,
+                   out$syllable_tseq[kept])
 })
 
-test_that("normalise_time_token rescales each token's time to 0-1", {
-  df <- data.frame(
-    token = c("a", "a", "a", "b", "b"),
-    time  = c(0.0, 0.5, 1.0, 2.0, 2.4)
-  )
+test_that("removing rows without f0 or reordering rows changes no axis", {
+  fx <- lm_fixture()
+  a  <- lm_axes(fx)
+  b  <- lm_axes(suppressMessages(drop_rows_without_f0(fx)))
+  k  <- !is.na(fx$f0)
+  set.seed(3)
+  o  <- sample(nrow(fx))
+  s  <- lm_axes(fx[o, ])[order(o), ]
+  for (cn in c("syllable_t01", "syllable_tseq", "syllable_tbound", "token_t01")) {
+    expect_identical(b[[cn]], a[[cn]][k], info = cn)
+    expect_identical(s[[cn]], a[[cn]], info = cn)
+  }
+  # Each syllable's first f0 sits at i - 1 and its last at i on _tseq
+  v <- a[k & !is.na(a$syllable_tseq), ]
+  lo <- tapply(v$syllable_tseq, list(v$token, v$syllable_i), min)
+  hi <- tapply(v$syllable_tseq, list(v$token, v$syllable_i), max)
+  for (tk in rownames(lo)) for (i in colnames(lo)) {
+    if (is.na(lo[tk, i])) next
+    expect_equal(c(lo[tk, i], hi[tk, i]), as.numeric(i) - c(1, 0), info = paste(tk, i))
+  }
+  expect_equal(sum(!is.na(lo)), 8L)           # C and D have no syllable 2 axis
+  # f0 in the unlabelled intervals (token E) is outside the tier
+  silence <- k & is.na(fx$syllable_i)
+  expect_equal(sum(silence), 10L)
+  expect_true(all(is.na(a$syllable_t01[silence])))
+  # A syllable with one f0 point (C) or none (D) has no span
+  expect_true(all(is.na(a$syllable_t01[a$token %in% c("C", "D") & a$syllable_i %in% 2])))
+  # Rows without f0 inside a span keep their place by time
+  expect_equal(sum(!k & is.finite(a$syllable_t01)), 2L)
+  expect_equal(sum(!k & is.finite(a$token_t01)), 21L)
+  # token_t01 runs from each token's first f0 to its last
+  expect_equal(as.vector(tapply(a$token_t01[k], a$token[k], min)), rep(0, 5))
+  expect_equal(as.vector(tapply(a$token_t01[k], a$token[k], max)), rep(1, 5))
+})
+
+test_that("tokens with the same boundaries are kept apart", {
+  tw <- data.frame(token = rep(c("x", "y"), each = 4),
+                   time = rep(c(0.1, 0.2, 0.3, 0.4), 2),
+                   f0 = c(NA, 200, 210, 220, 200, 205, 210, NA),
+                   syllable_start = 0, syllable_end = 0.5, syllable_i = 1L)
+  out <- normalise_time_landmarks(tw, "time", "syllable")
+  expect_equal(out$syllable_t01[out$token == "x"], c(NA, 0, 0.5, 1))
+  expect_equal(out$syllable_t01[out$token == "y"], c(0, 0.5, 1, NA))
+})
+
+test_that("0 counts as no f0 only in Hz", {
+  sg <- data.frame(token = "s", time = 1:6 / 100, f0_st = c(NA, -1, 0, 2, 0, NA),
+                   syllable_start = 0, syllable_end = 1, syllable_i = 1L)
+  expect_equal(normalise_time_landmarks(sg, "time", "syllable", f0 = "f0_st")$syllable_t01,
+               c(NA, 0, 1/3, 2/3, 1, NA))
+  hz <- data.frame(token = "h", time = 1:6 / 100, f0 = c(0, 210, 0, 220, 230, 0))
+  expect_equal(normalise_time_token(hz, "time", "token")$token_t01,
+               c(NA, 0, 1/3, 2/3, 1, NA))
+  # The same Hz rule in normalise_time_landmarks()
+  hz$syllable_start <- 0; hz$syllable_end <- 1; hz$syllable_i <- 1L
+  out <- normalise_time_landmarks(hz, "time", "syllable")
+  expect_equal(out$syllable_t01, c(NA, 0, 1/3, 2/3, 1, NA))
+  expect_equal(out$syllable_tseq, c(NA, 0, 1/3, 2/3, 1, NA))
+  # A column with negative markers is not read as Hz, so -1 counts as f0,
+  # as the docs say; set the markers to NA first
+  neg <- hz
+  neg$f0 <- c(-1, 210, 215, 220, 225, -1)
+  expect_identical(hz_f0_columns(neg["f0"]), character(0))
+  expect_equal(normalise_time_landmarks(neg, "time", "syllable")$syllable_t01, 0:5 / 5)
+  expect_equal(normalise_time_token(neg, "time", "token")$token_t01, 0:5 / 5)
+  neg$f0[neg$f0 < 0] <- NA
+  expect_equal(normalise_time_landmarks(neg, "time", "syllable")$syllable_t01,
+               c(NA, 0, 1/3, 2/3, 1, NA))
+})
+
+test_that("time in other units gives the same axis", {
+  fx <- lm_fixture()
+  ms <- fx
+  ms$time <- ms$time * 1000
+  a <- lm_axes(fx)
+  b <- suppressMessages(lm_axes(ms))   # _tbound: see below
+  expect_equal(b$syllable_t01, a$syllable_t01)
+  expect_equal(b$syllable_tseq, a$syllable_tseq)
+  expect_equal(b$token_t01, a$token_t01)
+  # _tbound reads the boundaries, so they go to ms too
+  expect_message(c1 <- lm_axes(ms), "same clock")
+  expect_true(all(is.na(c1$syllable_tbound[c1$token != "D"])))
+  ms$syllable_start <- ms$syllable_start * 1000
+  ms$syllable_end   <- ms$syllable_end * 1000
+  expect_silent(c2 <- normalise_time_landmarks(ms, "time", "syllable"))
+  expect_equal(c2$syllable_tbound, a$syllable_tbound)
+})
+
+test_that("missing columns are an error; no _i means no _tseq or _tbound", {
+  fx <- lm_fixture()
+  no_f0 <- fx[setdiff(names(fx), "f0")]
+  expect_error(normalise_time_landmarks(no_f0, "time", "syllable"),
+               "Column(s) not found in data: f0", fixed = TRUE)
+  expect_error(normalise_time_token(no_f0, "time", "token"),
+               "Column(s) not found in data: f0", fixed = TRUE)
+  expect_error(normalise_time_landmarks(fx, "time", "syllable", token = "word"),
+               "Column(s) not found in data: word", fixed = TRUE)
+  expect_error(normalise_time_landmarks(fx, "time", "rhyme"),
+               "rhyme_start, rhyme_end", fixed = TRUE)
+  expect_null(normalise_time_landmarks(NULL, "time", "syllable"))
+  no_i <- fx[setdiff(names(fx), "syllable_i")]
+  expect_message(out <- normalise_time_landmarks(no_i, "time", "syllable"),
+                 "No syllable_i column, so syllable_tseq and syllable_tbound are not added",
+                 fixed = TRUE)
+  expect_false(any(c("syllable_tseq", "syllable_tbound") %in% names(out)))
+  # Without _i, the label marks the labelled segments
+  expect_equal(out$syllable_t01, lm_axes(fx)$syllable_t01)
+})
+
+test_that("F0 Correction output: the default f0 says to pass f0_corrected", {
+  fx <- lm_fixture()
+  fx$f0_corrected <- fx$f0
+  fx$f0_corrected[fx$token == "E" & fx$time < 0.05] <- NA
+  expect_message(normalise_time_token(fx, "time", "token"), "f0_corrected")
+  expect_message(normalise_time_landmarks(fx, "time", "syllable"), "f0_corrected")
+  expect_silent(out <- normalise_time_token(fx, "time", "token", f0 = "f0_corrected"))
+  e <- out[out$token == "E", ]
+  expect_equal(e$token_t01[e$time == 0.055], 0)
+})
+
+test_that("normalise_time_token runs each token from its first f0 to its last", {
+  df <- data.frame(token = rep(c("a", "b"), c(6, 5)),
+                   time  = c(0:5, 0:4) / 100,
+                   f0    = c(NA, 210, 215, NA, 220, NA, 180, 185, 190, 195, NA))
   out <- normalise_time_token(df, "time", "token")
-  expect_equal(out$token_t01, c(0, 0.5, 1, 0, 1))   # per-token min->0, max->1
-  expect_identical(normalise_time_token(df, "time", "nope"), df)  # no-op, missing col
+  expect_equal(out$token_t01, c(NA, 0, 1/3, 2/3, 1, NA, 0, 1/3, 2/3, 1, NA))
+  # A token with f0 at one time has no span; rows with no token get NA
+  df2 <- data.frame(token = c("c", "c", "c", NA, NA, NA),
+                    time  = c(0, 0.01, 0.02, 0, 0.01, 0.02),
+                    f0    = c(NA, 200, NA, 190, 195, 200))
+  expect_true(all(is.na(normalise_time_token(df2, "time", "token")$token_t01)))
+  # The fits' rescale treats the rows with no token as one token of their
+  # own, as the docs say, while token_t01 is NA on them
+  expect_equal(resolve_time_norm(df2, "time", "token", f0 = "f0")$time_norm,
+               c(NA, 0.5, NA, 0, 0.5, 1))
+  # Factor tokens and factor times are read by value
+  df3 <- df
+  df3$token <- factor(df3$token)
+  df3$time  <- factor(df3$time)
+  expect_equal(normalise_time_token(df3, "time", "token")$token_t01, out$token_t01)
 })
 
-test_that("normalise_time_landmarks clamps to 0-1 and is a no-op when columns missing", {
-  df <- data.frame(time = c(-1, 5), syllable_start = c(0, 0), syllable_end = c(1, 1))
-  out <- normalise_time_landmarks(df, "time", "syllable")
-  expect_equal(out$syllable_t01, c(0, 1))                 # clamped
-  expect_equal(out$syllable_tseq, c(0, 1))                # no _i -> equals t01
-  expect_identical(normalise_time_landmarks(data.frame(a = 1), "time", "syllable"),
-                   data.frame(a = 1))
+test_that("a word tier gives token_t01 when all f0 lies inside the word", {
+  t  <- seq(0, 0.5, by = 0.01)
+  f0 <- ifelse(t >= 0.08 & t <= 0.42, 200 - 80 * t, NA)
+  f0[t %in% c(0.20, 0.21)] <- NA              # a voiceless stop inside the word
+  inside <- t >= 0.05 & t < 0.45
+  df <- data.frame(token = "w", time = t, f0 = f0,
+                   word = ifelse(inside, "pata", ""),
+                   word_start = ifelse(inside, 0.05, ifelse(t < 0.05, 0, 0.45)),
+                   word_end   = ifelse(inside, 0.45, ifelse(t < 0.05, 0.05, 0.5)),
+                   word_i     = ifelse(inside, 1L, NA_integer_))
+  out <- normalise_time_token(normalise_time_landmarks(df, "time", "word"), "time", "token")
+  k <- !is.na(df$f0)
+  expect_equal(out$word_t01[k], out$token_t01[k])
+  expect_equal(out$word_tseq[k], out$token_t01[k])
+  expect_identical(out$word_tbound, out$word_tseq)
+  expect_equal(range(out$token_t01[k]), c(0, 1))
+})
+
+# ---------- <set>_tbound -------------------------------------------------------
+
+# One token, two syllables on 10 ms frames: syllable 1 has f0 from 0.10 to
+# 0.30 s, the TextGrid boundary is at 0.31 s, syllable 2 has f0 from 0.38 to
+# 0.60 s. The tier runs from 0.05 to 0.65 s.
+tb_two <- function(tok = "A", s1 = c(0.10, 0.30), s2 = c(0.38, 0.60), b = 0.31) {
+  t  <- round(seq(0.06, 0.64, by = 0.01), 3)
+  on <- function(r) t >= r[1] - 1e-9 & t <= r[2] + 1e-9
+  in1 <- t < b
+  data.frame(token = tok, time = t, f0 = ifelse(on(s1) | on(s2), 200 + 100 * t, NA),
+             syllable = ifelse(in1, "S1", "S2"),
+             syllable_start = ifelse(in1, 0.05, b), syllable_end = ifelse(in1, b, 0.65),
+             syllable_i = ifelse(in1, 1L, 2L), stringsAsFactors = FALSE)
+}
+# Three syllables of 0.2 s on 10 ms frames (times 0.005, 0.015, ...), with
+# boundaries at 0.2 and 0.4 s. `voiced` gives the stretch with f0 in each
+# syllable, or NULL for a syllable with no f0.
+tb_three <- function(tok, voiced) {
+  t  <- round(seq(0.005, 0.595, by = 0.01), 3)
+  i  <- findInterval(t, c(0, 0.2, 0.4))
+  f0 <- rep(NA_real_, length(t))
+  for (k in seq_along(voiced)) {
+    if (is.null(voiced[[k]])) next
+    w <- i == k & t >= voiced[[k]][1] - 1e-9 & t <= voiced[[k]][2] + 1e-9
+    f0[w] <- 200 + 40 * k + 100 * t[w]
+  }
+  data.frame(token = tok, time = t, f0 = f0, syllable = paste0("S", i),
+             syllable_start = (i - 1) * 0.2, syllable_end = i * 0.2,
+             syllable_i = i, stringsAsFactors = FALSE)
+}
+tb_fixture <- function() {
+  rbind(tb_two("A"),
+        tb_two("B", s1 = c(0.08, 0.29), s2 = c(0.33, 0.62), b = 0.31),
+        tb_three("first_none", list(NULL, c(0.255, 0.345), c(0.455, 0.545))),
+        tb_three("mid_none",   list(c(0.055, 0.155), NULL, c(0.455, 0.545))),
+        tb_three("one_s1",     list(c(0.055, 0.155), NULL, NULL)),
+        tb_three("one_s2",     list(NULL, c(0.255, 0.345), NULL)),
+        tb_three("lone",       list(c(0.105, 0.105), c(0.205, 0.395), NULL)),
+        tb_three("single",     list(NULL, c(0.305, 0.305), NULL)))
+}
+
+test_that("<set>_tbound: 0 at the first f0, 1 at the boundary, 2 at the last f0", {
+  out <- normalise_time_token(normalise_time_landmarks(tb_two(), "time", "syllable"),
+                              "time", "token")
+  r <- match(c(0.10, 0.30, 0.31, 0.38, 0.60), out$time)
+  expect_equal(out$syllable_tbound[r],
+               c(0, (0.30 - 0.10) / (0.31 - 0.10), 1, 1 + (0.38 - 0.31) / (0.60 - 0.31), 2))
+  expect_equal(round(out$syllable_tbound[r], 3), c(0, 0.952, 1, 1.241, 2))
+  # Exactly 0, 1 and 2 at the first f0, the boundary and the last f0
+  expect_identical(out$syllable_tbound[r[c(1, 3, 5)]], c(0, 1, 2))
+  # The other axes on the same rows (the boundary row has no f0)
+  expect_equal(out$syllable_tseq[r[-3]], c(0, 1, 1, 2))
+  expect_equal(out$token_t01[r[-3]], c(0, 0.4, 0.56, 1))
+  # NA before the first f0 and after the last; the gap keeps its room
+  expect_true(all(is.na(out$syllable_tbound[out$time < 0.10 | out$time > 0.60])))
+  gap <- out$time > 0.30 & out$time < 0.38
+  expect_true(all(out$syllable_tbound[gap] > 0.952 & out$syllable_tbound[gap] < 1.241))
+  v <- out$syllable_tbound[!is.na(out$syllable_tbound)]
+  expect_false(is.unsorted(v, strictly = TRUE))
+})
+
+test_that("<set>_tbound does not change with rows without f0 removed, rows reordered or ms", {
+  fx <- tb_fixture()
+  a  <- normalise_time_landmarks(fx, "time", "syllable")
+  k  <- !is.na(fx$f0)
+  b  <- normalise_time_landmarks(fx[k, ], "time", "syllable")
+  expect_identical(b$syllable_tbound, a$syllable_tbound[k])
+  set.seed(11)
+  o <- sample(nrow(fx))
+  s <- normalise_time_landmarks(fx[o, ], "time", "syllable")[order(o), ]
+  expect_identical(s$syllable_tbound, a$syllable_tbound)
+  ms <- fx
+  for (cn in c("time", "syllable_start", "syllable_end")) ms[[cn]] <- ms[[cn]] * 1000
+  expect_silent(m <- normalise_time_landmarks(ms, "time", "syllable"))
+  expect_equal(m$syllable_tbound, a$syllable_tbound)
+  # _t01 and _tseq are as before
+  expect_identical(a$syllable_tseq, (a$syllable_i - 1L) + a$syllable_t01)
+  # Within each token the values rise with time
+  for (tk in unique(a$token)) {
+    v <- a$syllable_tbound[a$token == tk]
+    expect_false(is.unsorted(v[!is.na(v)]), info = tk)
+  }
+})
+
+test_that("<set>_tbound with a syllable without f0, or f0 in one syllable only", {
+  a <- normalise_time_landmarks(tb_fixture(), "time", "syllable")
+  g <- function(tk) a[a$token == tk, ]
+  # First syllable with no f0: syllable 2 is the first, and its first f0 is 1
+  x <- g("first_none")
+  expect_true(all(is.na(x$syllable_tbound[x$syllable_i == 1])))
+  expect_equal(x$syllable_tbound[x$time == 0.255], 1)
+  expect_equal(x$syllable_tbound[x$time == 0.395], 1 + (0.395 - 0.255) / (0.4 - 0.255))
+  expect_equal(x$syllable_tbound[x$time == 0.405], 2 + 0.005 / (0.545 - 0.4))
+  expect_equal(range(x$syllable_tbound, na.rm = TRUE), c(1, 3))
+  # A middle syllable with no f0 runs from boundary to boundary
+  y <- g("mid_none")
+  s2 <- y$syllable_i == 2
+  expect_equal(y$syllable_tbound[s2], 1 + (y$time[s2] - 0.2) / 0.2)
+  expect_equal(y$syllable_tbound[y$time == 0.055], 0)
+  expect_equal(y$syllable_tbound[y$time == 0.545], 3)
+  expect_equal(y$syllable_tbound[y$time == 0.155], (0.155 - 0.055) / (0.2 - 0.055))
+  # f0 in one syllable only: the same as _tseq. With f0 at one time only
+  # the span is empty, so every row is NA (not NaN)
+  for (tk in c("one_s1", "one_s2", "single")) {
+    z <- g(tk)
+    expect_identical(z$syllable_tbound, z$syllable_tseq, info = tk)
+  }
+  expect_identical(g("single")$syllable_tbound, rep(NA_real_, 60))
+  expect_equal(range(g("one_s2")$syllable_tbound, na.rm = TRUE), c(1, 2))
+  # A first syllable with f0 at one time still runs to its boundary
+  l <- g("lone")
+  expect_true(all(is.na(l$syllable_tseq[l$syllable_i == 1])))
+  expect_equal(l$syllable_tbound[l$syllable_i == 1 & l$time >= 0.105],
+               (c(0.105, 0.115, 0.125, 0.135, 0.145, 0.155, 0.165, 0.175, 0.185, 0.195) - 0.105) /
+                 (0.2 - 0.105))
+  expect_equal(l$syllable_tbound[l$time == 0.395], 2)
+})
+
+test_that("<set>_tbound: empty-label intervals, intervals that do not touch, no token", {
+  # Syllable 1 [0.05, 0.20], a pause [0.20, 0.26] with an empty label,
+  # syllable 2 [0.26, 0.45]. f0 runs on in the pause and after the tier.
+  t  <- round(seq(0.06, 0.50, by = 0.01), 3)
+  i  <- ifelse(t <= 0.20, 1L, ifelse(t < 0.26, NA, ifelse(t <= 0.45, 2L, NA)))
+  d  <- data.frame(token = "p", time = t, f0 = 200 + 50 * t,
+                   syllable = ifelse(is.na(i), "", paste0("S", i)),
+                   syllable_start = ifelse(is.na(i), ifelse(t < 0.26, 0.20, 0.45),
+                                           ifelse(i == 1, 0.05, 0.26)),
+                   syllable_end = ifelse(is.na(i), ifelse(t < 0.26, 0.26, 0.50),
+                                         ifelse(i == 1, 0.20, 0.45)),
+                   syllable_i = i, stringsAsFactors = FALSE)
+  out <- normalise_time_landmarks(d, "time", "syllable")
+  expect_true(all(is.na(out$syllable_tbound[is.na(i)])))
+  # Both ends of the pause sit at 1: it takes no room
+  expect_identical(out$syllable_tbound[t %in% c(0.20, 0.26)], c(1, 1))
+  expect_equal(out$syllable_tbound[t == 0.06], 0)
+  expect_equal(out$syllable_tbound[t == 0.45], 2)
+  expect_equal(out$syllable_tbound[t == 0.13], (0.13 - 0.06) / (0.20 - 0.06))
+  # Rows with no token or no time get NA, and the rest of the token keeps
+  # its values
+  d2 <- d
+  d2$token[t == 0.10] <- NA
+  d2$time[t == 0.12]  <- NA
+  out2 <- normalise_time_landmarks(d2, "time", "syllable")
+  expect_true(all(is.na(out2$syllable_tbound[t %in% c(0.10, 0.12)])))
+  keep <- !t %in% c(0.10, 0.12)
+  expect_identical(out2$syllable_tbound[keep], out$syllable_tbound[keep])
+})
+
+test_that("<set>_tbound needs time and the boundaries on the same clock", {
+  fx <- rbind(tb_two("A"), tb_two("B"), tb_three("one_s1", list(c(0.055, 0.155), NULL, NULL)))
+  good <- normalise_time_landmarks(fx, "time", "syllable")
+  # Token A in ms, its boundaries still in seconds; one_s1 too, but with f0
+  # in one syllable only it reads no boundary
+  ms <- fx
+  w  <- ms$token %in% c("A", "one_s1")
+  ms$time[w] <- ms$time[w] * 1000
+  expect_message(out <- normalise_time_landmarks(ms, "time", "syllable"),
+                 "syllable_tbound is NA in 1 token(s)", fixed = TRUE)
+  expect_message(normalise_time_landmarks(ms, "time", "syllable"), "same clock")
+  expect_true(all(is.na(out$syllable_tbound[out$token == "A"])))
+  expect_identical(out$syllable_tbound[out$token == "B"],
+                   good$syllable_tbound[good$token == "B"])
+  expect_equal(out$syllable_tbound[out$token == "one_s1"],
+               good$syllable_tbound[good$token == "one_s1"])
+  # _t01 and _tseq only read the order and spacing of time
+  expect_equal(out$syllable_tseq, good$syllable_tseq)
+  # Time counted from the token's start, with the file's boundaries
+  sh <- fx
+  sh$time[sh$token == "B"] <- sh$time[sh$token == "B"] - 0.05
+  expect_message(out <- normalise_time_landmarks(sh, "time", "syllable"), "1 token(s)",
+                 fixed = TRUE)
+  expect_true(all(is.na(out$syllable_tbound[out$token == "B"])))
+  # Rounding: a row a hair outside its interval is not another clock
+  hair <- fx
+  hair$syllable_end[hair$token == "A" & hair$syllable_i == 1] <- 0.31 - 1e-12
+  hair$time[hair$token == "A" & hair$time == 0.30] <- 0.31 - 1e-13
+  expect_silent(out <- normalise_time_landmarks(hair, "time", "syllable"))
+  expect_equal(range(out$syllable_tbound[out$token == "A"], na.rm = TRUE), c(0, 2))
+  # In ms, a row 1e-7 ms outside its interval is past 1e-9 but well inside a
+  # millionth of the token's time range (580 ms): still the same clock
+  hms <- fx
+  for (cn in c("time", "syllable_start", "syllable_end")) hms[[cn]] <- hms[[cn]] * 1000
+  hms$syllable_end[hms$token == "A" & hms$syllable_i == 1] <- 300 - 1e-7
+  expect_silent(out <- normalise_time_landmarks(hms, "time", "syllable"))
+  expect_equal(range(out$syllable_tbound[out$token == "A"], na.rm = TRUE), c(0, 2))
+  # The tolerance is per token: token B far along the file's clock does not
+  # widen it for token A, whose row is 0.1 ms outside its interval
+  far <- fx
+  wB  <- far$token == "B"
+  for (cn in c("time", "syllable_start", "syllable_end")) far[[cn]][wB] <- far[[cn]][wB] + 1000
+  far$syllable_end[far$token == "A" & far$syllable_i == 1] <- 0.30 - 1e-4
+  expect_message(out <- normalise_time_landmarks(far, "time", "syllable"), "1 token(s)",
+                 fixed = TRUE)
+  expect_true(all(is.na(out$syllable_tbound[out$token == "A"])))
+  expect_equal(range(out$syllable_tbound[out$token == "B"], na.rm = TRUE), c(0, 2))
 })
 
 # ---------- ipa_vowel_label --------------------------------------------------
@@ -641,6 +1013,34 @@ test_that("tiers named after core columns get _2 and leave them intact", {
   expect_equal(out$f0_2, c("3a", "3b", ""))
   expect_identical(attr(out, "renamed_tiers"),
                    c(time = "time_2", token = "token_2", f0 = "f0_2"))
+})
+
+test_that("a tier named like another tier's axis column does not take it", {
+  # syllable_t01, syllable_tseq and syllable_tbound belong to tier syllable
+  for (sfx in c("_t01", "_tseq", "_tbound", "_f0_dur")) {
+    nm <- paste0("syllable", sfx)
+    expect_identical(unname(landmark_prefixes(c(nm, "syllable"))),
+                     c(paste0(nm, "_2"), "syllable"), info = sfx)
+  }
+  expect_identical(unname(landmark_prefixes("syllable_tbound")), "syllable_tbound")
+})
+
+test_that("a tier named voiced_run leaves the voiced_run column intact", {
+  # drop_rows_without_f0() adds voiced_run, so a tier must not take it
+  expect_true("voiced_run" %in% eval(formals(landmark_prefixes)$reserved))
+  expect_identical(landmark_prefixes(c("voiced_run", "Voiced run")),
+                   c(voiced_run = "voiced_run_2",
+                     "Voiced run" = "voiced_run_3"))
+  # a tier named voiced keeps its name: none of its columns is voiced_run
+  expect_identical(landmark_prefixes("voiced"), c(voiced = "voiced"))
+  skip_if_not_installed("rPraat")
+  f <- tg_with_tiers("voiced_run")
+  df <- data.frame(token = "w1", time = c(0.2, 0.45, 0.7),
+                   f0 = c(120, 130, 140), voiced_run = 1L)
+  out <- attach_landmarks(df, lm_audio(f), "voiced_run")
+  expect_identical(out$voiced_run, df$voiced_run)
+  expect_equal(out$voiced_run_2, c("1a", "1b", ""))
+  expect_identical(attr(out, "renamed_tiers"), c(voiced_run = "voiced_run_2"))
 })
 
 test_that("ASCII tier names keep the column names of earlier versions", {

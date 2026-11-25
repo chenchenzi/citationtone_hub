@@ -8,9 +8,9 @@
 #'
 #' @section Online app:
 #' The hosted version of the app is available at
-#' <https://chenzixu.shinyapps.io/shinytone/>. A local launcher
-#' (`run_app()`) will be added in a future release so the same UI can be
-#' served offline once the package is installed.
+#' <https://chenzixu.shinyapps.io/shinytone/>. Run the same UI locally with
+#' [run_app()]: it has no upload limits, and recordings stay on your
+#' machine.
 #'
 #' @section Programmatic API:
 #' Standalone analytical functions (`normalise_f0()`, `fit_gca()`,

@@ -58,6 +58,12 @@ names).
 tables).
 \item \code{time_prenormalised}: logical; was the time column used as-is
 because it was already normalised to \verb{[0, 1]}?
+\item \code{time_coverage}: per tone, the first and last normalised time over the
+rows the model fits, as a data frame with \code{tone}, \code{t_first} and
+\code{t_last}. On a rescaled axis every tone runs from 0 to 1. On a time
+column used as it is, such as \code{time_prop} with no f0 at an end point, a
+tone can stop short of 0 or 1, and \code{\link[=predict_gca]{predict_gca()}} then extrapolates
+its curve to the ends.
 \item \code{convergence_warning}: \code{NULL} or the captured warning message.
 }
 }
@@ -79,15 +85,28 @@ directly.
 \details{
 \subsection{What the function does internally}{
 \enumerate{
-\item Within each token, normalise the time axis to \verb{[0, 1]}. If the time
+\item Within each token, normalise the time axis to \verb{[0, 1]}, from its first
+f0 (0) to its last f0 (1). If the time
 column is \emph{already} normalised (e.g. \code{token_t01} from
 \code{\link[=normalise_time_token]{normalise_time_token()}}), it is detected with
 \code{\link[=time_already_normalised]{time_already_normalised()}} and used as-is, so tokens whose samples do
 not span the full unit interval are not stretched a second time;
-override with \code{time_normalised}.
-\item Build orthogonal polynomial terms \code{ot1}, \code{ot2}, ..., \code{otK} on the
-normalised time using \code{\link[stats:poly]{stats::poly()}}, caching the basis
-coefficients so that \code{\link[=predict_gca]{predict_gca()}} can reuse them.
+override with \code{time_normalised}. A \verb{<tier>_tseq} (syllables in
+sequence) or \verb{<tier>_tbound} (in sequence, gap kept) is rescaled per
+token too: a token whose first or last
+syllable has no values on the axis (on a \verb{<tier>_tseq}, f0 at fewer
+than two times; on a \verb{<tier>_tbound}, no f0) is stretched, and its
+other syllables fill 0 to 1.
+\item Keep the rows the model fits: a finite normalised time, f0 (a
+finite value, above 0 in a column in Hz that \code{\link[=hz_f0_columns]{hz_f0_columns()}}
+finds) and a tone, and a speaker and item where the model has a term
+for them. Build orthogonal polynomial terms
+\code{ot1}, \code{ot2}, ..., \code{otK} on the normalised time of these rows using
+\code{\link[stats:poly]{stats::poly()}}, caching the basis coefficients so that
+\code{\link[=predict_gca]{predict_gca()}} can reuse them. Rows without f0 inside a token then
+leave the coefficients unchanged, and rows with no time (a landmark
+axis outside its tier, or outside a segment's first-to-last f0) are
+left out.
 \item Construct an \code{lmer} formula of the form
 \verb{f0 ~ (ot1 + ... + otK) * tone + (random effects)} using the
 options below to decide which random effects to include.

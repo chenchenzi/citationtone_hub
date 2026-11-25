@@ -164,3 +164,135 @@ test_that("input validation errors are raised", {
   expect_error(cluster_f0(f, method = "kmeans", k = 1), "between 2")
   expect_error(cluster_agreement(1:3, 1:4), "same length")
 })
+
+test_that("cluster_features: token-level values do not change when rows without f0 are removed or rows are reordered", {
+  # A tone tier from a TextGrid: "" in the silences at both edges, the tone
+  # inside, and a stray second label. Rows without f0 at the edges and inside.
+  d <- make_synth(n_per = 4, np = 20)
+  d$tone_tier <- d$tone
+  d$speaker   <- ifelse(d$token %in% c("tk001", "tk005"), "s2", "s1")
+  n_tok <- length(unique(d$token))
+  pos <- stats::ave(seq_len(nrow(d)), d$token, FUN = seq_along)
+  d$f0[pos %in% c(1:3, 10, 19:20)] <- NA
+  d$tone_tier[pos %in% c(1:4, 18:20)] <- ""
+  d$tone_tier[pos == 6] <- "other"
+  d$speaker[pos == 1] <- "s9"                     # first row only
+  expect_false(all(tapply(d$tone_tier, d$token, function(x) length(unique(x)) == 1)))
+
+  cf <- function(x) {
+    m <- cluster_features(x, f0 = "f0", token = "token", time = "time",
+                          speaker = "speaker", tone = "tone_tier",
+                          n_points = 10)$meta
+    m <- m[order(m$token), ]
+    rownames(m) <- NULL
+    m
+  }
+  raw  <- cf(d)
+  nona <- cf(d[!is.na(d$f0), ])
+  set.seed(3)
+  shuf <- cf(d[sample(nrow(d)), ])
+
+  expect_equal(nrow(raw), n_tok)
+  expect_identical(raw$tone, ifelse(raw$token <= "tk004", "rising",
+                                    ifelse(raw$token <= "tk008", "falling", "level")))
+  expect_identical(raw$speaker, ifelse(raw$token %in% c("tk001", "tk005"), "s2", "s1"))
+  expect_identical(nona, raw)
+  expect_identical(shuf, raw)
+})
+
+test_that("cluster_features: speaker and tone stay optional", {
+  d <- make_synth(n_per = 3, np = 12)
+  f <- cluster_features(d, f0 = "f0", n_points = 8)
+  expect_identical(names(f$meta), "token")
+  f <- cluster_features(d, f0 = "f0", n_points = 8, tone = "tone")
+  expect_identical(names(f$meta), c("token", "tone"))
+  f <- cluster_features(d, f0 = "f0", n_points = 8, speaker = "nope", tone = "tone")
+  expect_identical(names(f$meta), c("token", "tone"))
+})
+
+test_that("cluster_features never averages two rows at a syllable boundary", {
+  # T4 + T1 disyllables on syllable_tseq: syllable 1 falls to 150 Hz, a
+  # voiceless closure follows, and syllable 2 is level at 240 Hz. Both
+  # syllables have a row at 1; a blend of the two (195 Hz) is neither.
+  mk <- function(tok) {
+    t  <- seq(0, 0.40, by = 0.01)
+    s1 <- t < 0.20
+    f0 <- ifelse(s1, 250 - 100 * (t / 0.17), 240)
+    f0[t > 0.17 & t < 0.23] <- NA
+    data.frame(token = tok, time = t, f0 = f0,
+               syllable_start = ifelse(s1, 0, 0.20),
+               syllable_end = ifelse(s1, 0.20, 0.41),
+               syllable_i = ifelse(s1, 1L, 2L))
+  }
+  d <- normalise_time_landmarks(do.call(rbind, lapply(paste0("w", 1:4), mk)),
+                                "time", "syllable")
+  f <- cluster_features(d, f0 = "f0", token = "token", time = "syllable_tseq",
+                        n_points = 21, features = "points")
+  # Point 11 is at 1: the next syllable's first f0
+  expect_equal(unname(f$contours[, 11]), rep(240, 4))
+  # Point 10, at 0.9, is syllable 1 only
+  expect_equal(unname(f$contours[, 10]), rep(250 - 100 * (0.9 * 0.17) / 0.17, 4))
+  # The syllable is read from syllable_t01 or syllable_i, so the row order
+  # does not matter
+  set.seed(5)
+  for (x in list(d[nrow(d):1, ], d[sample(nrow(d)), ])) {
+    g <- cluster_features(x, f0 = "f0", token = "token", time = "syllable_tseq",
+                          n_points = 21, features = "points")
+    expect_equal(g$contours[rownames(f$contours), ], f$contours)
+  }
+  x <- d[sample(nrow(d)), ]
+  x$syllable_t01 <- NULL
+  g <- cluster_features(x, f0 = "f0", token = "token", time = "syllable_tseq",
+                        n_points = 21, features = "points")
+  expect_equal(g$contours[rownames(f$contours), ], f$contours)
+})
+
+test_that("cluster_features on a <tier>_tbound runs from the first f0 to the last", {
+  # Two intervals that do not touch, with a row with f0 on each end of the
+  # pause, so both sit at 1 on syllable_tbound: syllable 2's is used there
+  mk <- function(tok) {
+    t <- c(seq(0.06, 0.18, by = 0.02), seq(0.24, 0.40, by = 0.02))
+    s1 <- t < 0.2
+    data.frame(token = tok, time = t,
+               f0 = ifelse(s1, 250 - 500 * (t - 0.06), 240),
+               syllable_start = ifelse(s1, 0.06, 0.24),
+               syllable_end = ifelse(s1, 0.18, 0.40),
+               syllable_i = ifelse(s1, 1L, 2L))
+  }
+  d <- normalise_time_landmarks(rbind(mk("a"), mk("b")), "time", "syllable")
+  expect_equal(sum(d$syllable_tbound == 1), 4L)   # two rows at 1 per token
+  f <- cluster_features(d, time = "syllable_tbound", n_points = 21, features = "points")
+  # Point 11 is at 1
+  expect_equal(unname(f$contours[, 11]), rep(240, 2))
+  expect_equal(unname(f$contours[, 1]), rep(250, 2))
+  set.seed(9)
+  g <- cluster_features(d[sample(nrow(d)), ], time = "syllable_tbound", n_points = 21,
+                        features = "points")
+  expect_equal(g$contours[rownames(f$contours), ], f$contours)
+})
+
+test_that("cluster_features averages two recordings that share a token name", {
+  tp <- seq(0, 1, by = 0.05)
+  d <- rbind(data.frame(token = "dup", time_prop = tp, f0 = 200 + 40 * tp),
+             data.frame(token = "dup", time_prop = tp, f0 = 240 - 40 * tp),
+             data.frame(token = "one", time_prop = tp, f0 = 200 + 40 * tp))
+  expect_message(f <- cluster_features(d, time = "time_prop", n_points = 41),
+                 "1 token(s) (dup)", fixed = TRUE)
+  expect_equal(unname(f$contours["dup", ]), rep(220, 41))
+  expect_no_message(cluster_features(d[d$token == "one", ], time = "time_prop"))
+})
+
+test_that("cluster_features skips 0 Hz as no f0, as the time axes do", {
+  mk <- function(tok, base) data.frame(token = tok, time = 0:10 / 100,
+                                       f0 = c(0, base + 0:8, 0))
+  d <- rbind(mk("a", 200), mk("b", 210))
+  d$f0[d$token == "a" & d$time == 0.05] <- 0       # a 0 Hz frame inside token a
+  f <- cluster_features(d, n_points = 11)
+  # From the first f0 above 0 to the last; the inner 0 is skipped
+  expect_equal(unname(f$contours["a", ]), seq(200, 208, length.out = 11))
+  expect_equal(f$contours, cluster_features(d[d$f0 > 0, ], n_points = 11)$contours)
+  # In a column that is not in Hz, 0 is a value
+  d$f0_st <- c(rep(0, 11), 1:11)
+  expect_equal(unname(cluster_features(d, f0 = "f0_st", n_points = 11)$contours["a", ]),
+               rep(0, 11))
+})

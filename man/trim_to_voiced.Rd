@@ -4,15 +4,27 @@
 \alias{trim_to_voiced}
 \title{Trim each token to its voiced region}
 \usage{
-trim_to_voiced(df, token = "token", time = "time", f0 = "f0", min_run = 2)
+trim_to_voiced(
+  df,
+  token = "token",
+  time = "time",
+  f0 = "f0",
+  min_run = 2,
+  run = "voiced_run"
+)
 }
 \arguments{
 \item{df}{Long-format f0 data frame.}
 
-\item{token, time, f0}{Column names. Defaults \code{"token"}, \code{"time"}, \code{"f0"}.}
+\item{token, time, f0}{Column names. Defaults \code{"token"}, \code{"time"}, \code{"f0"}.
+\code{time} must be the real time column, not a 0-1 axis.}
 
-\item{min_run}{Minimum number of consecutive voiced frames an edge anchor
-must belong to. Default \code{2}.}
+\item{min_run}{Minimum number of voiced frames in a row that an edge
+anchor must belong to. Default \code{2}.}
+
+\item{run}{Name of a column that numbers the runs of f0 within each token,
+such as \code{voiced_run}. Used only when the column is present; \code{NULL}
+ignores it.}
 }
 \value{
 \code{df} with out-of-region rows removed, row order preserved.
@@ -23,21 +35,38 @@ downstream measurement spans the syllable rather than the whole recording.
 Frame-based trackers emit a frame every step across the entire file, with
 \code{NA} (or 0 Hz) f0 in silence; without trimming, "21 equidistant points
 across the token" spends part of the grid on leading and trailing silence.
-Sparse input such as a \code{.PitchTier} has no silent rows to trim, so this is
-a no-op there.
 }
 \details{
-The edges are anchored on a \emph{run} of at least \code{min_run} consecutive voiced
-frames, so one stray voiced frame in silence (a common octave-error
-artefact) cannot stretch the region. If no run is that long, the first and
-last voiced frames are used. Tokens with no voiced frame at all keep no
-rows — count them before and after if their loss should be reported.
+The edges are anchored on a \emph{run} of at least \code{min_run} voiced frames in a
+row, so one stray voiced frame in silence (a common octave-error artefact)
+cannot stretch the region. If no run is that long, the first and last
+voiced frames are used. Tokens with no voiced frame at all keep no rows, so
+count them before and after if their loss should be reported. Rows with no
+time are dropped too.
+
+A run ends at a gap. A gap is one of these:
+\itemize{
+\item rows without f0 between two voiced frames;
+\item a time step longer than 1.5 times the token's usual step, so input with
+the rows without f0 already removed gives the same region. This needs a
+regular frame grid, so it does not apply to sparse input such as a
+\code{.PitchTier};
+\item a change in the \code{run} column (\code{voiced_run}, which the Start page adds
+when it removes rows without f0 or marks gaps), when the data have one.
+}
 
 Frames \emph{inside} the region are kept whether or not they are voiced, so an
 internal unvoiced stretch (a medial voiceless stop, a creaky patch) stays
 in place and still reads as \code{NA}.
+
+Data whose rows without f0 were removed beforehand have no silence left
+to trim. Only a short run cut off by a gap at a token's start or end can
+still go, and only where the time steps (on a regular grid, see
+\code{\link[=screen_f0_rows]{screen_f0_rows()}}) or the \code{run} column show the gap. Without either,
+every row is kept.
 }
 \seealso{
 \code{\link[=resample_f0_equal]{resample_f0_equal()}}, which is normally applied after this;
-\code{\link[=filter_interval_rows]{filter_interval_rows()}} for a TextGrid-interval region instead.
+\code{\link[=filter_interval_rows]{filter_interval_rows()}} for a TextGrid-interval region instead;
+\code{\link[=contour_duration]{contour_duration()}}, which measures the same region.
 }

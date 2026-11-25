@@ -75,7 +75,10 @@ many dB below the token's peak intensity. Default \code{15}. Ignored when
 \item{time_unit}{One of \code{"s"} or \code{"ms"}. Default \code{"s"}. Inspection is
 meant to run on real-time data; a normalised-time option was removed
 because the physiological rate thresholds below lose their meaning once
-real time is discarded.}
+real time is discarded. The unit also sets the gap length in the notes.
+Check it against the data: times in ms read as seconds make every step
+look 1000 times slower, so the rate test then flags almost nothing. A
+median step below 1 within tokens usually means seconds.}
 }
 \value{
 A long-format data frame containing the original \code{token},
@@ -88,12 +91,23 @@ per-token summary statistics.
 any sample-level jump, or an unusual overall level for its tone.
 \item \code{flag_notes}: human-readable concatenation of the reasons a sample
 was flagged (e.g. \code{"max too high"}, \code{"jump (rise)"},
-\code{"level too high"}, \code{"low intensity"}).
+\code{"jump (rise) across a 20 ms gap"}, \code{"level too high"},
+\code{"low intensity"}), or \code{"no f0"} for each row of a token with no f0.
 }
+
+The rows come back sorted by token and time. When the input has a
+\code{voiced_run} column (from \code{\link[=drop_rows_without_f0]{drop_rows_without_f0()}}), it is kept, after
+the f0 column.
 
 When \code{tone} is \code{NULL} the \code{tone} column is omitted and the level check is
 not run, so \code{flag_notes} never contains \code{"level too high"} /
 \code{"level too low"} and those checks do not contribute to \code{flagged_token}.
+When \code{tone} is given, the attribute \code{"level_groups"} holds one row per
+speaker x tone group, with \code{n_tokens} (its tokens with f0) and \code{checked}
+(\code{TRUE} when \code{n_tokens} is at least \code{min_tokens}, so the level check ran
+for the group). The attribute \code{"token_groups"} holds one row per token
+with f0: its \code{token}, \code{speaker} and \code{tone}, as the level check read them
+(the most frequent non-empty value on the token's rows with f0).
 
 When \code{intensity} is supplied, the result additionally carries the
 \code{intensity} column and a sample-level \code{flag_low_intensity} logical. The
@@ -118,7 +132,11 @@ token-level (speaker-by-tone) level check (\code{flag_level_high},
 \code{flag_level_low}). With \code{tone = NULL} this screen is skipped and both
 flags are set to \code{FALSE}.
 \item Call \code{\link[=flag_pitch_jumps]{flag_pitch_jumps()}} for the sample-level pitch-tracking artefact
-flags (\code{flagged_jump}, \code{jump_note}).
+flags (\code{flagged_jump}, \code{jump_note}). It compares each sample with the
+next sample that has f0, with the rate scaled by the real time step. A
+jump across a gap (a stretch with no f0) gets \code{" across a N ms gap"}
+in its note, and the flag goes on a short run of at most 5 samples cut
+off by the gap; otherwise on the side farther from the token median.
 \item Left-join the token-level flags onto the long-format jump output, so
 every sample carries all three kinds of information.
 \item Set \code{flagged_token} to \code{TRUE} for any token that is a speaker-level
@@ -127,6 +145,23 @@ sample-level jump.
 \item Concatenate the human-readable reasons into a single \code{flag_notes}
 column for display.
 }
+}
+
+\subsection{Rows without f0}{
+
+A row has f0 when its value is above 0 Hz. Rows without f0 (\code{NA}, 0 or a
+negative marker such as -1) stay in the output but are never flagged as
+samples: \code{flagged_jump} is \code{FALSE} on them, and no check uses their
+values. They do carry their token's \code{flagged_token} and its token-level
+notes, since the token-level flags are joined by token. So the flags on
+the rows with f0 are the same whether or not the data still have these
+rows (for example after \code{\link[=drop_rows_without_f0]{drop_rows_without_f0()}}). Count shares of
+flagged samples over the samples with f0, as the Inspect tab does, so
+they do not change either.
+
+A token with no f0 at all cannot be checked. Its flags are all \code{FALSE},
+and each of its rows gets the note \code{"no f0"}. It does not count towards
+the size of its speaker x tone group in the level check.
 
 Use the individual functions (\code{\link[=flag_outliers]{flag_outliers()}}, \code{\link[=flag_level_outliers]{flag_level_outliers()}},
 \code{\link[=flag_pitch_jumps]{flag_pitch_jumps()}}) if you want only one kind of check or want to combine
@@ -147,6 +182,10 @@ table(unique(result[, c("token", "flagged_token")])$flagged_token)
 
 # Inspect the first few flagged samples
 head(result[result$flagged_jump, c("token", "time", "f0_Hz", "flag_notes")])
+
+# Share of flagged samples, over the samples with f0
+with_f0 <- !is.na(result$f0_Hz) & result$f0_Hz > 0
+mean(result$flagged_jump[with_f0])
 
 }
 \references{

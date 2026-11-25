@@ -1,9 +1,188 @@
-/* Make all h5 elements bold */
-h5 {
-  font-weight: bold;
+/* ui.R does not link this file. The Start page report (start_ui.R,
+   output$f0_screen_report) loads it as an htmlDependency, so every rule
+   here must stay scoped to .st-report and leave the rest of the app alone.
+   The two old global rules below are kept, switched off, for reference:
+
+   h5 { font-weight: bold; }
+   label { font-weight: bold; }
+*/
+
+/* ---- Start page report: "Your data" and "Data screening" ----------------
+   Colours follow the app: teal #78c2ad (minty), dark green #2c5f4f
+   (headings), the guide boxes' #f0faf7 and the amber notices' #fff8e1. */
+.st-report {
+  margin: 4px 0 18px 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: #34433d;
+}
+.st-report .st-card {
+  background: #ffffff;
+  border: 1px solid #d7ebe3;
+  border-radius: 10px;
+  padding: 14px 16px 12px 16px;
+  box-shadow: 0 1px 3px rgba(44, 95, 79, 0.06);
+}
+.st-report .st-card + .st-card { margin-top: 12px; }
+
+/* Card heading: an icon in a teal disc, the title, a chip or the file name */
+.st-report .st-head {
+  display: flex; align-items: center; flex-wrap: wrap;
+  gap: 6px 10px; margin: 0 0 12px 0;
+}
+.st-report .st-head h5 {
+  margin: 0; font-size: 1.02rem; font-weight: 700; color: #2c5f4f;
+}
+.st-report .st-head-icon {
+  flex: none; width: 30px; height: 30px; border-radius: 50%;
+  background: #e3f3ec; color: #2c5f4f; font-size: 0.82rem;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.st-report .st-head-aside {
+  margin-left: auto; color: #56665f; font-size: 0.8rem;
+  overflow-wrap: anywhere; display: inline-flex; align-items: center; gap: 5px;
 }
 
-/* Make all input labels bold */
-label {
-  font-weight: bold;
+/* Facts: a responsive grid of tiles, bold numbers with muted labels.
+   auto-fit, not auto-fill: 2 or 3 tiles share the card's full width
+   rather than leave empty columns. A tile next to a taller one is
+   stretched to its height, with its content centred. */
+.st-report .st-facts {
+  display: grid; gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+.st-report .st-facts > .st-fact { align-content: center; }
+.st-report .st-fact {
+  display: grid; grid-template-columns: 18px minmax(0, 1fr);
+  column-gap: 10px; align-items: start; min-width: 0;
+  background: #f5fbf8; border: 1px solid #e1f0e9; border-radius: 8px;
+  padding: 9px 12px;
+}
+.st-report .st-fact-icon {
+  width: 18px; text-align: center; color: #3f8f77;
+  font-size: 0.92rem; line-height: 1.6rem;
+}
+.st-report .st-fact-body { min-width: 0; }
+.st-report .st-fact-line {
+  display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 5px; line-height: 1.35;
+}
+.st-report .st-num {
+  font-size: 1.22rem; font-weight: 700; color: #1d3a31;
+  font-variant-numeric: tabular-nums;
+}
+.st-report .st-fact-text .st-num { font-size: 0.98rem; }
+.st-report .st-label { color: #56665f; font-size: 0.83rem; white-space: nowrap; }
+.st-report .st-sub {
+  grid-column: 2; margin-top: 4px; color: #56665f; font-size: 0.79rem;
+  overflow-wrap: anywhere; min-width: 0;
+}
+.st-report .st-nw { white-space: nowrap; }
+.st-report .st-see { margin-left: 6px; color: #56665f; font-size: 0.78rem; white-space: nowrap; }
+
+/* How the f0 is sampled: a full-width tile under the grid */
+.st-report .st-kind { margin-top: 8px; }
+.st-report .st-kind .st-fact-body { display: block; }
+.st-report .st-kind-label { color: #56665f; font-size: 0.78rem; font-weight: 700; }
+.st-report .st-kind-title { font-weight: 700; color: #1d3a31; font-size: 0.95rem; }
+.st-report .st-kind-line { margin-top: 3px; color: #34433d; }
+
+/* The columns used: a small muted line */
+.st-report .st-cols {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px;
+  margin-top: 10px; color: #56665f; font-size: 0.79rem;
+}
+.st-report .st-cols-label { font-weight: 700; color: #56665f; }
+.st-report .st-col { white-space: nowrap; }
+
+/* Code chips: token and column names */
+.st-report code,
+.st-report .st-tok {
+  font-family: SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.76rem; color: #24584a; background: #eaf4ef;
+  border: 1px solid #d6e9e0; border-radius: 4px; padding: 0 5px;
+  overflow-wrap: anywhere;
+}
+.st-report .st-tok { white-space: nowrap; }
+
+/* Status chips */
+.st-report .st-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  border-radius: 999px; padding: 1px 10px; font-size: 0.76rem;
+  font-weight: 700; line-height: 1.6; white-space: nowrap;
+}
+.st-report .st-chip-ok { background: #ddf2e7; color: #17573d; }
+.st-report .st-chip-warn { background: #fff0c4; color: #634b00; }
+
+/* Callouts: amber for a problem, teal for a note */
+.st-report .st-callout {
+  display: flex; align-items: flex-start; gap: 10px;
+  margin-top: 10px; padding: 8px 12px; border-radius: 4px;
+  background: #fff8e1; border-left: 4px solid #e0a800; color: #594300;
+}
+.st-report .st-callout-icon { flex: none; color: #a87a00; line-height: 1.5rem; }
+.st-report .st-callout-info {
+  background: #f0faf7; border-left-color: #78c2ad; color: #34433d;
+}
+.st-report .st-callout-info .st-callout-icon { color: #3f8f77; }
+
+/* Where the rows without f0 are: the fact grid, tinted amber */
+.st-report .st-lead { margin: 0 0 8px 0; }
+.st-report .st-where { margin-bottom: 10px; }
+.st-report .st-where .st-fact { background: #fffcf2; border-color: #f2e6c2; }
+.st-report .st-where .st-fact-icon { color: #a87a00; }
+
+/* The decision line: what the boxes did */
+.st-report .st-decision {
+  display: flex; align-items: flex-start; gap: 10px;
+  border-radius: 8px; padding: 9px 12px; margin: 0 0 4px 0;
+}
+.st-report .st-decision-icon { flex: none; line-height: 1.5rem; }
+.st-report .st-decision-done { background: #e8f6ef; border: 1px solid #bde2cf; color: #194f3b; }
+.st-report .st-decision-done .st-decision-icon { color: #2e8b62; }
+.st-report .st-decision-kept { background: #f3f5f7; border: 1px solid #dde4e9; color: #33434d; }
+.st-report .st-decision-kept .st-decision-icon { color: #66798a; }
+.st-report .st-decision-stop { background: #fff8e1; border: 1px solid #f0dc9e; color: #594300; }
+.st-report .st-decision-stop .st-decision-icon { color: #a87a00; }
+.st-report .st-verdict { font-weight: 700; }
+
+/* Further facts, one per line */
+.st-report .st-notes { list-style: none; margin: 8px 0 0 0; padding: 0; }
+.st-report .st-notes li {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 7px 0 6px 0; border-top: 1px solid #eaf2ee;
+}
+.st-report .st-note-icon {
+  flex: none; width: 18px; text-align: center; color: #3f8f77; line-height: 1.5rem;
+}
+
+/* The longer explanations, folded */
+.st-report .st-more { margin-top: 8px; border-top: 1px solid #eaf2ee; padding-top: 6px; }
+.st-report .st-more + .st-more { margin-top: 0; }
+.st-report .st-more > summary {
+  cursor: pointer; list-style: none; user-select: none;
+  display: flex; align-items: center; gap: 7px; padding: 2px 0;
+  color: #2c5f4f; font-weight: 700; font-size: 0.83rem;
+}
+.st-report .st-more > summary::-webkit-details-marker { display: none; }
+.st-report .st-more > summary::before {
+  content: "\25B8"; color: #78c2ad; display: inline-block;
+  transition: transform 0.15s ease;
+}
+.st-report .st-more[open] > summary::before { transform: rotate(90deg); }
+.st-report .st-more > summary:focus-visible { outline: 2px solid #78c2ad; outline-offset: 2px; }
+.st-report .st-more-body { padding: 2px 0 4px 18px; color: #45544e; font-size: 0.83rem; }
+.st-report .st-more-body p { margin: 0 0 6px 0; }
+.st-report .st-more-body p:last-child { margin-bottom: 0; }
+
+@media (max-width: 575.98px) {
+  .st-report .st-card { padding: 12px 12px 10px 12px; }
+  .st-report .st-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .st-report .st-fact { padding: 8px 10px; column-gap: 8px; }
+  .st-report .st-num { font-size: 1.08rem; }
+  .st-report .st-data .st-facts > .st-fact > .st-sub { grid-column: 1 / -1; }
+  .st-report .st-sub .st-chip { padding: 1px 8px; font-size: 0.74rem; }
+  .st-report .st-sub .st-chip > i { display: none; }
+  .st-report .st-head-aside { margin-left: 0; flex-basis: 100%; }
+  .st-report .st-kind,
+  .st-report .st-fact-text { grid-column: 1 / -1; }
 }

@@ -13,7 +13,11 @@ predict_gca(gca_obj, n = 100)
 \item{n}{Number of time points across \verb{[0, 1]}. Default \code{100}.}
 }
 \value{
-A data frame with columns \code{time}, \code{f0_predicted}, \code{tone}.
+A data frame with columns \code{time}, \code{f0_predicted}, \code{tone}. The
+attribute \code{time_coverage} is the fit's \code{time_coverage}: where each
+tone's fitted rows start and end on the time axis, so a curve that is
+extrapolated to 0 or 1 can be spotted (\code{NULL} for a fit made by an
+earlier version).
 }
 \description{
 Generates population-average per-tone f0 curves from a fitted

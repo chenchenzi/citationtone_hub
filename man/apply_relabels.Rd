@@ -60,7 +60,7 @@ values are already clean (see \code{\link[=inspect_f0]{inspect_f0()}} and the F0
 repairing mis-tracked f0). Variant patterns are often discovered visually
 or surfaced by the token-level register check of \code{\link[=flag_level_outliers]{flag_level_outliers()}},
 which flags tokens whose overall level is unusual for their speaker and
-tone --- a natural seed for relabelling.
+tone: a natural seed for relabelling.
 }
 \examples{
 data(sample_f0)

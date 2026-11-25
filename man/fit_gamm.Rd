@@ -53,8 +53,9 @@ include the corresponding \code{s(..., bs = "re")} random intercept.}
 residuals' lag-1 autocorrelation, then refit with that \code{rho}.}
 
 \item{time_normalised}{One of \code{"auto"} (default: detect an
-already-normalised \verb{[0, 1]} time column, or a \verb{<tier>_tseq} column,
-and use it as-is), \code{"no"} (always rescale to \verb{[0, 1]} within each
+already-normalised \verb{[0, 1]} time column, or a \verb{<tier>_tseq} or
+\verb{<tier>_tbound} column, and use it as-is), \code{"no"} (always rescale to
+\verb{[0, 1]} within each
 token), \code{"yes"} (declare the column already normalised to \verb{[0, 1]}),
 or \code{"sequential"} (declare a sequential landmark axis running from 0
 to the number of segments, whatever its name). See
@@ -75,16 +76,24 @@ because it was already normalised (to \verb{[0, 1]}, or as a sequential
 landmark axis)?
 \item \code{time_axis}: \code{"unit"} for a \verb{[0, 1]} axis, or \code{"sequential"} for a
 landmark axis kept on its \code{0}-to-\code{n} scale.
-\item \code{time_range}: the observed range of the fitted time axis, which
-\code{\link[=predict_gamm]{predict_gamm()}} predicts across; \code{c(0, 1)} on a unit axis.
-\item \code{n_segments}: segments on a sequential axis (\code{1} on a unit axis).
+\item \code{time_range}: the range of the time axis over the rows the model
+fits (rows with f0), which \code{\link[=predict_gamm]{predict_gamm()}} predicts across;
+\code{c(0, 1)} on a unit axis.
+\item \code{n_segments}: segments on a sequential axis, counted over the rows
+the model fits (\code{1} on a unit axis).
+\item \code{time_coverage}: per tone, the first and last time on the axis over
+the rows the model fits, as a data frame with \code{tone}, \code{t_first} and
+\code{t_last}. On a rescaled axis every tone runs from 0 to 1. On a time
+column used as it is, such as \code{time_prop} with no f0 at an end point, a
+tone can stop short of 0 or 1, and \code{\link[=predict_gamm]{predict_gamm()}} then extrapolates
+its curve to the ends.
 }
 }
 \description{
 Fits a Generalised Additive Mixed Model with smooth (non-polynomial)
 tone-by-time interactions. GAMMs are an increasingly common
 alternative to GCA for dynamic speech analysis because they capture
-arbitrary smooth contour shapes without requiring the analyst to
+arbitrary smooth contour shapes without requiring the user to
 choose a polynomial degree (Wood 2017; Sóskuthy 2021;
 Xu & Zhang 2024).
 
@@ -97,17 +106,17 @@ with an AR1 correlation. For non-standard model structures, call
 \details{
 \subsection{What the function does internally}{
 \enumerate{
-\item Normalise time to \verb{[0, 1]} per token. If the time column is
-\emph{already} normalised (e.g. \code{token_t01} from
-\code{\link[=normalise_time_token]{normalise_time_token()}}), it is detected with
-\code{\link[=time_already_normalised]{time_already_normalised()}} and used as-is, so tokens whose samples
-do not span the full unit interval are not stretched a second time;
-override with \code{time_normalised}. A sequential landmark axis
-(\verb{<tier>_tseq} from \code{\link[=normalise_time_landmarks]{normalise_time_landmarks()}}, where segment \code{i}
-spans \verb{[i - 1, i]}) is recognised by name and also used as-is, on its
-own \code{0}-to-\code{n} scale: a per-token rescale would squeeze each token's
-first-to-last frame onto \verb{[0, 1]}, so the segment boundaries would no
-longer line up across tokens.
+\item Normalise time to \verb{[0, 1]} per token, from its first f0 (0) to its
+last f0 (1), so rows without f0 at a token's edges do not move it (see
+\code{\link[=resolve_time_norm]{resolve_time_norm()}}). If the time column is \emph{already} normalised
+(e.g. \code{token_t01} from \code{\link[=normalise_time_token]{normalise_time_token()}}), it is detected with
+\code{\link[=time_already_normalised]{time_already_normalised()}} and used as it is; override with
+\code{time_normalised}. A sequential landmark axis (\verb{<tier>_tseq} or
+\verb{<tier>_tbound} from \code{\link[=normalise_time_landmarks]{normalise_time_landmarks()}}, where segment \code{i}
+runs from \code{i - 1} to \code{i}) is recognised by name and also used as it
+is, on its own \code{0}-to-\code{n} scale, so the segment boundaries stay at
+whole numbers. A per-token rescale would put them at 1/n, 2/n, ...,
+and would stretch a token whose first or last segment has no f0.
 \item Coerce \code{tone}, \code{speaker}, \code{item}, and (for difference smooths) an
 ordered \code{tone_ord} to factors with treatment contrasts.
 \item Build the formula based on \code{smooth_type} and \code{random_smooth}.
@@ -117,8 +126,34 @@ datasets, capturing warnings.
 of the residuals computed \emph{within} tokens (pooling only genuine
 within-token neighbours, not across token boundaries), then refit
 with that \code{rho} plus per-token \code{AR.start} to correct for
-within-token correlation.
+within-token correlation. \code{AR.start} marks each token's first row
+that is fitted, so rows without f0 at its start do not hide it.
+Inside a token the AR1 series does not restart at a gap: \code{\link[mgcv:bam]{mgcv::bam()}}
+leaves out the rows without f0, so the samples on either side of a
+gap count as neighbours, whether or not those rows are kept.
 }
+
+Rows are put in order of token and normalised time. Rows at the same
+time keep their order in \code{data}, so give the rows of each token in time
+order: the AR1 correction runs along that order.
+}
+
+\subsection{On \verb{<tier>_tseq}, an f0 jump at each boundary}{
+
+On a \verb{<tier>_tseq} from \code{\link[=normalise_time_landmarks]{normalise_time_landmarks()}}, a stretch without
+f0 between two syllables takes no room: syllable 1's last f0 and
+syllable 2's first f0 are both at 1. A falling syllable followed by a
+high level one jumps in f0 there, with no time to make the jump. One
+smooth per tone cannot follow such a jump, and raising \code{k} does not
+help: the curve runs through the middle of the jump and misses both
+syllables near the boundary. To model the whole word, use
+\verb{<tier>_tbound}: it keeps the stretch without f0 at each boundary, so
+the two sides of a jump are a gap apart and one smooth can follow it,
+and the boundaries still sit at whole numbers. \code{token_t01} from
+\code{\link[=normalise_time_token]{normalise_time_token()}} keeps the stretch too (and the syllables'
+duration ratio), but the boundary falls at a different point in each
+token. Or model each syllable on its own, with one token per syllable on
+\verb{<tier>_t01} and a label for its tone pattern and place.
 }
 
 \subsection{Choosing \code{smooth_type}}{
