@@ -1,7 +1,7 @@
 # Flag low-intensity f0 samples within tokens
 
 Detects f0 samples that fall in a low-energy region of their token,
-where pitch estimates are least reliable — voicing onsets and offsets,
+where pitch estimates are least reliable: voicing onsets and offsets,
 devoiced or breathy segments, and creaky utterance-final tails.
 Intensity is an *independent* cue from f0: a smoothly drifting
 mis-tracked tail at a vowel edge need not trip the rate-of-change check
@@ -58,12 +58,12 @@ For each token the function takes the **peak intensity across that
 token's voiced samples** and flags every voiced sample whose intensity
 is more than `intensity_drop` dB below that peak. The comparison is
 relative-to-peak (not an absolute dB threshold), so it transfers across
-recordings regardless of microphone distance or gain. Unvoiced samples
-(`f0` is `NA` or `0`) and samples with missing intensity are never
-flagged, and tokens with no voiced sample are left unflagged.
+recordings regardless of microphone distance or gain. Rows without f0
+(`NA`, 0 or a negative marker) and samples with missing intensity are
+never flagged, and tokens with no voiced sample are left unflagged.
 
-Low intensity does not by itself mean the f0 is wrong — a softly but
-modally produced frame tracks fine — so this is an advisory,
+Low intensity does not by itself mean the f0 is wrong (a softly but
+modally produced frame tracks fine), so this is an advisory,
 inspect-don't-delete signal, consistent with the rest of the Inspect
 tab.
 

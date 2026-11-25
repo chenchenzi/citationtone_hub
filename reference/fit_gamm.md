@@ -3,8 +3,8 @@
 Fits a Generalised Additive Mixed Model with smooth (non-polynomial)
 tone-by-time interactions. GAMMs are an increasingly common alternative
 to GCA for dynamic speech analysis because they capture arbitrary smooth
-contour shapes without requiring the analyst to choose a polynomial
-degree (Wood 2017; Sóskuthy 2021; Xu & Zhang 2024).
+contour shapes without requiring the user to choose a polynomial degree
+(Wood 2017; Sóskuthy 2021; Xu & Zhang 2024).
 
 This is a convenience wrapper around
 [`mgcv::bam()`](https://rdrr.io/pkg/mgcv/man/bam.html) that prepares the
@@ -89,11 +89,11 @@ fit_gamm(
 - time_normalised:
 
   One of `"auto"` (default: detect an already-normalised `[0, 1]` time
-  column, or a `<tier>_tseq` column, and use it as-is), `"no"` (always
-  rescale to `[0, 1]` within each token), `"yes"` (declare the column
-  already normalised to `[0, 1]`), or `"sequential"` (declare a
-  sequential landmark axis running from 0 to the number of segments,
-  whatever its name). See
+  column, or a `<tier>_tseq` or `<tier>_tbound` column, and use it
+  as-is), `"no"` (always rescale to `[0, 1]` within each token), `"yes"`
+  (declare the column already normalised to `[0, 1]`), or `"sequential"`
+  (declare a sequential landmark axis running from 0 to the number of
+  segments, whatever its name). See
   [`resolve_time_norm()`](https://chenchenzi.github.io/citationtone_hub/reference/resolve_time_norm.md).
 
 ## Value
@@ -121,29 +121,42 @@ An S3 object of class `"shinytone_gamm"`, a list with:
 - `time_axis`: `"unit"` for a `[0, 1]` axis, or `"sequential"` for a
   landmark axis kept on its `0`-to-`n` scale.
 
-- `time_range`: the observed range of the fitted time axis, which
+- `time_range`: the range of the time axis over the rows the model fits
+  (rows with f0), which
   [`predict_gamm()`](https://chenchenzi.github.io/citationtone_hub/reference/predict_gamm.md)
   predicts across; `c(0, 1)` on a unit axis.
 
-- `n_segments`: segments on a sequential axis (`1` on a unit axis).
+- `n_segments`: segments on a sequential axis, counted over the rows the
+  model fits (`1` on a unit axis).
+
+- `time_coverage`: per tone, the first and last time on the axis over
+  the rows the model fits, as a data frame with `tone`, `t_first` and
+  `t_last`. On a rescaled axis every tone runs from 0 to 1. On a time
+  column used as it is, such as `time_prop` with no f0 at an end point,
+  a tone can stop short of 0 or 1, and
+  [`predict_gamm()`](https://chenchenzi.github.io/citationtone_hub/reference/predict_gamm.md)
+  then extrapolates its curve to the ends.
 
 ## Details
 
 ### What the function does internally
 
-1.  Normalise time to `[0, 1]` per token. If the time column is
-    *already* normalised (e.g. `token_t01` from
+1.  Normalise time to `[0, 1]` per token, from its first f0 (0) to its
+    last f0 (1), so rows without f0 at a token's edges do not move it
+    (see
+    [`resolve_time_norm()`](https://chenchenzi.github.io/citationtone_hub/reference/resolve_time_norm.md)).
+    If the time column is *already* normalised (e.g. `token_t01` from
     [`normalise_time_token()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_time_token.md)),
     it is detected with
     [`time_already_normalised()`](https://chenchenzi.github.io/citationtone_hub/reference/time_already_normalised.md)
-    and used as-is, so tokens whose samples do not span the full unit
-    interval are not stretched a second time; override with
-    `time_normalised`. A sequential landmark axis (`<tier>_tseq` from
+    and used as it is; override with `time_normalised`. A sequential
+    landmark axis (`<tier>_tseq` or `<tier>_tbound` from
     [`normalise_time_landmarks()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_time_landmarks.md),
-    where segment `i` spans `[i - 1, i]`) is recognised by name and also
-    used as-is, on its own `0`-to-`n` scale: a per-token rescale would
-    squeeze each token's first-to-last frame onto `[0, 1]`, so the
-    segment boundaries would no longer line up across tokens.
+    where segment `i` runs from `i - 1` to `i`) is recognised by name
+    and also used as it is, on its own `0`-to-`n` scale, so the segment
+    boundaries stay at whole numbers. A per-token rescale would put them
+    at 1/n, 2/n, ..., and would stretch a token whose first or last
+    segment has no f0.
 
 2.  Coerce `tone`, `speaker`, `item`, and (for difference smooths) an
     ordered `tone_ord` to factors with treatment contrasts.
@@ -158,7 +171,35 @@ An S3 object of class `"shinytone_gamm"`, a list with:
     of the residuals computed *within* tokens (pooling only genuine
     within-token neighbours, not across token boundaries), then refit
     with that `rho` plus per-token `AR.start` to correct for
-    within-token correlation.
+    within-token correlation. `AR.start` marks each token's first row
+    that is fitted, so rows without f0 at its start do not hide it.
+    Inside a token the AR1 series does not restart at a gap:
+    [`mgcv::bam()`](https://rdrr.io/pkg/mgcv/man/bam.html) leaves out
+    the rows without f0, so the samples on either side of a gap count as
+    neighbours, whether or not those rows are kept.
+
+Rows are put in order of token and normalised time. Rows at the same
+time keep their order in `data`, so give the rows of each token in time
+order: the AR1 correction runs along that order.
+
+### On `<tier>_tseq`, an f0 jump at each boundary
+
+On a `<tier>_tseq` from
+[`normalise_time_landmarks()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_time_landmarks.md),
+a stretch without f0 between two syllables takes no room: syllable 1's
+last f0 and syllable 2's first f0 are both at 1. A falling syllable
+followed by a high level one jumps in f0 there, with no time to make the
+jump. One smooth per tone cannot follow such a jump, and raising `k`
+does not help: the curve runs through the middle of the jump and misses
+both syllables near the boundary. To model the whole word, use
+`<tier>_tbound`: it keeps the stretch without f0 at each boundary, so
+the two sides of a jump are a gap apart and one smooth can follow it,
+and the boundaries still sit at whole numbers. `token_t01` from
+[`normalise_time_token()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_time_token.md)
+keeps the stretch too (and the syllables' duration ratio), but the
+boundary falls at a different point in each token. Or model each
+syllable on its own, with one token per syllable on `<tier>_t01` and a
+label for its tone pattern and place.
 
 ### Choosing `smooth_type`
 

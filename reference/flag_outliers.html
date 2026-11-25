@@ -17,7 +17,7 @@ analysis (Xu &amp;amp; Zhang 2024)."><meta property="og:image" content="https://
 
     <a class="navbar-brand me-2" href="../index.html">shinytone</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.0.9000</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -66,7 +66,8 @@ analysis (Xu &amp; Zhang 2024).</p>
 <span>  f0 <span class="op">=</span> <span class="st">"f0"</span>,</span>
 <span>  token <span class="op">=</span> <span class="st">"token"</span>,</span>
 <span>  speaker <span class="op">=</span> <span class="st">"speaker"</span>,</span>
-<span>  z_threshold <span class="op">=</span> <span class="fl">3</span></span>
+<span>  z_threshold <span class="op">=</span> <span class="fl">3</span>,</span>
+<span>  time <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -95,6 +96,13 @@ analysis (Xu &amp; Zhang 2024).</p>
 per-token max exceeds <code>+z_threshold</code> (too high) or its min falls below
 <code>-z_threshold</code> (too low). Default <code>3</code>.</p></dd>
 
+
+<dt id="arg-time">time<a class="anchor" aria-label="anchor" href="#arg-time"></a></dt>
+<dd><p>Column name of time, or <code>NULL</code> (the default). Used only to
+break a tie between two speaker values that are equally frequent
+within a token: the one that comes first in time wins. <code><a href="inspect_f0.html">inspect_f0()</a></code>
+passes its <code>time</code>, so it picks the same speaker as <code><a href="fit_polynomial.html">fit_polynomial()</a></code>.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -109,9 +117,14 @@ per-token max exceeds <code>+z_threshold</code> (too high) or its min falls belo
 <div class="section">
 <h3 id="what-the-function-does-internally">What the function does internally<a class="anchor" aria-label="anchor" href="#what-the-function-does-internally"></a></h3>
 
-<ol><li><p>Drop samples where <code>f0</code> is <code>NA</code> or <code>0</code> (pitch trackers commonly
-output 0 for unvoiced frames).</p></li>
-<li><p>Compute the per-token maximum, minimum, mean, and SD of <code>f0</code>.</p></li>
+<ol><li><p>Drop the rows without f0. A row has f0 when its value is above 0 Hz,
+so <code>NA</code>, 0 (pitch trackers commonly output 0 for unvoiced frames) and
+negative markers such as -1 are all left out.</p></li>
+<li><p>Compute the per-token maximum, minimum, mean, and SD of <code>f0</code>. Each
+token's speaker is the most frequent non-empty value of <code>speaker</code> on
+its rows with f0. A tie goes to the value that comes first in <code>time</code>
+(when given), then to the first in alphabetical (C-locale) order, so
+neither the row order nor the rows without f0 change it.</p></li>
 <li><p>Within each speaker, z-score the per-token maxima against each
 other and the per-token minima against each other (so a speaker
 with consistently high f0 isn't flagged as an outlier of the corpus).</p></li>
@@ -125,10 +138,10 @@ only the outer tails are treated as errors.</p></li>
 the opposite tails are occupied by legitimate tone identity rather than
 error (a low ceiling is what a genuine low tone looks like; a high floor
 is what a genuine high tone looks like), so they are deliberately not
-flagged here. The rarer artefacts that do sit in those tails — a
-truncated (abnormally low) maximum or a floored (abnormally high) minimum
-— are deferred to the finer screens <code><a href="flag_level_outliers.html">flag_level_outliers()</a></code> (within
-speaker and tone) and <code><a href="flag_pitch_jumps.html">flag_pitch_jumps()</a></code> (frame level).</p>
+flagged here. The rarer artefacts that do sit in those tails (a
+truncated, abnormally low maximum or a floored, abnormally high minimum)
+are left to the finer screens <code><a href="flag_level_outliers.html">flag_level_outliers()</a></code> (within speaker
+and tone) and <code><a href="flag_pitch_jumps.html">flag_pitch_jumps()</a></code> (sample level).</p>
 </div>
 
 <div class="section">

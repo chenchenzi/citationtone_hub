@@ -17,7 +17,7 @@ classifiers and regression models (Mirman 2014; Xu &amp;amp; Zhang 2024)."><meta
 
     <a class="navbar-brand me-2" href="../index.html">shinytone</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.0.9000</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -97,12 +97,12 @@ cross-speaker comparison.</p></dd>
 
 <dt id="arg-speaker">speaker<a class="anchor" aria-label="anchor" href="#arg-speaker"></a></dt>
 <dd><p>Column name of speaker ID, carried through to the
-output. Default <code>"speaker"</code>.</p></dd>
+output (see "Speaker and tone" below). Default <code>"speaker"</code>.</p></dd>
 
 
 <dt id="arg-tone">tone<a class="anchor" aria-label="anchor" href="#arg-tone"></a></dt>
 <dd><p>Column name of tone category, carried through to the
-output. Default <code>"tone"</code>.</p></dd>
+output (see "Speaker and tone" below). Default <code>"tone"</code>.</p></dd>
 
 
 <dt id="arg-degree">degree<a class="anchor" aria-label="anchor" href="#arg-degree"></a></dt>
@@ -131,13 +131,19 @@ whether the time column was treated as already normalised.</p>
 <h3 id="what-the-function-does-internally">What the function does internally<a class="anchor" aria-label="anchor" href="#what-the-function-does-internally"></a></h3>
 
 
-<p>For each token:</p><ol><li><p>Compute the per-token range of <code>time</code> and rescale it linearly to
-the interval <code>[-1, 1]</code>, which is where Legendre polynomials are
-orthogonal. If the time column is <em>already</em> normalised to <code>[0, 1]</code>
+<p>For each token:</p><ol><li><p>Rescale each token's <code>time</code> linearly to <code>[-1, 1]</code>, from its first f0
+(-1) to its last f0 (1), which is where Legendre polynomials are
+orthogonal. Rows without f0 at a token's edges do not move it. If the
+time column is <em>already</em> normalised to <code>[0, 1]</code>
 (detected with <code><a href="time_already_normalised.html">time_already_normalised()</a></code>, or declared via
 <code>time_normalised</code>), the fixed map <code>2 * t - 1</code> is used instead, so
 tokens whose samples do not span the full unit interval are not
-stretched a second time.</p></li>
+stretched a second time. A <code>&lt;tier&gt;_tseq</code> (syllables in sequence) or
+<code>&lt;tier&gt;_tbound</code> (in sequence, gap kept) is rescaled per token too: a
+token whose first or last syllable has
+no values on the axis (on a <code>&lt;tier&gt;_tseq</code>, f0 at fewer than two times;
+on a <code>&lt;tier&gt;_tbound</code>, no f0) is stretched, and its other syllables
+fill the axis.</p></li>
 <li><p>Build the Legendre basis up to the requested <code>degree</code>.</p></li>
 <li><p>Solve the ordinary least-squares problem with <code><a href="https://rdrr.io/r/stats/lmfit.html" class="external-link">stats::lm.fit()</a></code> to
 recover the coefficients.</p></li>
@@ -161,10 +167,25 @@ contours.</p></li>
 
 
 <p>Samples with a missing or infinite f0 or time are skipped (<code>-Inf</code> comes
-from taking the log of 0 Hz). Tokens with fewer than <code>degree + 1</code> valid
-samples receive <code>NA</code> for all coefficients. Tokens with a single unique
-time point keep <code>c0</code> as the mean of their finite f0 values and set the
-higher-order coefficients to <code>NA</code>.</p>
+from taking the log of 0 Hz), and so are 0 values in a column in Hz (one
+that <code><a href="hz_f0_columns.html">hz_f0_columns()</a></code> finds), which have no f0. The checks below count
+only the samples that remain, so rows without f0 do not change them. A
+token whose samples all share one time point keeps <code>c0</code> as the mean of
+their f0 and sets the higher-order coefficients to <code>NA</code>. Any other token
+with fewer than <code>degree + 1</code> samples gets <code>NA</code> for all coefficients. So
+does a token with no samples.</p>
+</div>
+
+<div class="section">
+<h3 id="speaker-and-tone">Speaker and tone<a class="anchor" aria-label="anchor" href="#speaker-and-tone"></a></h3>
+
+
+<p><code>speaker</code> and <code>tone</code> are read once per token. Each token takes the most
+frequent non-empty value among its rows with f0 (a finite f0, and above 0
+in a column in Hz, as in "Edge cases"). A tie goes to the value that comes
+first in time. So a label column that changes within
+a token, such as a tone tier from a TextGrid with <code>""</code> in the silences,
+gives the same result in any row order, with or without rows without f0.</p>
 </div>
 
     </div>

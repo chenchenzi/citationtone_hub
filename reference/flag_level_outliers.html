@@ -4,14 +4,14 @@ with other tokens of the same speaker and same tone, even when the
 contour is smooth (no sample-to-sample jumps) and not extreme for the
 speaker overall. This catches the &quot;right shape, wrong height&quot; case that
 flag_outliers() (which pools all tones within a speaker) and
-flag_pitch_jumps() (which only sees within-token movement) both miss
-— for example a low-tone token mis-tracked up into the mid-tone band."><meta property="og:description" content="Detects tokens whose whole contour sits too high or too low compared
+flag_pitch_jumps() (which only sees within-token movement) both miss,
+for example a low-tone token mis-tracked up into the mid-tone band."><meta property="og:description" content="Detects tokens whose whole contour sits too high or too low compared
 with other tokens of the same speaker and same tone, even when the
 contour is smooth (no sample-to-sample jumps) and not extreme for the
 speaker overall. This catches the &quot;right shape, wrong height&quot; case that
 flag_outliers() (which pools all tones within a speaker) and
-flag_pitch_jumps() (which only sees within-token movement) both miss
-— for example a low-tone token mis-tracked up into the mid-tone band."><meta property="og:image" content="https://chenchenzi.github.io/citationtone_hub/logo.png"></head><body>
+flag_pitch_jumps() (which only sees within-token movement) both miss,
+for example a low-tone token mis-tracked up into the mid-tone band."><meta property="og:image" content="https://chenchenzi.github.io/citationtone_hub/logo.png"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -19,7 +19,7 @@ flag_pitch_jumps() (which only sees within-token movement) both miss
 
     <a class="navbar-brand me-2" href="../index.html">shinytone</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.0.9000</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -58,8 +58,8 @@ with other tokens of the <strong>same speaker and same tone</strong>, even when 
 contour is smooth (no sample-to-sample jumps) and not extreme for the
 speaker overall. This catches the "right shape, wrong height" case that
 <code><a href="flag_outliers.html">flag_outliers()</a></code> (which pools all tones within a speaker) and
-<code><a href="flag_pitch_jumps.html">flag_pitch_jumps()</a></code> (which only sees within-token movement) both miss
-— for example a low-tone token mis-tracked up into the mid-tone band.</p>
+<code><a href="flag_pitch_jumps.html">flag_pitch_jumps()</a></code> (which only sees within-token movement) both miss,
+for example a low-tone token mis-tracked up into the mid-tone band.</p>
     </div>
 
     <div class="section level2">
@@ -71,7 +71,8 @@ speaker overall. This catches the "right shape, wrong height" case that
 <span>  speaker <span class="op">=</span> <span class="st">"speaker"</span>,</span>
 <span>  tone <span class="op">=</span> <span class="st">"tone"</span>,</span>
 <span>  level_threshold <span class="op">=</span> <span class="fl">3.5</span>,</span>
-<span>  min_tokens <span class="op">=</span> <span class="fl">5</span></span>
+<span>  min_tokens <span class="op">=</span> <span class="fl">5</span>,</span>
+<span>  time <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -109,6 +110,14 @@ level is flagged. Default <code>3.5</code> (Iglewicz &amp; Hoaglin 1993).</p></d
 required to run the check for a group. Default <code>5</code>. More tokens give a
 more reliable estimate of the group's spread.</p></dd>
 
+
+<dt id="arg-time">time<a class="anchor" aria-label="anchor" href="#arg-time"></a></dt>
+<dd><p>Column name of time, or <code>NULL</code> (the default). Used only to
+break a tie between two speaker or tone values that are equally
+frequent within a token: the one that comes first in time wins.
+<code><a href="inspect_f0.html">inspect_f0()</a></code> passes its <code>time</code>, so it picks the same tone as
+<code><a href="fit_polynomial.html">fit_polynomial()</a></code>.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -123,11 +132,17 @@ plus the original <code>token</code>, <code>speaker</code>, and <code>tone</code
 <div class="section">
 <h3 id="what-the-function-does-internally">What the function does internally<a class="anchor" aria-label="anchor" href="#what-the-function-does-internally"></a></h3>
 
-<ol><li><p>Drop samples where <code>f0</code> is <code>NA</code> or <code>0</code> (unvoiced frames).</p></li>
+<ol><li><p>Drop the rows without f0 (<code>NA</code>, 0 or a negative marker; only values
+above 0 Hz count). Each token's speaker and tone are the most frequent
+non-empty values on its rows with f0, so a tone column that changes
+within a token (for example one read from a TextGrid tier) still gives
+one tone per token. A tie goes to the value that comes first in <code>time</code>
+(when given), then to the first in alphabetical (C-locale) order, so
+neither the row order nor the rows without f0 change it.</p></li>
 <li><p>Compute each token's <strong>median f0</strong>, converted to semitones
 (<code>12 * log2(Hz)</code>). The median (rather than the mean) is used so that a
-handful of mis-tracked frames — which <code><a href="flag_pitch_jumps.html">flag_pitch_jumps()</a></code> already
-catches — do not shift a token's apparent level.</p></li>
+handful of mis-tracked frames, which <code><a href="flag_pitch_jumps.html">flag_pitch_jumps()</a></code> already
+catches, do not shift a token's apparent level.</p></li>
 <li><p>Within each speaker x tone group, compute the <strong>modified z-score</strong>
 (Iglewicz &amp; Hoaglin 1993) of each token's level:
 <code>0.6745 * (level - median) / MAD</code>, where MAD is the median absolute

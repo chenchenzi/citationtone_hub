@@ -25,6 +25,6 @@ assign_tier_landmarks(times, t1, t2, labels)
 ## Value
 
 A data.frame with one row per `times` value: `label`, `start`, `end`,
-and `idx` — the 1-based ordinal of the interval among non-empty-labelled
+and `idx`, the 1-based ordinal of the interval among non-empty-labelled
 intervals (NA inside empty/unlabelled intervals or outside the tier's
 span).

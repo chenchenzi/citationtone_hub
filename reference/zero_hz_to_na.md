@@ -3,8 +3,14 @@
 Pitch trackers write 0 Hz for unvoiced frames, where no pitch was
 measured. A 0 left in the data is read as a very low pitch: it pulls
 mean contours and fits towards 0, and gives `-Inf` in semitones. This
-sets 0 to `NA` in the f0 columns of `df`. The app does this to every CSV
-uploaded in the Start tab.
+sets 0 to `NA` in the f0 columns of `df`. The app's Start page does this
+to every CSV it reads. Its screen
+([`screen_f0_rows()`](https://chenchenzi.github.io/citationtone_hub/reference/screen_f0_rows.md))
+then counts the rows without f0 in the chosen f0 column, and a box
+removes them with
+[`drop_rows_without_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/drop_rows_without_f0.md).
+The box is ticked by default, except for files where every token has the
+same number of points and some token's first or last point has no f0.
 
 ## Usage
 
@@ -51,12 +57,25 @@ used when:
 
 Negative values, which some trackers use for unvoiced frames, are left
 as they are, and a column that has any is not used. Give `cols` to
-choose the columns yourself.
+choose the columns yourself. For a marker such as -1, or 0 in a column
+in Hz that is not found (such as `f0_rapt`),
+[`suggest_unvoiced()`](https://chenchenzi.github.io/citationtone_hub/reference/suggest_unvoiced.md)
+finds the values, and the `unvoiced` argument of
+[`screen_f0_rows()`](https://chenchenzi.github.io/citationtone_hub/reference/screen_f0_rows.md)
+and
+[`drop_rows_without_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/drop_rows_without_f0.md)
+reads them as no f0. The Start page offers to read them as no f0.
 
 ## See also
 
+[`hz_f0_columns()`](https://chenchenzi.github.io/citationtone_hub/reference/hz_f0_columns.md)
+for the columns used;
 [`normalise_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_f0.md),
-which also reads f0 of 0 or below as `NA`.
+which also reads f0 of 0 or below as `NA`;
+[`screen_f0_rows()`](https://chenchenzi.github.io/citationtone_hub/reference/screen_f0_rows.md)
+and
+[`drop_rows_without_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/drop_rows_without_f0.md)
+to run next.
 
 ## Examples
 

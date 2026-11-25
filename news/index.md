@@ -2,6 +2,529 @@
 
 ## shinytone (development version)
 
+- **Start page: rows without f0 are removed, and the gaps are marked.**
+  A new *Data screening* box in the Start sidebar has token, time and f0
+  pickers, and screens the chosen f0 variable when a file is uploaded
+  (before an upload it shows its heading and a one-line note). Its
+  *Remove N rows without f0 (recommended)* box is ticked by default, for
+  pitch-tracker frames and equidistant points alike. The rows go before
+  any tab sees the data; the uploaded file is not changed, and unticking
+  the box brings them back. A new integer column, `voiced_run`, numbers
+  the stretches with f0 in each token (1 up to the first gap, 2 after
+  it, and so on), so the gaps stay marked once the rows are gone. Other
+  boxes appear only when they have something to do: *Also remove runs of
+  1–2 samples cut off by a gap at a token’s start or end* (unticked; not
+  offered when every token has the same number of points, where such a
+  gap flags its token); *Read 0 / -1 as no f0* (ticked), for an Hz
+  column such as `f0_rapt` that
+  [`zero_hz_to_na()`](https://chenchenzi.github.io/citationtone_hub/reference/zero_hz_to_na.md)
+  does not pick; and, when every row has f0 but the time steps show
+  gaps, *Mark the N gaps in a voiced_run column* (ticked), which removes
+  nothing. Without a token variable, the box counts the rows without f0
+  over the whole file and asks for the token variable only when it needs
+  one. One message on upload sums it up, with the 0 Hz count. The other
+  tabs start on its f0 and token variables. New exported
+  [`screen_f0_rows()`](https://chenchenzi.github.io/citationtone_hub/reference/screen_f0_rows.md)
+  (the counts),
+  [`drop_rows_without_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/drop_rows_without_f0.md)
+  (the removal),
+  [`suggest_unvoiced()`](https://chenchenzi.github.io/citationtone_hub/reference/suggest_unvoiced.md)
+  (values that may mark no f0) and
+  [`hz_f0_columns()`](https://chenchenzi.github.io/citationtone_hub/reference/hz_f0_columns.md).
+  [`landmark_prefixes()`](https://chenchenzi.github.io/citationtone_hub/reference/landmark_prefixes.md)
+  reserves `voiced_run`.
+- **Start page: a report on the upload.** Above the Data Preview, a
+  *Your data* card gives the tokens, speakers, tones and rows, how the
+  f0 is sampled (pitch-tracker frames, their step and how many tokens
+  have a gap in the middle; N equidistant points per token with the
+  tokens that have fewer or more; or uneven points), and the variables
+  used. A *Data screening* card, the same for frames and equidistant
+  points, gives the share of rows without f0, says where they are (at a
+  token’s start or end, or inside it) and what the boxes do: how many
+  rows removal takes (“Removed: 16 rows without f0”), or “All good:
+  every row has f0” when there are none to take. A folded *Your raw file
+  is not changed* note, shown whenever the app’s copy differs from the
+  file, says to download that copy in Normalise or Curate. The card also
+  names short runs cut off at a token’s edge, other Hz columns and the
+  rows where they differ, rows deleted in F0 Correction, token-level
+  columns (speaker, tone, metadata) that change within a token, and a
+  time column whose 0-1 decision would change with the rows removed. A
+  warning that gaps cannot be found from the time steps appears only
+  when it matters: when neither rows without f0 inside the tokens nor a
+  `voiced_run` column show the gaps, and never for equidistant points.
+  Frames with the same number in every token count as points in both
+  cards.
+- **Start page: tokens with an issue are flagged, and can be dropped.**
+  A new column, `screen_flag`, gives each flagged token’s reasons on
+  every row (“” for the other tokens): no f0, or fewer than 3 samples
+  with f0 (either reason stands alone), and, when every token has the
+  same number of points N, no f0 at the first or last point, or points
+  without f0 inside (a gap of any length). In such a file a token is
+  flagged when it has fewer than N points with f0. The column is added
+  when a token is flagged and the drop is unticked, and it replaces a
+  `screen_flag` column the file already has (left out when no token is
+  flagged now). One box, *Drop the N flagged tokens* (unticked), leaves
+  them all out; it appears when a token is flagged. A token with no f0
+  is flagged like the rest, whatever the removal box says, and counts in
+  the box, the message and the report. When every flagged token has no
+  f0 and removal is ticked, the report says that removal takes their
+  rows. The report says what the flagged tokens share (“5 tokens
+  flagged: fewer than 11 points with f0”). For equidistant points it
+  lists them grouped by reason, one line each: points without f0 inside,
+  no f0 at the first or last point, and fewer than 3 points with f0
+  (tokens with no f0 among them), with at most 5 tokens per line. For
+  frames it names them in brackets. The flags and the drop come before
+  the removal of rows without f0, and the R code repeats them. New
+  exported
+  [`flag_f0_tokens()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_f0_tokens.md).
+  [`screen_f0_rows()`](https://chenchenzi.github.io/citationtone_hub/reference/screen_f0_rows.md)
+  also lists the tokens left with 1 or 2 samples (`few_samples`,
+  `few_tokens`) and the tokens missing an end point (`edge_missing`,
+  `edge_tokens`, `edge_rows`).
+- **Normalise: *Download Normalised Data* saves every column** of the
+  data it normalised, with the new columns at the end, as the other tabs
+  get it. It used to save only the columns shown in the table, so an
+  f0-only run had no token or time column.
+- **Start page: what each tab does comes first.** The welcome text is
+  followed by a folded *Continuing from the F0 Correction tab?* box and
+  then the list of tabs, which now includes Cluster and Curate; *What
+  the data look like* follows. Both Start pages (F0 Analysis and F0
+  Processing) list their tabs with one Font Awesome icon each, on a pale
+  circle coloured by the stage of the work (data, prepare, explore,
+  model, summarise), in place of emoji.
+- **F0 Processing Start page: a syllable tier for multisyllabic words.**
+  Its companion-files note now says that a `.TextGrid` with a syllable
+  tier is highly recommended for multisyllabic words, so the analysis
+  can line up the syllables across tokens. The note is set off by a soft
+  yellow bar, and *Already have f0 extracted with another tool?* is a
+  folded guide box.
+- **A larger top menu, and what a token is.** The top menu (About, F0
+  Analysis, F0 Processing, Data Collection) is now 17 px, a step larger
+  than the sub-tabs below it. Data Collection \> Filename says in one
+  sentence what a token is: one recording of one syllable or word by one
+  speaker, that is one `.wav` file and the rows of f0 data that share
+  its token ID.
+- **About page: an optional export step in workflow 3.** In
+  *Pitch-tracking correction*, a dashed (optional) *F0 Extraction
+  (export)* step now follows F0 Correction. F0 Correction saves the
+  cleaned CSV directly. For another region (the whole token or a
+  TextGrid interval) or sampling (native frames or equidistant points),
+  export it from F0 Extraction instead, which picks up the corrections
+  made in the session. Workflow 2 no longer shows the Start page as a
+  step, like the others.
+- **Pickers say “variable” throughout.** The Start page’s pickers (Data
+  screening, contour duration and the metadata pickers) and the F0
+  Processing tabs’ pickers now say “variable” (e.g. *f0 variable*,
+  *Token ID variable*, *Time variable*, *Token / filename variable*), as
+  the F0 Analysis tabs already did, and so does the text that names
+  them. Text about a column the app adds, such as `voiced_run`, or a
+  column of a metadata CSV still says column.
+- **Gaps read from the time steps.** Once rows without f0 are removed, a
+  gap shows only as a longer time step. A step more than 1.5 times the
+  token’s usual step is a gap: a one-frame gap doubles the step, so a 2x
+  rule would miss it. The usual step is the token’s median step or, in a
+  token with fewer than 5 steps, the file’s common step when that is
+  smaller. Steps are read only on a regular grid, where one step and two
+  are clearly apart and the times are written finely enough, so points
+  timed at each glottal pulse are not read. A token with two samples
+  with f0 at the same time is set aside, and the other tokens are still
+  read. Times written to the step itself, such as 10 ms frames written
+  to 2 decimals, are read in whole units: a step of 0.02 s or more is a
+  gap. This needs at least 99% of the steps to be exactly one unit. So
+  such a file is not read from its time steps when more than 1 step in
+  100 is a gap, or when its frames are not 10 ms apart (12.5 ms, say);
+  when that matters, the Start page says how many decimals to save the
+  times with (3 for 10 ms frames, 4 for 12.5 ms). A token where at least
+  2 steps, and more than 1 in 8, are exactly 2 units is set aside. The
+  same rule serves the Start page, the jump check,
+  [`contour_duration()`](https://chenchenzi.github.io/citationtone_hub/reference/contour_duration.md),
+  [`trim_to_voiced()`](https://chenchenzi.github.io/citationtone_hub/reference/trim_to_voiced.md)
+  and
+  [`flag_f0_gaps()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_f0_gaps.md).
+- **0-1 time axes run from the first f0 to the last.** A 0-1 axis is
+  there to compare contour shapes, and stretches without f0 carry no
+  tone.
+  [`normalise_time_token()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_time_token.md)
+  now runs each token from its first f0 (0) to its last f0 (1), and
+  [`normalise_time_landmarks()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_time_landmarks.md)
+  runs each segment of a tier, such as each syllable, from its first f0
+  to its last; the TextGrid boundaries only say which rows belong to
+  which syllable. Before, they ran from the token’s first row to its
+  last and from each interval’s start boundary to its end, so a
+  voiceless onset put the first f0 at, say, 0.2. `<tier>_tseq` puts the
+  syllables in sequence: syllable 1’s f0 fills 0 to 1, syllable 2’s
+  fills 1 to 2, and a stretch without f0 at the boundary takes no room.
+  `token_t01` is the whole-word option: it keeps the gap between the
+  syllables and their duration ratio. Rows before the first f0 or after
+  the last are `NA`, not 0 or 1, and so are segments with f0 at fewer
+  than two times, rows in empty-label intervals and rows outside the
+  tier. So removing rows without f0 changes none of these columns. A
+  lone sample cut off by a gap at a token’s edge still sets its 0 or 1;
+  the Start page’s short-run box removes such samples. Both functions
+  gain `f0` (default `"f0"`), and
+  [`normalise_time_landmarks()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_time_landmarks.md)
+  gains `token` (default `"token"`), as segments are taken within each
+  token. In a column in Hz, 0 is no f0. A column with negative markers
+  such as -1 is not read as Hz, so its -1 and 0 values count as f0: set
+  them to `NA` first, or tick the Start page’s box that reads them as no
+  f0. A missing column is now an error rather than a silent no-op,
+  `<tier>_tseq` is no longer added without a `<tier>_i` column, and data
+  with an `f0_corrected` column get a message to pass
+  `f0 = "f0_corrected"`. **Columns saved by earlier versions keep their
+  old values** and are still used as they are by their names: make them
+  again in Normalise.
+- **`<tier>_tbound`: syllables in sequence, with the gap kept.**
+  [`normalise_time_landmarks()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_time_landmarks.md)
+  adds a third column next to `<tier>_t01` and `<tier>_tseq`. The
+  TextGrid boundaries between a word’s syllables are at 1, 2, …, so they
+  line up across tokens, as on `<tier>_tseq`. A stretch without f0 at a
+  boundary keeps its length, as on `token_t01`. The word’s first f0 is
+  at 0 and its last f0 at n, the number of syllables, so stretches
+  without f0 at the word’s edges take no room. A syllable with no f0 at
+  all at the word’s start or end gets `NA`, and the word then starts at
+  1 (or ends at n - 1). One GAMM smooth over `<tier>_tbound` can follow
+  an f0 jump across the gap; on `<tier>_tseq` both sides of the jump sit
+  at the same time. Removing rows without f0 or reordering the rows
+  changes nothing. The column needs `<tier>_i`, and it needs `time` and
+  the boundaries on the same clock, as F0 Extraction writes them: a
+  token whose time lies outside its own intervals gets `NA`, with a
+  message.
+  [`fit_gamm()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_gamm.md)
+  keeps it on its own 0 to n scale, like `<tier>_tseq`; the other fits
+  and
+  [`compute_mean_contour()`](https://chenchenzi.github.io/citationtone_hub/reference/compute_mean_contour.md)
+  rescale it per token from the first f0 to the last.
+  [`landmark_prefixes()`](https://chenchenzi.github.io/citationtone_hub/reference/landmark_prefixes.md)
+  keeps `<tier>_tbound` free for the tier.
+- **The fits rescale time from the first f0 to the last too.**
+  [`resolve_time_norm()`](https://chenchenzi.github.io/citationtone_hub/reference/resolve_time_norm.md)
+  gains `f0`, and
+  [`fit_gca()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_gca.md),
+  [`fit_gamm()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_gamm.md),
+  [`fit_polynomial()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_polynomial.md)
+  and
+  [`compute_mean_contour()`](https://chenchenzi.github.io/citationtone_hub/reference/compute_mean_contour.md)
+  pass their f0 column, so rows without f0 at a token’s edges no longer
+  move the time axis. Fits, mean contours, Chao numerals and Timing are
+  now the same with or without these rows, and a fit on the time column
+  matches a fit on `token_t01`. On a test set of 1,853 tokens with rows
+  without f0 at every edge, the Chao numerals with the rows kept were
+  32, 212, 323, 54, 315/415 and 214; they are now 32, 212, 32, 45/55, 31
+  and 213, as with the rows removed. These functions and
+  [`cluster_features()`](https://chenchenzi.github.io/citationtone_hub/reference/cluster_features.md)
+  also read 0 in an Hz column as no f0, as the axes do, rather than as a
+  pitch of 0. Without `f0`,
+  [`resolve_time_norm()`](https://chenchenzi.github.io/citationtone_hub/reference/resolve_time_norm.md)
+  keeps its first-row-to-last-row rescale.
+- **Syllables in sequence: two rows at each boundary.** On
+  `<tier>_tseq`, one syllable’s last f0 and the next one’s first f0
+  share a whole number, often with an f0 jump between them.
+  [`compute_mean_contour()`](https://chenchenzi.github.io/citationtone_hub/reference/compute_mean_contour.md)
+  and
+  [`cluster_features()`](https://chenchenzi.github.io/citationtone_hub/reference/cluster_features.md)
+  never average the two: at the boundary and just after it they use the
+  next syllable’s f0, and just before it the earlier one’s. They tell
+  the rows apart by `<tier>_t01` or `<tier>_i`, so the row order does
+  not matter. Other rows of a token at one time, such as two recordings
+  that share a token name, are averaged, with a message that names the
+  tokens. One GAMM smooth over `<tier>_tseq` cannot follow a jump at a
+  boundary; the
+  [`fit_gamm()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_gamm.md)
+  help suggests `<tier>_tbound` or `token_t01` for the whole word, or
+  one token per syllable on `<tier>_t01`.
+- **Landmark axes in auto mode.**
+  [`time_already_normalised()`](https://chenchenzi.github.io/citationtone_hub/reference/time_already_normalised.md)
+  gains `name`. A column named `<tier>_t01`, `token_t01` or `time_prop`
+  whose values all lie in \[0, 1\] counts as already normalised by its
+  name, so removing rows cannot switch the fits to a rescale.
+  [`resolve_time_norm()`](https://chenchenzi.github.io/citationtone_hub/reference/resolve_time_norm.md)
+  and the app pass the name. A `<tier>_tseq` is still judged by its
+  values. On the Model, GCA and GAMM tabs, a `<tier>_t01` with one part
+  per token (a word, rhyme or vowel tier) counts as a whole-token axis,
+  like `token_t01`: it gets the “already on 0-1” note, not the
+  multisyllabic warning.
+- **Normalise: three ways to put a word on one axis.** Time
+  normalisation reads which rows have f0 from the f0 (Hz) variable the
+  tab normalises, offers the token picker for tiers too, and no longer
+  offers a 0-1 axis as the time variable. A tier adds `<tier>_t01`,
+  `<tier>_tseq` and `<tier>_tbound`, and the message after the run names
+  all three. The guide says what the new column is and why tokens need
+  it, and names the tier columns by their endings
+  (`<syllable_tier>_t01`, `_tseq`, `_tbound`; `token_t01` keeps its name
+  whatever the token variable is called). Its pictures show one token in
+  time on top, with a ruler for each axis, then, in a row, the three
+  choices for a word, each with a card under it saying when to use it:
+  *In sequence* (`_tseq`: the boundaries line up), *In sequence, gap
+  kept* (`_tbound`: the boundaries line up and the gap is kept) and
+  *Whole word* (`token_t01`: the gap and the syllables’ relative
+  durations are kept, so the boundary moves from token to token). The
+  layout follows the guide’s width: three in a row, then each picture
+  beside its card, then each above it (on a phone); on narrow screens
+  Token A switches to a narrower drawing. The *Whole word* card says to
+  pick a word tier with only the target word labelled when a token holds
+  more than the word, such as a carrier phrase. The first tip names
+  every tab that takes the new column. The table shows the time, token
+  and `<tier>_i` columns next to the new axes. When time and the
+  boundaries are not on the same clock, a second message says why
+  `<tier>_tbound` is `NA`.
+- **Visualise: in sequence, gap kept.** *Align by TextGrid tier*
+  (renamed from *Align time by landmark*) offers three layouts, named
+  after the chosen tier: *In sequence (`<tier>_tseq`)*, *In sequence,
+  gap kept (`<tier>_tbound`)* and *Overlaid (`<tier>_t01`)* (*In
+  sequence* was *Side by side*). *In sequence, gap kept* is new and
+  plots `<tier>_tbound`. Both layouts in sequence draw dashed lines at
+  the boundaries and now name each part at its middle (“syllable 1”, not
+  “1”). *Show R code* makes the same axis. A tier without `<tier>_i`
+  offers *Overlaid* only; a tier with it offers all three again, with
+  the layout picked before.
+- **GAMM: a note for `<tier>_tbound`.** On a `<tier>_tbound` with
+  several syllables per token, the GAMM tab says that the fit keeps its
+  0 to n scale and that the gap is kept, so one smooth can follow an f0
+  jump across it. The note on `<tier>_tseq`, where one smooth cannot
+  follow such a jump, now suggests `<tier>_tbound` or `token_t01` for
+  the whole word, and so do the red warning on a `<tier>_t01` and the
+  multisyllabic guide. Model and GCA give a `<tier>_tbound` the same
+  nudge to GAMM as a `<tier>_tseq`. With several syllables per token,
+  the GAMM tab now starts on `<tier>_tbound`, where one smooth can
+  follow an f0 jump at the boundary; Model and GCA still start on
+  `<tier>_tseq`. When `<tier>_tbound` is empty for some tokens (time and
+  the boundaries on different clocks), GAMM starts on `<tier>_tseq` too.
+- **Jump check: the same flags with or without rows without f0.**
+  [`flag_pitch_jumps()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_pitch_jumps.md),
+  and so
+  [`inspect_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/inspect_f0.md)
+  and the Inspect tab, now set aside rows without f0 (`NA`, 0 or a
+  negative marker) and rows with no time, check the rest in time order
+  and map the flags back. Rows set aside are never flagged, so the flags
+  are the same with or without them and in any row order. Each sample is
+  compared with the next sample that has f0, with the rate scaled by the
+  real time step. On a regular grid, a jump across a gap gets ” across a
+  N ms gap” in its note, where N is the step minus the usual step, so a
+  one-frame gap in 10 ms frames reads as 10 ms. Across a gap, the flag
+  goes on the shorter side when it is a run of at most 5 samples, since
+  a short fragment cut off by a gap is the likelier error; otherwise on
+  the side farther from the token median, as before. Negative values and
+  `NA` times no longer stop the check.
+  [`inspect_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/inspect_f0.md)
+  gives a token with no f0 the note “no f0” and no flags, counts the
+  level check’s speaker x tone groups over tokens with f0, and keeps a
+  `voiced_run` column.
+- **[`contour_duration()`](https://chenchenzi.github.io/citationtone_hub/reference/contour_duration.md),
+  [`trim_to_voiced()`](https://chenchenzi.github.io/citationtone_hub/reference/trim_to_voiced.md)
+  and
+  [`flag_f0_gaps()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_f0_gaps.md)
+  find gaps without the rows.** A run of f0 now also ends at a time step
+  longer than 1.5 times the usual step (on a regular grid) and where a
+  `voiced_run` column changes, so these functions give the same result
+  with or without the rows without f0. Before, removing them could join
+  a stray frame in the silence to the contour: 6 of the 1,853 test
+  tokens gained 20 to 60 ms of duration. With `set`,
+  [`contour_duration()`](https://chenchenzi.github.io/citationtone_hub/reference/contour_duration.md)
+  finds the gaps over the whole token, then counts each segment’s own
+  rows. For a token with no rows without f0,
+  [`flag_f0_gaps()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_f0_gaps.md)
+  keeps the file’s own `n_missing` and `has_gap`, which may record rows
+  removed earlier, instead of resetting them, and sets `has_gap` where
+  the time steps or `voiced_run` show a gap. All three gain `run`
+  (default `"voiced_run"`).
+- **GCA: the polynomial basis is built on the rows the model fits.**
+  [`fit_gca()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_gca.md)
+  resolves the time axis on all rows, then keeps the rows the model fits
+  (a finite time, f0 and tone, and the speaker and item the model uses)
+  and builds [`poly()`](https://rdrr.io/r/stats/poly.html) on those.
+  Before, rows without f0 inside tokens shifted the basis and so the
+  coefficients, and a landmark axis with `NA` time stopped with “missing
+  values are not allowed in ‘poly’”. On data with no rows without f0,
+  the fit is unchanged. Too few rows for the degree now give a clear
+  error. The fit records `time_coverage`, each tone’s first and last
+  fitted time, and
+  [`predict_gca()`](https://chenchenzi.github.io/citationtone_hub/reference/predict_gca.md)
+  carries it. The GCA tab’s *Show R code* keeps the same rows before
+  [`poly()`](https://rdrr.io/r/stats/poly.html).
+- **GAMM: the AR1 correction starts afresh at every token.** With
+  `use_ar1 = TRUE`,
+  [`fit_gamm()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_gamm.md)
+  put each token’s `AR.start` on its first row by time. When that row
+  had no f0, as at the edges of a whole-file track, `bam()` left the row
+  out and the marker with it, so the AR1 correction ran on from one
+  token into the next. The marker now sits on each token’s first row
+  that the model fits. On the test set, all 1,853 markers had been lost,
+  which moved the curves by up to 1.2 LZ. On a `<tier>_tseq`,
+  `time_range` and `n_segments` now come from the fitted rows, so
+  [`predict_gamm()`](https://chenchenzi.github.io/citationtone_hub/reference/predict_gamm.md)
+  spans the part of the axis the model was fitted to (0 to n on a
+  `<tier>_tseq` from
+  [`normalise_time_landmarks()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_time_landmarks.md)),
+  not rows without f0 at the edges; its tones and reference speaker and
+  item come from the fitted rows too. Rows at the same time keep their
+  input order, so give each token’s rows in time order.
+  [`diagnose_gamm()`](https://chenchenzi.github.io/citationtone_hub/reference/diagnose_gamm.md)
+  whitens the residuals along the model’s own AR starts. The fit records
+  `time_coverage`, which
+  [`predict_gamm()`](https://chenchenzi.github.io/citationtone_hub/reference/predict_gamm.md)
+  carries. The GAMM tab’s *Show R code* keeps the fitted rows, puts the
+  marker on the first of them, estimates rho within tokens, and runs
+  with a speaker-by-tone random smooth, where its prediction step used
+  to fail.
+- **[`contour_to_chao()`](https://chenchenzi.github.io/citationtone_hub/reference/contour_to_chao.md)
+  checks the time axis.** Time must run from 0 at the onset to 1 at the
+  offset. Time outside \[0, 1\], such as milliseconds, point numbers or
+  a GAMM across several segments of a `<tier>_tseq`, is now an error;
+  such input used to give numerals read at the wrong points. A contour
+  that starts after 0.25 or ends before 0.75 gives a warning. A factor
+  time column is read by its labels. Rows with no tone, time or f0 no
+  longer set the f0 range, and a tone with f0 at fewer than two time
+  points is left out, with a warning. New columns `t_first` and `t_last`
+  give where each tone’s contour starts and stops. When it misses 0 or
+  1, its onset or offset is read from the nearest measured point, held
+  flat, and `move`, `progress` and `timing` use that value; `progress`
+  is still read at 0.5 on the time axis. Summarise marks such a tone
+  with a dagger (†) and a note, and does the same for GCA and GAMM
+  predictions whose fitted rows stop short of 0 or 1.
+- **Summarise fixes.** An error in the mean contours or the Chao
+  conversion, such as a text column chosen as Time, now shows a message
+  and clears the old table and plot, instead of closing the app;
+  warnings from the conversion show as messages too. The guide opens
+  with “One syllable per token”: for a multisyllabic word, make each
+  syllable its own token on `<syllable_tier>_t01` (numbered by
+  `<syllable_tier>_i`), labelled by the word’s tone pattern and its
+  place. When the tab declines Chao numerals for a GAMM fit across
+  several segments, the message now says to model each syllable as its
+  own token on `<syllable_tier>_t01`. The Timing guide says the middle
+  of the tone is halfway between its first and last f0. The curated
+  route takes its token and f0 variables from the Start page, and the
+  menus keep the user’s picks when the data change. The Praat script
+  page says that its CSV covers whole files, silence included, and that
+  Data screening on the Start page removes the rows without f0 by
+  default.
+- **Model, GCA, GAMM and Summarise: a notice only when it matters.** An
+  amber notice at the top of these tabs appears when a time column used
+  as it is (already on 0-1) leaves some token’s f0 short of 0 or 1:
+  `time_prop` over a region whose end points have no f0, or a 0-1 column
+  made by an older version. It counts those tokens (or syllables, on a
+  `<tier>_t01`), says whether removing rows changes it, and how to fix
+  it. It never appears on the real time column, which the fits rescale
+  from the first f0 to the last.
+- **Token labels from the rows with f0.**
+  [`fit_polynomial()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_polynomial.md),
+  [`cluster_features()`](https://chenchenzi.github.io/citationtone_hub/reference/cluster_features.md),
+  [`compute_mean_contour()`](https://chenchenzi.github.io/citationtone_hub/reference/compute_mean_contour.md),
+  [`flag_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_outliers.md)
+  and
+  [`flag_level_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_level_outliers.md)
+  take a token’s speaker and tone as the most frequent non-empty value
+  on its rows with f0 (a tie goes to the value that comes first in
+  time), not from its first row. A label column read from a TextGrid
+  tier, such as a `tone` tier with `""` in the silences, can change
+  within a token, so the first row used to depend on the row order and
+  on the rows without f0.
+  [`fit_polynomial()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_polynomial.md)’s
+  checks for tokens with too few samples now count only rows with f0 and
+  time.
+- **Results from old rows are cleared.** A new upload already cleared
+  every result computed from the previous file. Now so does a change on
+  the Start page that changes the rows the tabs read: a box under *Data
+  screening*, the screened variables, *Exclude discarded tokens*,
+  metadata or duration columns. Normalised, inspected, clustered and
+  curated + normalised data, GCA and GAMM predictions and each tab’s
+  shown results are cleared, with a message that names them and the
+  change. Curate’s relabels and exclusions are kept, as they are keyed
+  by token. A change that leaves the rows as they were clears nothing.
+- **Variable defaults follow the Start page.** The token and f0 menus of
+  the F0 Analysis tabs default to the Start page’s token and f0
+  variables, so an F0 Correction file is analysed on `f0_corrected`, not
+  the tracked `f0`. Normalised columns still come first where a tab
+  prefers them, and time defaults are as before. The Start page’s token
+  picker never falls back to another column (a file of points with no
+  token column was grouped by its point number), and its time picker
+  leaves out `*_t01`, `*_tseq` and `*_tbound`. A menu keeps the user’s
+  own pick. When a tab’s f0 variable is not the screened one and still
+  has rows without f0, a note under the menu says so.
+- **Show R code repeats the Start page.** The R code of Visualise,
+  Model, GCA, GAMM and Summarise now rebuilds the rows the app used, in
+  the order the Start page runs its steps: the read and
+  [`zero_hz_to_na()`](https://chenchenzi.github.io/citationtone_hub/reference/zero_hz_to_na.md),
+  the exclusion of tokens discarded in F0 Correction (missing before),
+  the metadata join (as code when the file and key are known, otherwise
+  as a comment), the
+  [`contour_duration()`](https://chenchenzi.github.io/citationtone_hub/reference/contour_duration.md)
+  lines, and
+  [`drop_rows_without_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/drop_rows_without_f0.md)
+  with `min_run` and `unvoiced` when used. Comments give the counts, and
+  a commented
+  [`screen_f0_rows()`](https://chenchenzi.github.io/citationtone_hub/reference/screen_f0_rows.md)
+  line reproduces the report. The code starts with
+  `stopifnot(utils::packageVersion("shinytone") >= ...)` for the version
+  the app runs on, since these functions need it. The Model, GCA and
+  GAMM scripts rescale time from each token’s first f0 to its last, as
+  the app does.
+- **Inspect tab.** Shares of flagged samples are counted over the
+  samples with f0, so they are the same whether or not the Start page
+  removed rows. The time unit is set from the data (a median step within
+  tokens below 1 means seconds) and shown under the buttons, e.g. “Frame
+  step 10 ms”, with a warning when the chosen unit does not fit. Before,
+  millisecond data left at “s” silently turned off the rate test. A
+  failed run shows a message instead of closing the app. The guide
+  describes the comparison with the next sample that has f0, the gap
+  note and where the flag goes across a gap.
+- **Plot lines break at gaps.** Curate’s plots and Visualise’s *Align by
+  TextGrid tier* plot draw one line per voiced run when the data have
+  `voiced_run`, so a line no longer bridges a gap where the Start page
+  removed rows without f0. Curate’s selection, click and hover still
+  work by token, and Visualise’s *Show R code* groups the lines the same
+  way. The aligned plot now calls
+  [`normalise_time_landmarks()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_time_landmarks.md),
+  so each part runs from its first f0 to its last, as in `<tier>_t01`
+  and `<tier>_tseq`, and its *Show R code* prints that call. Which rows
+  have f0 comes from the Start page’s f0 variable, even when Y is
+  another variable. Alignment now needs a token variable.
+- **F0 Extraction: *Drop rows without f0* marks the gaps.** The export
+  option now uses
+  [`drop_rows_without_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/drop_rows_without_f0.md),
+  so the file carries a `voiced_run` column. With equidistant points or
+  a TextGrid interval region, only the dropped rows mark gaps. The help
+  says that Curate and Visualise break the line at each gap either way,
+  and that other plotting tools join the line across the removed rows
+  unless they group by `voiced_run`. A re-uploaded file’s `voiced_run`
+  is not carried over: the export makes it again.
+- **Changed arguments.** New arguments come last, so positional calls
+  still work.
+  [`contour_duration()`](https://chenchenzi.github.io/citationtone_hub/reference/contour_duration.md),
+  [`trim_to_voiced()`](https://chenchenzi.github.io/citationtone_hub/reference/trim_to_voiced.md)
+  and
+  [`flag_f0_gaps()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_f0_gaps.md)
+  gain `run = "voiced_run"`.
+  [`flag_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_outliers.md)
+  and
+  [`flag_level_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_level_outliers.md)
+  gain `time = NULL`, used only to break a tie between labels.
+  [`normalise_time_landmarks()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_time_landmarks.md)
+  gains `f0 = "f0"` and `token = "token"`, and
+  [`normalise_time_token()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_time_token.md)
+  gains `f0 = "f0"`; a missing column is now an error.
+  [`resolve_time_norm()`](https://chenchenzi.github.io/citationtone_hub/reference/resolve_time_norm.md)
+  gains `f0 = NULL`, and
+  [`time_already_normalised()`](https://chenchenzi.github.io/citationtone_hub/reference/time_already_normalised.md)
+  gains `name = NULL`.
+  [`contour_to_chao()`](https://chenchenzi.github.io/citationtone_hub/reference/contour_to_chao.md)
+  returns `t_first` and `t_last`, and stops on time outside \[0, 1\].
+  [`fit_gca()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_gca.md)
+  stops with “Too few rows to fit” when fewer than `degree + 1` distinct
+  time points remain.
+  [`fit_gca()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_gca.md)
+  and
+  [`fit_gamm()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_gamm.md)
+  return `time_coverage`, which
+  [`predict_gca()`](https://chenchenzi.github.io/citationtone_hub/reference/predict_gca.md)
+  and
+  [`predict_gamm()`](https://chenchenzi.github.io/citationtone_hub/reference/predict_gamm.md)
+  carry as an attribute. New exports:
+  [`screen_f0_rows()`](https://chenchenzi.github.io/citationtone_hub/reference/screen_f0_rows.md)
+  (its `run` reads the gaps an earlier removal marked),
+  [`drop_rows_without_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/drop_rows_without_f0.md),
+  [`suggest_unvoiced()`](https://chenchenzi.github.io/citationtone_hub/reference/suggest_unvoiced.md)
+  and
+  [`hz_f0_columns()`](https://chenchenzi.github.io/citationtone_hub/reference/hz_f0_columns.md).
 - **CSVs and TextGrids in UTF-16 and other encodings.** Praat saves
   tables and TextGrids as UTF-16 whenever any text is not plain ASCII,
   such as Chinese token names or IPA labels. A UTF-16 CSV used to close
@@ -62,14 +585,14 @@
   same levels get the same digits.
   [`contour_to_chao()`](https://chenchenzi.github.io/citationtone_hub/reference/contour_to_chao.md)
   now also returns `move` (the change from onset to offset), `progress`
-  (the share of it done at 50% of the contour) and `timing`: `"early"`
-  above 0.75, `"late"` below 0.25 and `"mid"` in between. They are given
-  for a rise or fall of at least half a unit with no sampled turning
-  point, and are `NA` otherwise. The numerals themselves are unchanged.
-  In the app, the results table has a Timing column, in red when the
-  value at 50% is within the fuzzy margin of a cut-off, and the CSV and
-  the R code carry it. On the sample data, tones 3 and 6 are late and
-  tone 5 is mid.
+  (the share of it done at 0.5 on the time axis, the middle of the tone)
+  and `timing`: `"early"` above 0.75, `"late"` below 0.25 and `"mid"` in
+  between. They are given for a rise or fall of at least half a unit
+  with no sampled turning point, and are `NA` otherwise. The numerals
+  themselves are unchanged. In the app, the results table has a Timing
+  column, in red when the value at 0.5 is within the fuzzy margin of a
+  cut-off, and the CSV and the R code carry it. On the sample data,
+  tones 3 and 6 are late and tone 5 is mid.
 - **Non-ASCII tone labels.**
   [`compute_mean_contour()`](https://chenchenzi.github.io/citationtone_hub/reference/compute_mean_contour.md)
   no longer stops with “Character encoding must be UTF-8, Latin-1 or
@@ -183,7 +706,8 @@
   and counts at most once at each: nothing is extrapolated beyond a
   token’s first and last f0 value. Measured points that fall on the
   grid, such as 11 or 21 equally spaced points per token, keep their
-  values. `n_bins` is deprecated in favour of `n_points`. The mean
+  values when each token’s first and last points have f0, or on
+  `time_prop`. `n_bins` is deprecated in favour of `n_points`. The mean
   contours of the Chao tab and the GCA tab’s observed overlay use the
   new method.
 - **Summarise: the robust Chao method is removed.** Its range, one SD
@@ -329,22 +853,22 @@
   voiced stretch’s own duration, so it lines up with the recording.
 - **Model: GAMM tab keeps a `<tier>_tseq` axis on its own scale.** For
   multisyllabic words the guide routes you to fit on `syllable_tseq`
-  (syllable 1 spans 0–1, syllable 2 spans 1–2), but
+  (syllable 1’s f0 fills 0–1, syllable 2’s fills 1–2), but
   [`fit_gamm()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_gamm.md)
-  rescaled each token’s time to 0–1 like any other column. That squeezed
-  every token’s first-to-last frame onto \[0, 1\], so the syllable
-  boundary no longer sat at the same point across tokens, and the plot
-  showed a 0–1 axis.
+  rescaled each token’s time to 0–1 like any other column. That moved
+  the syllable boundaries away from whole numbers, and the plot showed a
+  0–1 axis.
   [`fit_gamm()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_gamm.md)
   now recognises a `_tseq` column and uses it as-is
   (`time_normalised = "sequential"` declares any such axis).
   [`predict_gamm()`](https://chenchenzi.github.io/citationtone_hub/reference/predict_gamm.md)
-  predicts across its observed range, and the fit records `time_axis`,
-  `time_range` and `n_segments`. The GAMM plot keeps the 0-to-n axis,
-  marks each segment boundary with a dashed line, and labels the
-  segments. The tab explains the axis when `_tseq` is chosen, and *Show
-  R code* reproduces all of it. Summarise now declines Chao numerals for
-  such a fit, since they describe one syllable on a 0–1 axis.
+  predicts across the range of the rows it fits, and the fit records
+  `time_axis`, `time_range` and `n_segments`. The GAMM plot keeps the
+  0-to-n axis, marks each segment boundary with a dashed line, and
+  labels the segments. The tab explains the axis when `_tseq` is chosen,
+  and *Show R code* reproduces all of it. Summarise now declines Chao
+  numerals for such a fit, since they describe one syllable on a 0–1
+  axis.
 - **Axis titles: `f₀ (st)` for semitones.** The GAMM plot labelled its y
   axis with the raw column name (`Predicted f0_st`); it now uses the
   same title as the other tabs (`Predicted f₀ (st)`). Semitone axes read
@@ -357,10 +881,13 @@
   (`syllable_f0_dur`), repeated on every row of the unit. Unvoiced
   frames at the edges do not count, and unvoiced frames inside the
   contour do not shorten it. The ends are anchored on two voiced frames
-  in a row, the rule the *Whole token* export region uses, so a lone
-  stray frame in the silence cannot stretch the duration; a whole
-  token’s value then equals the `voiced_s` that F0 Extraction reports.
-  The column reaches every F0 Analysis tab. Also scriptable as
+  in a row with no gap between them, the rule the *Whole token* export
+  region uses, so a lone stray frame in the silence cannot stretch the
+  duration; a whole token’s value then equals the `voiced_s` that F0
+  Extraction reports. The value is the same whether or not the Start
+  page removes the rows without f0, and when it reads 0 or -1 as no f0
+  in the same column, so does the duration. The column reaches every F0
+  Analysis tab. Also scriptable as
   [`contour_duration()`](https://chenchenzi.github.io/citationtone_hub/reference/contour_duration.md)
   (`min_run = 1` for the literal first-to-last frame), which counts
   negative values as measured, so it works on semitone or z-score
@@ -369,10 +896,11 @@
   *Whole token* region already leaves out leading and trailing silence
   but keeps unvoiced gaps inside the contour as `f0 = NA` rows. A new
   checkbox (off by default) drops those rows too, for tools that expect
-  measured values only. It runs last, so resampling still sees the gaps
-  and `has_gap` / `n_missing` still flag the tokens. With equidistant
-  points, a token with a gap then keeps fewer than N points, each still
-  labelled by `point` and `time_prop`.
+  measured values only, and marks the gaps in `voiced_run` (see above).
+  It runs last, so resampling still sees the gaps and `has_gap` /
+  `n_missing` still flag the tokens. With equidistant points, a token
+  with a gap then keeps fewer than N points, each still labelled by
+  `point` and `time_prop`.
 - **F0 Extraction tab: 0 Hz in an uploaded f0 CSV reads as unvoiced.**
   The wrassp and `.Pitch` paths already turned 0 Hz into `NA`, but a
   CSV’s zeros passed through as values and could reach the export inside
@@ -384,7 +912,7 @@
   `all_correctedf0.csv` read `edited = FALSE` everywhere. When
   corrections exist, the export now also writes `f0_original` (the
   tracker’s value) and `edited`, and re-uploading either file restores
-  the edits. This works whichever f0 column the picker is set to:
+  the edits. This works whichever f0 variable the picker is set to:
   choosing `f0_corrected` from `all_correctedf0.csv` used to lose the
   history the same way. Re-uploading an older export without these
   columns now shows a note explaining that its corrections cannot be
@@ -421,13 +949,13 @@
   original values of edited frames. And the Delete button sometimes
   appeared to do nothing: a click after a box/lasso selection silently
   kept the stale box (plotly never clears that input on a plain click),
-  so the edit hit the old — often already deleted — frames. The
-  selection now follows whichever of click or box-select happened last,
-  and switching tokens clears it.
+  so the edit hit the old (often already deleted) frames. The selection
+  now follows whichever of click or box-select happened last, and
+  switching tokens clears it.
 - **F0 Correction tab: a `note` column in the edit log.** A *Note
   (optional)* box in the sidebar. Whatever it holds is saved with the
-  next edit or discard as the `note` column of the edit log — table, CSV
-  download, and log re-upload alike — then cleared so it cannot leak
+  next edit or discard as the `note` column of the edit log (table, CSV
+  download, and log re-upload alike), then cleared so it cannot leak
   onto later, unrelated actions. For recording *why*: a reason to
   discard a token, or why frames were removed.
 - **F0 Extraction tab: export notes restyled as a banner.** The
@@ -446,12 +974,12 @@
   decides what the downloaded dataset contains, without touching the
   data in the app: F0 Correction keeps working on the extraction exactly
   as it arrived, so changing these settings can never disturb frame
-  edits. **Region** is what the measurement covers — *Whole token* runs
+  edits. **Region** is what the measurement covers: *Whole token* runs
   from a token’s first to its last voiced frame, so leading and trailing
   silence (which carries no f0) is excluded, and an edge needs two
   consecutive voiced frames so a lone voiced frame stranded in silence
   cannot stretch it; or a *TextGrid interval*. **Sampling** is how
-  densely — every *native frame time*, or *N equidistant points* across
+  densely: every *native frame time*, or *N equidistant points* across
   the region, which is time normalisation applied at the sampling stage
   and adds `point` (1…N) and `time_prop` (0–1). An **export preview**
   shows the first rows of the file the Download button will write,
@@ -488,13 +1016,16 @@
 - **Two checks that make silent problems visible.**
   [`flag_f0_gaps()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_f0_gaps.md)
   adds `n_missing` and `has_gap`, marking tokens whose voicing was
-  interrupted mid-region — measured on the native frames *before*
+  interrupted mid-region, measured on the native frames *before*
   resampling, since resampling can fill a short dropout from the nearer
-  frame. And the per-token summary reports `voiced_s` with `voiced_prop`
-  (`voiced_s / duration_s`), shading and naming tokens voiced across a
-  far shorter span than the rest of the corpus: with equidistant
-  sampling their percentage positions are squeezed into whatever was
-  tracked, so they are not comparable with the other tokens.
+  frame. (On data whose rows without f0 were removed, it reads the gaps
+  from the time steps or `voiced_run` and keeps the file’s own values;
+  see above.) And the per-token summary reports `voiced_s` with
+  `voiced_prop` (`voiced_s / duration_s`), shading and naming tokens
+  voiced across a far shorter span than the rest of the corpus: with
+  equidistant sampling their percentage positions are squeezed into
+  whatever was tracked, so they are not comparable with the other
+  tokens.
 - **Modelling: an already-normalised time column is used as-is.**
   [`fit_gca()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_gca.md),
   [`fit_gamm()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_gamm.md),
@@ -502,35 +1033,36 @@
   and
   [`compute_mean_contour()`](https://chenchenzi.github.io/citationtone_hub/reference/compute_mean_contour.md)
   gained `time_normalised` (`"auto"`, `"no"`, `"yes"`). Under the
-  default `"auto"`, a column that is already proportional — `token_t01`
+  default `"auto"`, a column that is already proportional (`token_t01`
   from
   [`normalise_time_token()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_time_token.md),
-  or `time_prop` from equal-point extraction — is detected by the new
+  or `time_prop` from equal-point extraction) is detected by the new
   [`time_already_normalised()`](https://chenchenzi.github.io/citationtone_hub/reference/time_already_normalised.md)
-  and used as-is, rather than min-max rescaled a second time, which
-  stretched any token not spanning the full unit interval. The Model,
-  GCA and GAMM tabs say when this applies and their **Show R code**
-  output reflects whichever branch ran;
+  and used as-is, rather than rescaled a second time, which stretched
+  any token not spanning the full unit interval. The Model, GCA and GAMM
+  tabs say when this applies and their **Show R code** output reflects
+  whichever branch ran;
   [`fit_gca()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_gca.md)
   and
   [`fit_gamm()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_gamm.md)
   record `time_prenormalised` in the returned object,
   [`fit_polynomial()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_polynomial.md)
-  as an attribute. Detection is deliberately conservative and has two
-  documented limits: a set in which *every* token is a partial span
-  cannot be distinguished from ordinary variable-duration time and is
-  rescaled as before (pass `"yes"`), and raw seconds in which every
-  token lasts just under one second is detected as proportional (pass
-  `"no"`).
+  as an attribute. Columns named `<tier>_t01`, `token_t01` or
+  `time_prop` are recognised by their name (see above). For other
+  columns, detection is deliberately conservative and has two documented
+  limits: a set in which *every* token is a partial span cannot be
+  distinguished from ordinary variable-duration time and is rescaled as
+  before (pass `"yes"`), and raw seconds in which every token lasts just
+  under one second is detected as proportional (pass `"no"`).
 - **0 Hz counts as unvoiced** in the new f0 helpers, matching
   [`inspect_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/inspect_f0.md)
   and the extraction paths, so trackers that code unvoiced frames as 0
   Hz are handled rather than having silence blended into speech.
 - **The multisyllabic warning no longer fires on `token_t01`.** On the
   Model, GCA and GAMM tabs it is now raised only for a landmark tier’s
-  `<tier>_t01`, which resets at every segment boundary, and not for the
-  whole-token proportional axis, which is a perfectly good time
-  variable.
+  `<tier>_t01` with more than one part per token, which resets at every
+  segment boundary, and not for the whole-token proportional axis, which
+  is a perfectly good time variable.
 - **F0 Correction tab: whole-token discard.** A new “Whole token” edit
   group adds **Discard token** / **Restore token** for tokens that are
   beyond repair: instead of fixing frames, the whole token is marked as
@@ -556,14 +1088,14 @@
   bulk and manual alike, and removes their edit-log rows.
 - **F0 Correction tab: discard-share breakdown by speaker and tone.**
   The corpus-wide discarded share can look harmless while the discards
-  pile up in one speaker or tone — worst case, a whole speaker × tone
-  cell is emptied and vanishes from the retained data. When the filter
-  drawer’s speaker / tone columns are picked (auto-guessed from the
-  uploaded Inspect CSV), the bulk-discard confirmation dialog shows what
-  the discard set would look like per speaker × tone cell with marginals
-  (“After this discard”), and a **Breakdown** button next to the discard
-  toggle reopens the same table for the current state. Cells are
-  `discarded/total (%)`, tinted red when a group would be fully
+  pile up in one speaker or tone; in the worst case a whole speaker ×
+  tone cell is emptied and vanishes from the retained data. When the
+  filter drawer’s speaker / tone columns are picked (auto-guessed from
+  the uploaded Inspect CSV), the bulk-discard confirmation dialog shows
+  what the discard set would look like per speaker × tone cell with
+  marginals (“After this discard”), and a **Breakdown** button next to
+  the discard toggle reopens the same table for the current state. Cells
+  are `discarded/total (%)`, tinted red when a group would be fully
   discarded and amber at half or more, with tokens absent from the CSV
   grouped as “(no metadata)”. With only one of the two columns picked
   the table reduces to that margin; with neither, the dialog shows the
@@ -571,19 +1103,19 @@
 - **GCA and GAMM guides: pointer to model structures the UI does not
   cover.** Both guide boxes now close with a **Beyond the built-in
   options** note. The checkboxes and dropdowns cover the structures most
-  often used for tone contours, but `lme4` and `mgcv` support many more
-  — by-speaker tone slopes `(1 + (ot1 + ot2) * tone | speaker)` or
+  often used for tone contours, but `lme4` and `mgcv` support many more:
+  by-speaker tone slopes `(1 + (ot1 + ot2) * tone | speaker)` or
   uncorrelated terms via `||` for GCA; tensor-product interactions such
   as `te(time_norm, duration)`, or smooths varying by a further factor,
   for GAMMs. The note directs users to **Show R code**, which already
   emits a runnable script reproducing the current fit, as the starting
   point for editing the model formula.
-- **Model: Polynomials — Show R code now reproduces the coefficient
+- **Model: Polynomials tab’s Show R code now reproduces the coefficient
   scatter.** The tab’s generated script used to stop at the coefficient
   table, leaving the coefficient-space scatter as the one part of the
   tab with no reproducible counterpart outside the app. The snippet now
-  ends with a plotting section that rebuilds the scatter — one point per
-  token, coloured by tone — using the axes currently selected in the tab
+  ends with a plotting section that rebuilds the scatter (one point per
+  token, coloured by tone) using the axes currently selected in the tab
   (falling back to the plot’s own defaults) and axis labels carrying the
   phonetic gloss (`c1` slope, `c2` curvature, …). With no Z axis it
   emits a static `ggplot2` scatter; with a Z axis selected it emits the
@@ -689,11 +1221,11 @@
   octave-halving, a subharmonic, or creak deflates the minimum), and
   because the screen pools all of a speaker’s tones the opposite tails
   hold legitimate low/high tones rather than errors. This makes the
-  `flag_too_high` / `flag_too_low` columns — and the “max too high” /
+  `flag_too_high` / `flag_too_low` columns, and the “max too high” /
   “min too low” notes from
-  [`inspect_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/inspect_f0.md)
-  — directionally correct; before, a token with an unusually *high*
-  floor could be mislabelled “too low”. The set of flagged tokens is
+  [`inspect_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/inspect_f0.md),
+  directionally correct; before, a token with an unusually *high* floor
+  could be mislabelled “too low”. The set of flagged tokens is
   essentially unchanged on clean data (the rarer truncated-max /
   floored-min cases are left to
   [`flag_level_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_level_outliers.md)
@@ -708,10 +1240,10 @@
   The speaker-level extreme-value and sample-level jump checks still
   run, and the default remains `tone = "tone"`, so existing calls are
   unchanged.
-- **Inspect tab: optional tone.** The tone selector now offers
-  `— none —`, which runs the two tone-free screens (speaker-level
-  extreme-value and sample-level jumps) without a tone column, for the
-  pre-tone-discovery workflow. Backed by `inspect_f0(tone = NULL)`.
+- **Inspect tab: optional tone.** The tone selector now offers `(none)`,
+  which runs the two tone-free screens (speaker-level extreme-value and
+  sample-level jumps) without a tone column, for the pre-tone-discovery
+  workflow. Backed by `inspect_f0(tone = NULL)`.
 - **GAMM tab: on-demand diagnostics.** The “Run model diagnostics”
   button is shown in the sidebar from the start (disabled until a model
   is fitted), and diagnostics run when it is clicked rather than
@@ -731,7 +1263,7 @@
   computed with
   [`compute_mean_contour()`](https://chenchenzi.github.io/citationtone_hub/reference/compute_mean_contour.md))
   on the fitted polynomial curves, so you can judge how well the chosen
-  degree tracks the data — the standard GCA model-adequacy check (Mirman
+  degree tracks the data (the standard GCA model-adequacy check, Mirman
   2014). Toggle it with the “Overlay observed per-tone means” checkbox;
   turn it off for a cleaner plot on busy data. The overlay is included
   in the downloaded plot.

@@ -45,13 +45,13 @@ fit_polynomial(
 
 - speaker:
 
-  Column name of speaker ID, carried through to the output. Default
-  `"speaker"`.
+  Column name of speaker ID, carried through to the output (see "Speaker
+  and tone" below). Default `"speaker"`.
 
 - tone:
 
-  Column name of tone category, carried through to the output. Default
-  `"tone"`.
+  Column name of tone category, carried through to the output (see
+  "Speaker and tone" below). Default `"tone"`.
 
 - degree:
 
@@ -78,14 +78,19 @@ treated as already normalised.
 
 For each token:
 
-1.  Compute the per-token range of `time` and rescale it linearly to the
-    interval `[-1, 1]`, which is where Legendre polynomials are
-    orthogonal. If the time column is *already* normalised to `[0, 1]`
-    (detected with
+1.  Rescale each token's `time` linearly to `[-1, 1]`, from its first f0
+    (-1) to its last f0 (1), which is where Legendre polynomials are
+    orthogonal. Rows without f0 at a token's edges do not move it. If
+    the time column is *already* normalised to `[0, 1]` (detected with
     [`time_already_normalised()`](https://chenchenzi.github.io/citationtone_hub/reference/time_already_normalised.md),
     or declared via `time_normalised`), the fixed map `2 * t - 1` is
     used instead, so tokens whose samples do not span the full unit
-    interval are not stretched a second time.
+    interval are not stretched a second time. A `<tier>_tseq` (syllables
+    in sequence) or `<tier>_tbound` (in sequence, gap kept) is rescaled
+    per token too: a token whose first or last syllable has no values on
+    the axis (on a `<tier>_tseq`, f0 at fewer than two times; on a
+    `<tier>_tbound`, no f0) is stretched, and its other syllables fill
+    the axis.
 
 2.  Build the Legendre basis up to the requested `degree`.
 
@@ -111,10 +116,24 @@ coefficients have a tidy shape interpretation:
 ### Edge cases
 
 Samples with a missing or infinite f0 or time are skipped (`-Inf` comes
-from taking the log of 0 Hz). Tokens with fewer than `degree + 1` valid
-samples receive `NA` for all coefficients. Tokens with a single unique
-time point keep `c0` as the mean of their finite f0 values and set the
-higher-order coefficients to `NA`.
+from taking the log of 0 Hz), and so are 0 values in a column in Hz (one
+that
+[`hz_f0_columns()`](https://chenchenzi.github.io/citationtone_hub/reference/hz_f0_columns.md)
+finds), which have no f0. The checks below count only the samples that
+remain, so rows without f0 do not change them. A token whose samples all
+share one time point keeps `c0` as the mean of their f0 and sets the
+higher-order coefficients to `NA`. Any other token with fewer than
+`degree + 1` samples gets `NA` for all coefficients. So does a token
+with no samples.
+
+### Speaker and tone
+
+`speaker` and `tone` are read once per token. Each token takes the most
+frequent non-empty value among its rows with f0 (a finite f0, and above
+0 in a column in Hz, as in "Edge cases"). A tie goes to the value that
+comes first in time. So a label column that changes within a token, such
+as a tone tier from a TextGrid with `""` in the silences, gives the same
+result in any row order, with or without rows without f0.
 
 ## References
 

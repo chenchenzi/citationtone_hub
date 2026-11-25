@@ -79,7 +79,7 @@ patterns are often discovered visually or surfaced by the token-level
 register check of
 [`flag_level_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_level_outliers.md),
 which flags tokens whose overall level is unusual for their speaker and
-tone — a natural seed for relabelling.
+tone: a natural seed for relabelling.
 
 ## See also
 

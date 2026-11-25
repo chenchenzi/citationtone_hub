@@ -5,7 +5,7 @@
 **shinytone** is a research hub for *citation tone analysis* in tone
 languages. It bundles:
 
-- An interactive Shiny app that walks you through the full workflow —
+- An interactive Shiny app that walks you through the full workflow:
   pitch extraction, by-speaker f0 normalisation, outlier detection,
   growth-curve and generalised additive mixed models, and Chao tone
   numeral summarisation.
@@ -59,17 +59,65 @@ glimpse(sample_f0)
 
 The columns we’ll use:
 
-- `token` — unique identifier for each recorded syllable (groups rows of
+- `token`: unique identifier for each recorded syllable (groups rows of
   the same contour together)
-- `time` — time in seconds within each token
-- `f0_Hz` — fundamental frequency
-- `speaker` — speaker ID
-- `tone` — Chao tone category (1-5)
-- `char` — the Chinese character of the syllable
+- `time`: time in seconds within each token
+- `f0_Hz`: fundamental frequency
+- `speaker`: speaker ID
+- `tone`: Chao tone category (1-5)
+- `char`: the Chinese character of the syllable
 
 See
 [`?sample_f0`](https://chenchenzi.github.io/citationtone_hub/reference/sample_f0.md)
 for the full schema and source citation.
+
+## Screen the rows without f0
+
+`sample_f0` has f0 on every row. Output straight from a pitch tracker
+usually has rows without f0 (NA or 0 Hz) where there is no voicing. The
+app’s Start page screens them on upload; in a script,
+\[screen_f0_rows()\] counts them per token and
+\[drop_rows_without_f0()\] removes them. The new `voiced_run` column
+numbers the stretches with f0 in each token, so the gaps stay marked:
+
+``` r
+
+raw <- data.frame(
+  token = rep(c("a", "b"), each = 8),
+  time  = rep(0.005 + 0.01 * (0:7), 2),
+  f0    = c(0, 0, 201, 204, 0, 0, 210, 211,
+            0, 182, 184, 186, 188, 190, 191, 0))
+raw <- zero_hz_to_na(raw)   # read 0 Hz as NA
+scr <- screen_f0_rows(raw)
+scr[c("token", "n_rows", "n_f0", "n_start", "n_end", "n_inside", "n_gaps")]
+#>   token n_rows n_f0 n_start n_end n_inside n_gaps
+#> 1     a      8    4       2     0        2      1
+#> 2     b      8    6       1     1        0      0
+
+voiced <- drop_rows_without_f0(raw)
+voiced
+#>    token  time  f0 voiced_run
+#> 1      a 0.025 201          1
+#> 2      a 0.035 204          1
+#> 3      a 0.065 210          2
+#> 4      a 0.075 211          2
+#> 5      b 0.015 182          1
+#> 6      b 0.025 184          1
+#> 7      b 0.035 186          1
+#> 8      b 0.045 188          1
+#> 9      b 0.055 190          1
+#> 10     b 0.065 191          1
+```
+
+On a regular time grid the time steps show the gaps too, so data saved
+without these rows get the same `voiced_run`:
+
+``` r
+
+clean <- raw[!is.na(raw$f0), ]
+identical(drop_rows_without_f0(clean)$voiced_run, voiced$voiced_run)
+#> [1] TRUE
+```
 
 ## Normalise f0 by speaker
 
@@ -101,11 +149,11 @@ head(normed[, c("speaker", "tone", "f0_Hz", "speaker_mean", "f0_st")])
 Now `f0_st` puts every speaker on a comparable scale. To plot the mean
 contour per tone, use \[compute_mean_contour()\], which puts time on a
 `[0, 1]` axis and resamples every token at the same time points before
-averaging. It rescales time within each token, unless the time column is
-already proportional, which it detects and leaves alone
-(`time_normalised` overrides either way). The package function returns
-its result in the same `time / f0_predicted / tone` schema used by
-\[predict_gca()\] and \[predict_gamm()\]:
+averaging. It rescales time within each token, from its first f0 to its
+last, unless the time column is already proportional, which it detects
+and leaves alone (`time_normalised` overrides either way). The package
+function returns its result in the same `time / f0_predicted / tone`
+schema used by \[predict_gca()\] and \[predict_gamm()\]:
 
 ``` r
 
@@ -118,7 +166,7 @@ ggplot(mean_contour, aes(time, f0_predicted, colour = factor(tone))) +
   labs(x = "Normalised time", y = "f0 (semitones)", colour = "Tone")
 ```
 
-![](shinytone_files/figure-html/unnamed-chunk-4-1.png)
+![](shinytone_files/figure-html/unnamed-chunk-6-1.png)
 
 ## Inspect for outliers and pitch-tracking artefacts
 
@@ -203,7 +251,7 @@ Interpretation:
 [`fit_gca()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_gca.md)
 is a convenience wrapper around
 [`lme4::lmer()`](https://rdrr.io/pkg/lme4/man/lmer.html) with sensible
-defaults for tone-shape modelling — orthogonal polynomials on per-token
+defaults for tone-shape modelling: orthogonal polynomials on per-token
 normalised time, plus conventional random effects on speaker and item.
 For non-standard model structures, call
 [`lme4::lmer()`](https://rdrr.io/pkg/lme4/man/lmer.html) directly.
@@ -271,7 +319,7 @@ head(diag$acf)
 ## Convert to Chao tone numerals
 
 [`contour_to_chao()`](https://chenchenzi.github.io/citationtone_hub/reference/contour_to_chao.md)
-reduces per-tone mean (or model-predicted) contours into Chao numerals —
+reduces per-tone mean (or model-predicted) contours into Chao numerals,
 5-level digit strings like `55`, `35`, or `214`. Give it
 speaker-normalised f0, here the semitone mean contours from above:
 averaging Hz over speakers would mix higher and lower voices. (The app’s
@@ -293,8 +341,8 @@ chao[, c("tone", "refline", "interval", "shape")]
 Two conversion methods in one pass, both on the range between the lowest
 and highest points of the mean contours:
 
-- **`refline`** — reference-line FOR, rounded on the `[1, 5]` scale
-- **`interval`** — interval-based FOR, ceiling on the `(0, 5]` scale
+- **`refline`**: reference-line FOR, rounded on the `[1, 5]` scale
+- **`interval`**: interval-based FOR, ceiling on the `(0, 5]` scale
 
 The `shape` column summarises the contour (“rising”, “falling”,
 “dipping”, etc.) and is derived from the reference-line numeral via

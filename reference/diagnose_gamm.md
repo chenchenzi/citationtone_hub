@@ -85,13 +85,17 @@ can be computed.
 The ACF is computed **per token** (the residuals are split by token and
 the within-token lag products are pooled, in the spirit of
 `itsadug::acf_resid()`) so that token boundaries do not contaminate the
-low lags — important because f0 tokens are short. When the fit used an
-AR1 correction the residuals are first whitened within each token
-(`e_i - rho * e_{i-1}`, reset at each token start), so the ACF then
-shows whether the AR1 term actually removed the autocorrelation rather
-than the pre-correction picture. `acf_grouped` / `acf_whitened` record
-which path was taken (a plain concatenated ACF is used only as a
-fallback if residuals cannot be aligned to tokens).
+low lags, which matters because f0 tokens are short. When the fit used
+an AR1 correction the residuals are first whitened
+(`e_i - rho * e_{i-1}`). The whitening restarts at each `AR.start` in
+the model, as [`mgcv::bam()`](https://rdrr.io/pkg/mgcv/man/bam.html)
+does, and
+[`fit_gamm()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_gamm.md)
+puts one on each token's first fitted row. So the ACF then shows whether
+the AR1 term actually removed the autocorrelation rather than the
+pre-correction picture. `acf_grouped` / `acf_whitened` record which path
+was taken (a plain concatenated ACF is used only as a fallback if
+residuals cannot be aligned to tokens).
 
 ## References
 

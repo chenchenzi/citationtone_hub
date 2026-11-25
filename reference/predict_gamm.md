@@ -27,19 +27,28 @@ predict_gamm(gamm_obj, n = 200)
 ## Value
 
 A data frame with columns `time`, `f0_predicted`, `se`, `tone`, carrying
-the fit's `time_axis` (`"unit"` or `"sequential"`) and `n_segments` as
-attributes of the same names.
+the fit's `time_axis` (`"unit"` or `"sequential"`), `n_segments` and
+`time_coverage` (where each tone's fitted rows start and end on the time
+axis; `NULL` for a fit made by an earlier version) as attributes of the
+same names.
 
 ## Details
 
 Internally:
 
 1.  Build a per-tone time grid with `n` evenly-spaced points across
-    `[0, 1]`, or, for a fit on a sequential landmark axis
-    (`<tier>_tseq`), across the observed range of that axis, so the
-    curves keep the segment boundaries at whole numbers and are not
-    extrapolated into stretches no token was measured in (a voiceless
-    onset, say).
+    `[0, 1]`, or, for a fit on a sequential landmark axis (`<tier>_tseq`
+    or `<tier>_tbound`), across the part of that axis the model was
+    fitted to (rows with f0), so the curves keep the segment boundaries
+    at whole numbers and are not extrapolated into stretches no token
+    was measured in. On a `<tier>_tseq` or `<tier>_tbound` from
+    [`normalise_time_landmarks()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_time_landmarks.md)
+    that part is normally `0` to `n`: it is less only when no token has
+    f0 in its first or last segment (on a `<tier>_tseq`, f0 at two
+    times). On a `[0, 1]` axis the grid always runs from 0 to 1, so a
+    tone whose fitted rows stop short of 0 or 1 (on a time column used
+    as it is) is extrapolated there; the `time_coverage` attribute shows
+    where each tone's rows start and end.
 
 2.  Set random-effect columns (speaker, item, and any random-smooth
     grouping factors) to the first level of their respective factors;

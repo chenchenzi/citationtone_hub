@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">shinytone</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.0.9000</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -41,7 +41,7 @@
     <div class="section level2">
       <h2 id="launch-the-app">Launch the app<a class="anchor" aria-label="anchor" href="#launch-the-app"></a></h2>
 
-      <div class="section-desc"><p>Run the bundled Shiny UI locally — same interface as the hosted version, no upload limits, recordings stay on your machine.</p></div>
+      <div class="section-desc"><p>Run the bundled Shiny UI locally: the same interface as the hosted version, with no upload limits, and recordings stay on your machine.</p></div>
 
       <dl></dl></div><div class="section level2">
 
@@ -57,7 +57,7 @@
       </dl></div><div class="section level2">
       <h2 id="read-data">Read data<a class="anchor" aria-label="anchor" href="#read-data"></a></h2>
 
-      <div class="section-desc"><p>Read a CSV in any Unicode encoding, including the UTF-16 files Praat saves for non-ASCII text, and read 0 Hz f0 values as missing.</p></div>
+      <div class="section-desc"><p>Read a CSV in any Unicode encoding, including the UTF-16 files Praat saves for non-ASCII text. Find the f0 columns in Hz and read their 0 Hz values as missing, and find other values that may mark no f0, such as -1. Then screen the rows without f0 (at a token’s start or end, or in gaps inside it) and remove them, as the app’s Start page does. The gaps they leave are kept in a voiced_run column, and the time column shows them as longer steps.</p></div>
 
       <dl></dl></div><div class="section level2">
 
@@ -77,10 +77,45 @@
 
         </dt>
         <dd>Read 0 Hz f0 values as missing</dd>
+
+        <dt>
+
+          <code><a href="hz_f0_columns.html">hz_f0_columns()</a></code>
+
+        </dt>
+        <dd>Find the f0 columns in Hz</dd>
+
+        <dt>
+
+          <code><a href="suggest_unvoiced.html">suggest_unvoiced()</a></code>
+
+        </dt>
+        <dd>Values that may mark rows without f0 in an f0 column in Hz</dd>
+
+        <dt>
+
+          <code><a href="screen_f0_rows.html">screen_f0_rows()</a></code>
+
+        </dt>
+        <dd>Screen f0 data for rows without f0</dd>
+
+        <dt>
+
+          <code><a href="drop_rows_without_f0.html">drop_rows_without_f0()</a></code>
+
+        </dt>
+        <dd>Remove rows without f0 and mark the gaps they leave</dd>
+
+        <dt>
+
+          <code><a href="flag_f0_tokens.html">flag_f0_tokens()</a></code>
+
+        </dt>
+        <dd>Flag tokens with too few samples with f0, or with points missing</dd>
       </dl></div><div class="section level2">
       <h2 id="normalisation">Normalisation<a class="anchor" aria-label="anchor" href="#normalisation"></a></h2>
 
-      <div class="section-desc"><p>By-speaker semitone, z-score or log z-score (LZ) f0 normalisation, plus landmark-based time normalisation for multisyllabic words and auto-detection of time columns that are already on a [0, 1] scale.</p></div>
+      <div class="section-desc"><p>By-speaker semitone, z-score or log z-score (LZ) f0 normalisation, plus time normalisation from each token’s, or each syllable’s, first f0 to its last (whole token, or the syllables in sequence, with or without the gap at each TextGrid boundary, for multisyllabic words), and auto-detection of time columns that are already on a [0, 1] scale.</p></div>
 
       <dl></dl></div><div class="section level2">
 
@@ -106,7 +141,7 @@
           <code><a href="normalise_time_token.html">normalise_time_token()</a></code>
 
         </dt>
-        <dd>Whole-token 0-1 time normalisation</dd>
+        <dd>Whole-token 0-1 time</dd>
 
         <dt>
 
@@ -189,7 +224,7 @@
       </dl></div><div class="section level2">
       <h2 id="voiced-region-trimming-and-resampling">Voiced-region trimming and resampling<a class="anchor" aria-label="anchor" href="#voiced-region-trimming-and-resampling"></a></h2>
 
-      <div class="section-desc"><p>Trim each token to its voiced span, flag contours with gaps inside the measured region, measure how long each contour lasts (per token or per landmark segment), and resample every contour to N equidistant points for export or cross-token comparison.</p></div>
+      <div class="section-desc"><p>Trim each token to its voiced span, flag contours with gaps inside the measured region, measure how long each contour lasts (per token or per landmark segment), and resample every contour to N equidistant points for export or cross-token comparison. The first three still find the gaps once the rows without f0 are removed, from voiced_run or from the time steps; resampling reads gaps from rows only, so resample first.</p></div>
 
       <dl></dl></div><div class="section level2">
 

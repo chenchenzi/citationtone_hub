@@ -13,7 +13,7 @@ as all_tiers is the same."><meta property="og:image" content="https://chenchenzi
 
     <a class="navbar-brand me-2" href="../index.html">shinytone</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.0.9000</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -59,7 +59,8 @@ as <code>all_tiers</code> is the same.</p>
 <span>  <span class="va">tier_names</span>,</span>
 <span>  all_tiers <span class="op">=</span> <span class="va">tier_names</span>,</span>
 <span>  reserved <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"token"</span>, <span class="st">"time"</span>, <span class="st">"f0"</span>, <span class="st">"intensity"</span>, <span class="st">"f0_corrected"</span>, <span class="st">"f0_original"</span>,</span>
-<span>    <span class="st">"edited"</span>, <span class="st">"token_dropped"</span>, <span class="st">"n_missing"</span>, <span class="st">"has_gap"</span>, <span class="st">"point"</span>, <span class="st">"time_prop"</span><span class="op">)</span></span>
+<span>    <span class="st">"edited"</span>, <span class="st">"token_dropped"</span>, <span class="st">"n_missing"</span>, <span class="st">"has_gap"</span>, <span class="st">"point"</span>, <span class="st">"time_prop"</span>,</span>
+<span>    <span class="st">"voiced_run"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -79,8 +80,9 @@ depends only on this set, so pass the same one in every call. Names in
 
 
 <dt id="arg-reserved">reserved<a class="anchor" aria-label="anchor" href="#arg-reserved"></a></dt>
-<dd><p>Column names a tier must not take. Defaults to the columns
-of the f0 data.</p></dd>
+<dd><p>Column names a tier must not take. Defaults to the
+columns that F0 Extraction, F0 Correction and the Start page write into
+the f0 data, <code>voiced_run</code> included.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -103,7 +105,7 @@ tier whose name is already its own prefix keeps it, and the others are
 numbered in the byte order of their names. So tiers <code>syllable</code>, <code>Syllable</code>
 and <code>syllable!</code> give <code>syllable</code>, <code>syllable_2</code> and <code>syllable_3</code>, and a tier
 named <code>time</code> gives <code>time_2</code>. Columns made later from a prefix (<code>p_t01</code>,
-<code>p_tseq</code>, <code>p_f0_dur</code>) are kept apart too.</p>
+<code>p_tseq</code>, <code>p_tbound</code>, <code>p_f0_dur</code>) are kept apart too.</p>
     </div>
 
     <div class="section level2">

@@ -19,7 +19,7 @@ normalise_time_landmarks()) are usually the better route."><meta property="og:im
 
     <a class="navbar-brand me-2" href="../index.html">shinytone</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.0.9000</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -110,7 +110,9 @@ ever computed.</p></dd>
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A data frame with the <code>token</code>, <code>point</code> (measurement number,
 <code>1</code>...<code>n</code>), <code>time</code> (seconds, on the new grid), <code>time_prop</code>
-(proportional position 0-1 within the token), and <code>f0</code> columns, plus
+(proportional position 0-1 within the token: 0 and 1 are the first and
+last frames of the extracted region, which need not have f0), and <code>f0</code>
+columns, plus
 <code>intensity</code> (when present) and any carried token-constant columns.
 Input columns named <code>point</code> or <code>time_prop</code> are dropped, since those
 names are computed here. Rows are sorted by time within each token;
@@ -132,13 +134,18 @@ measurement at the edge of one is not thrown away;</p></li>
 that frame's value exactly. At a point falling exactly midway between two
 frames the choice of <em>near</em> is a floating-point tie and may fall either
 way; it only changes the answer when exactly one of the two is unvoiced.</p>
-<p>This rests on unvoiced frames being <strong>present as <code>NA</code> (or 0 Hz) rows</strong>,
-which is how the wrassp and <code>.Pitch</code> paths deliver them. Sparse input
-carries no such rows: a <code>.PitchTier</code>, or a CSV listing only voiced
-samples, represents an unvoiced stretch as nothing more than a wide gap
-between two voiced anchors, so both bracketing frames are voiced and the
-point is interpolated straight across. Praat does the same on a PitchTier.
-Add explicit <code>NA</code> rows if such stretches should read as unvoiced.</p>
+<p>This reads gaps from rows only: unvoiced frames must be <strong>present as <code>NA</code>
+(or 0 Hz) rows</strong>, which is how the wrassp and <code>.Pitch</code> paths deliver them.
+Input without such rows has a gap only as a wide step between two voiced
+frames: a <code>.PitchTier</code>, a CSV listing only voiced samples, or data whose
+rows without f0 were removed (the app's Start page, or
+<code><a href="drop_rows_without_f0.html">drop_rows_without_f0()</a></code>). Both bracketing frames are then voiced, and the
+point is interpolated straight across the gap. Praat does the same on a
+PitchTier. The time steps and a <code>voiced_run</code> column are not read here. So
+resample before removing the rows without f0, as F0 Extraction does: its
+"Drop rows without f0" option is applied after resampling.
+<code><a href="screen_f0_rows.html">screen_f0_rows()</a></code> counts the gaps that the time steps show
+(<code>n_gaps_time</code>), so a file can be checked for them first.</p>
 <p>With <code>method = "nearest"</code> (Praat's other option) the middle case goes
 away: a point always takes the nearer frame's measured value, or <code>NA</code>
 when that frame is unvoiced. Every exported value is then a number the
@@ -150,18 +157,24 @@ the extraction aligns the intensity track to the f0 frames).</p>
 <p>Any other column is carried through when it is constant within every
 token (metadata, <code>token_dropped</code>, and similar token-level columns);
 per-frame columns that vary within a token cannot survive a change of
-grid and are dropped — their names are recorded in the
+grid and are dropped. Their names are recorded in the
 <code>dropped_columns</code> attribute of the result.</p>
 <p>Rows with a missing time are dropped, and rows sharing a frame time
 are collapsed to the first of them, so interpolation has strictly
 increasing anchors. A token left with fewer than two distinct frame
 times cannot be resampled and keeps its single remaining row, with
 <code>time_prop = 0.5</code>.</p>
+<p><code>time_prop</code> is used as it is by the model fits (see
+<code><a href="time_already_normalised.html">time_already_normalised()</a></code>). Over a region trimmed to its voiced part
+(F0 Extraction's <em>Whole token (voiced region)</em>, or <code><a href="trim_to_voiced.html">trim_to_voiced()</a></code>), 0
+and 1 are close to the first and last f0. Over a TextGrid interval, an
+end point may have no f0, and the contour then does not reach 0 or 1.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
-    <div class="dont-index"><p><code><a href="normalise_time_token.html">normalise_time_token()</a></code> for adding a proportional time
-column without changing the sampling grid.</p></div>
+    <div class="dont-index"><p><code><a href="normalise_time_token.html">normalise_time_token()</a></code> for a 0-1 column from the first f0 to
+the last, without changing the sampling grid. On equal-point data with
+no f0 at an end point, it moves the other points off the grid.</p></div>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

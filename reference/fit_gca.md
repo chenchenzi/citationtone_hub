@@ -95,27 +95,47 @@ An S3 object of class `"shinytone_gca"`, a list with:
 - `time_prenormalised`: logical; was the time column used as-is because
   it was already normalised to `[0, 1]`?
 
+- `time_coverage`: per tone, the first and last normalised time over the
+  rows the model fits, as a data frame with `tone`, `t_first` and
+  `t_last`. On a rescaled axis every tone runs from 0 to 1. On a time
+  column used as it is, such as `time_prop` with no f0 at an end point,
+  a tone can stop short of 0 or 1, and
+  [`predict_gca()`](https://chenchenzi.github.io/citationtone_hub/reference/predict_gca.md)
+  then extrapolates its curve to the ends.
+
 - `convergence_warning`: `NULL` or the captured warning message.
 
 ## Details
 
 ### What the function does internally
 
-1.  Within each token, normalise the time axis to `[0, 1]`. If the time
-    column is *already* normalised (e.g. `token_t01` from
+1.  Within each token, normalise the time axis to `[0, 1]`, from its
+    first f0 (0) to its last f0 (1). If the time column is *already*
+    normalised (e.g. `token_t01` from
     [`normalise_time_token()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_time_token.md)),
     it is detected with
     [`time_already_normalised()`](https://chenchenzi.github.io/citationtone_hub/reference/time_already_normalised.md)
     and used as-is, so tokens whose samples do not span the full unit
     interval are not stretched a second time; override with
-    `time_normalised`.
+    `time_normalised`. A `<tier>_tseq` (syllables in sequence) or
+    `<tier>_tbound` (in sequence, gap kept) is rescaled per token too: a
+    token whose first or last syllable has no values on the axis (on a
+    `<tier>_tseq`, f0 at fewer than two times; on a `<tier>_tbound`, no
+    f0) is stretched, and its other syllables fill 0 to 1.
 
-2.  Build orthogonal polynomial terms `ot1`, `ot2`, ..., `otK` on the
-    normalised time using
+2.  Keep the rows the model fits: a finite normalised time, f0 (a finite
+    value, above 0 in a column in Hz that
+    [`hz_f0_columns()`](https://chenchenzi.github.io/citationtone_hub/reference/hz_f0_columns.md)
+    finds) and a tone, and a speaker and item where the model has a term
+    for them. Build orthogonal polynomial terms `ot1`, `ot2`, ..., `otK`
+    on the normalised time of these rows using
     [`stats::poly()`](https://rdrr.io/r/stats/poly.html), caching the
     basis coefficients so that
     [`predict_gca()`](https://chenchenzi.github.io/citationtone_hub/reference/predict_gca.md)
-    can reuse them.
+    can reuse them. Rows without f0 inside a token then leave the
+    coefficients unchanged, and rows with no time (a landmark axis
+    outside its tier, or outside a segment's first-to-last f0) are left
+    out.
 
 3.  Construct an `lmer` formula of the form
     `f0 ~ (ot1 + ... + otK) * tone + (random effects)` using the options

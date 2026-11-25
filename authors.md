@@ -14,13 +14,13 @@ Source:
 [`inst/CITATION`](https://github.com/chenchenzi/citationtone_hub/blob/main/inst/CITATION)
 
 Xu, C., & Zhang, C. (2026). shinytone: A Citation Tone Research Hub. R
-package version 1.0.0. https://doi.org/10.5281/zenodo.22632508
+package version 1.0.0.9000. https://doi.org/10.5281/zenodo.22632508
 
     @Manual{,
       title = {{shinytone}: A Citation Tone Research Hub},
       author = {Chenzi Xu and Cong Zhang},
       year = {2026},
-      note = {R package version 1.0.0},
+      note = {R package version 1.0.0.9000},
       url = {https://github.com/chenchenzi/citationtone_hub},
       doi = {10.5281/zenodo.22632508},
     }

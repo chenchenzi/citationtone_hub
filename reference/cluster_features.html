@@ -13,7 +13,7 @@ reflect tone shape and register rather than who has a high voice."><meta propert
 
     <a class="navbar-brand me-2" href="../index.html">shinytone</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.0.9000</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -78,15 +78,35 @@ reflect tone shape and register rather than who has a high voice.</p>
 
 
 <dt id="arg-f-token-time">f0, token, time<a class="anchor" aria-label="anchor" href="#arg-f-token-time"></a></dt>
-<dd><p>Column names. <code>time</code> is normalised per token.</p></dd>
+<dd><p>Column names. Each token is resampled from its
+first f0 to its last on the <code>time</code> axis, as the 0-1 axes are built:
+in a column in Hz (one that <code><a href="hz_f0_columns.html">hz_f0_columns()</a></code> finds), 0 is no f0 and
+is skipped. At each boundary of a <code>&lt;tier&gt;_tseq</code> (syllables in
+sequence), one
+syllable's last f0 and the next one's first f0 share a time (on a
+<code>&lt;tier&gt;_tbound</code>, only rows exactly on a boundary can). The next
+syllable's f0 is used there, and the two are never averaged. The
+syllable is read from <code>&lt;tier&gt;_i</code> (or, on a <code>&lt;tier&gt;_tseq</code>,
+<code>&lt;tier&gt;_t01</code>), so the row order does not matter; without either
+column, give each token's rows in time order. Other rows of a token at
+the same time, such as two recordings that share a token name, are
+averaged, with a message. A token whose first or last syllable has no
+values on a <code>&lt;tier&gt;_tseq</code> or <code>&lt;tier&gt;_tbound</code> is stretched: its other
+syllables fill the grid. On a <code>&lt;tier&gt;_tseq</code> that is a syllable with
+f0 at fewer than two times; on a <code>&lt;tier&gt;_tbound</code>, one with no f0.</p></dd>
 
 
 <dt id="arg-speaker">speaker<a class="anchor" aria-label="anchor" href="#arg-speaker"></a></dt>
-<dd><p>Optional speaker column, carried through as metadata.</p></dd>
+<dd><p>Optional speaker column, carried through as metadata.
+Each token takes the most frequent non-empty value among its rows with
+f0, so a label that changes within a token gives the same result in any
+row order, with or without rows without f0. A tie goes to the value that
+comes first in time.</p></dd>
 
 
 <dt id="arg-tone">tone<a class="anchor" aria-label="anchor" href="#arg-tone"></a></dt>
-<dd><p>Optional tone column, carried through for later validation.</p></dd>
+<dd><p>Optional tone column, carried through for later validation.
+Read per token in the same way as <code>speaker</code>.</p></dd>
 
 
 <dt id="arg-n-points">n_points<a class="anchor" aria-label="anchor" href="#arg-n-points"></a></dt>

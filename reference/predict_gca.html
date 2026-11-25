@@ -13,7 +13,7 @@ summarisation via contour_to_chao()."><meta property="og:image" content="https:/
 
     <a class="navbar-brand me-2" href="../index.html">shinytone</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.0.9000</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -73,7 +73,11 @@ summarisation via <code><a href="contour_to_chao.html">contour_to_chao()</a></co
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A data frame with columns <code>time</code>, <code>f0_predicted</code>, <code>tone</code>.</p>
+    <p>A data frame with columns <code>time</code>, <code>f0_predicted</code>, <code>tone</code>. The
+attribute <code>time_coverage</code> is the fit's <code>time_coverage</code>: where each
+tone's fitted rows start and end on the time axis, so a curve that is
+extrapolated to 0 or 1 can be spotted (<code>NULL</code> for a fit made by an
+earlier version).</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>

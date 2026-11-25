@@ -17,7 +17,7 @@ run_app(...)
 - ...:
 
   Additional arguments forwarded to
-  [`shiny::runApp()`](https://rdrr.io/pkg/shiny/man/runApp.html) — e.g.
+  [`shiny::runApp()`](https://rdrr.io/pkg/shiny/man/runApp.html), e.g.
   `port = 4321`, `launch.browser = FALSE`, `host = "0.0.0.0"`.
 
 ## Value

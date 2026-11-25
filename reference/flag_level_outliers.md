@@ -7,7 +7,7 @@ speaker overall. This catches the "right shape, wrong height" case that
 [`flag_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_outliers.md)
 (which pools all tones within a speaker) and
 [`flag_pitch_jumps()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_pitch_jumps.md)
-(which only sees within-token movement) both miss — for example a
+(which only sees within-token movement) both miss, for example a
 low-tone token mis-tracked up into the mid-tone band.
 
 ## Usage
@@ -20,7 +20,8 @@ flag_level_outliers(
   speaker = "speaker",
   tone = "tone",
   level_threshold = 3.5,
-  min_tokens = 5
+  min_tokens = 5,
+  time = NULL
 )
 ```
 
@@ -57,6 +58,15 @@ flag_level_outliers(
   check for a group. Default `5`. More tokens give a more reliable
   estimate of the group's spread.
 
+- time:
+
+  Column name of time, or `NULL` (the default). Used only to break a tie
+  between two speaker or tone values that are equally frequent within a
+  token: the one that comes first in time wins.
+  [`inspect_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/inspect_f0.md)
+  passes its `time`, so it picks the same tone as
+  [`fit_polynomial()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_polynomial.md).
+
 ## Value
 
 A token-level data frame (one row per token with at least one voiced
@@ -68,13 +78,20 @@ sample) with columns: `f0_token_median`, `level_st`, `n_tone_peers`,
 
 ### What the function does internally
 
-1.  Drop samples where `f0` is `NA` or `0` (unvoiced frames).
+1.  Drop the rows without f0 (`NA`, 0 or a negative marker; only values
+    above 0 Hz count). Each token's speaker and tone are the most
+    frequent non-empty values on its rows with f0, so a tone column that
+    changes within a token (for example one read from a TextGrid tier)
+    still gives one tone per token. A tie goes to the value that comes
+    first in `time` (when given), then to the first in alphabetical
+    (C-locale) order, so neither the row order nor the rows without f0
+    change it.
 
 2.  Compute each token's **median f0**, converted to semitones
     (`12 * log2(Hz)`). The median (rather than the mean) is used so that
-    a handful of mis-tracked frames — which
+    a handful of mis-tracked frames, which
     [`flag_pitch_jumps()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_pitch_jumps.md)
-    already catches — do not shift a token's apparent level.
+    already catches, do not shift a token's apparent level.
 
 3.  Within each speaker x tone group, compute the **modified z-score**
     (Iglewicz & Hoaglin 1993) of each token's level:

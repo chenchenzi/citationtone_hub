@@ -1,8 +1,8 @@
 # Diagnostics for choosing the number of clusters (candidate tones)
 
 Runs k-means across a range of `k` and reports the elbow (total
-within-cluster sum of squares), average silhouette width, and – when the
-`cluster` / `mclust` packages are available – the gap statistic and the
+within-cluster sum of squares), average silhouette width, and, when the
+`cluster` / `mclust` packages are available, the gap statistic and the
 GMM/BIC-preferred `k`. No single index is authoritative; use the spread
 to read off a plausible *range* for the number of tones.
 

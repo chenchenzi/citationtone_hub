@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<title>shinytone — A Citation Tone Research Hub • shinytone</title>
+<title>shinytone: A Citation Tone Research Hub • shinytone</title>
 <!-- favicons --><link rel="icon" type="image/png" sizes="96x96" href="favicon-96x96.png">
 <link rel="icon" type="”image/svg+xml”" href="favicon.svg">
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
@@ -15,7 +15,7 @@
 <script src="deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
 <script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><link href="extra.css" rel="stylesheet">
-<meta property="og:title" content="shinytone — A Citation Tone Research Hub">
+<meta property="og:title" content="shinytone: A Citation Tone Research Hub">
 <meta name="description" content="Interactive Shiny app and accompanying R functions for citation tone research across tone languages.
 ">
 <meta property="og:description" content="Interactive Shiny app and accompanying R functions for citation tone research across tone languages.
@@ -30,7 +30,7 @@
 
     <a class="navbar-brand me-2" href="index.html">shinytone</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.0.9000</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -101,10 +101,11 @@
 </h2>
 <ul>
 <li>🎙️ <strong>F0 processing</strong>: extract f0 from <code>.wav</code> files with <code>wrassp</code> or Praat, including a downloadable Praat script tailored to your settings.</li>
-<li>🔍 <strong>Inspect</strong>: token-level outlier flags (by-speaker z-score) and sample-level artefact detection (octave jumps, rate-of-change violations, carryover frames; Steffman &amp; Cole 2022).</li>
-<li>📏 <strong>Normalise</strong>: by-speaker semitone, z-score or log z-score (LZ) normalisation, with simple or weighted speaker means.</li>
+<li>🧹 <strong>Data screening (Start page)</strong>: on upload, finds the rows without f0 (NA or 0 Hz) at the start, at the end and inside each token, and removes them by default (untick to keep them). It also reads gaps from the time steps, so a file saved without those rows still shows them. A <code>voiced_run</code> column numbers the stretches with f0 in each token.</li>
+<li>🔍 <strong>Inspect</strong>: token-level outlier flags (by-speaker z-score, and by speaker and tone) and sample-level artefact detection (octave jumps, rate-of-change violations, carryover frames; Steffman &amp; Cole 2022). Each sample is compared with the next sample that has f0, so the flags are the same with or without the rows without f0.</li>
+<li>📏 <strong>Normalise</strong>: by-speaker semitone, z-score or log z-score (LZ) normalisation, with simple or weighted speaker means, and 0-1 time from each token’s or syllable’s first f0 to its last.</li>
 <li>📈 <strong>Visualise</strong>: f0 contours coloured by tone, with optional faceting by speaker.</li>
-<li>📊 <strong>Model</strong>: per-token Legendre polynomials, growth-curve analysis (GCA) on orthogonal polynomials, and generalised additive mixed models (GAMM) with AR1 correction (on by default in the app) and one-click model diagnostics — basis-dimension check, residual panels, per-token residual ACF, and concurvity.</li>
+<li>📊 <strong>Model</strong>: per-token Legendre polynomials, growth-curve analysis (GCA) on orthogonal polynomials, and generalised additive mixed models (GAMM) with AR1 correction (on by default in the app) and one-click model diagnostics: basis-dimension check, residual panels, per-token residual ACF, and concurvity.</li>
 <li>🧮 <strong>Summarise</strong>: convert contours into Chao tone numerals using two FOR methods (reference-line and interval).</li>
 </ul>
 </div>
@@ -291,7 +292,8 @@
 <div class="license">
 <h2 data-toc-skip>License</h2>
 <ul class="list-unstyled">
-<li>GPL (&gt;= 3)</li>
+<li><a href="LICENSE.html">Full license</a></li>
+<li><small>GPL (&gt;= 3)</small></li>
 </ul>
 </div>
 

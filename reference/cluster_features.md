@@ -32,15 +32,36 @@ cluster_features(
 
 - f0, token, time:
 
-  Column names. `time` is normalised per token.
+  Column names. Each token is resampled from its first f0 to its last on
+  the `time` axis, as the 0-1 axes are built: in a column in Hz (one
+  that
+  [`hz_f0_columns()`](https://chenchenzi.github.io/citationtone_hub/reference/hz_f0_columns.md)
+  finds), 0 is no f0 and is skipped. At each boundary of a `<tier>_tseq`
+  (syllables in sequence), one syllable's last f0 and the next one's
+  first f0 share a time (on a `<tier>_tbound`, only rows exactly on a
+  boundary can). The next syllable's f0 is used there, and the two are
+  never averaged. The syllable is read from `<tier>_i` (or, on a
+  `<tier>_tseq`, `<tier>_t01`), so the row order does not matter;
+  without either column, give each token's rows in time order. Other
+  rows of a token at the same time, such as two recordings that share a
+  token name, are averaged, with a message. A token whose first or last
+  syllable has no values on a `<tier>_tseq` or `<tier>_tbound` is
+  stretched: its other syllables fill the grid. On a `<tier>_tseq` that
+  is a syllable with f0 at fewer than two times; on a `<tier>_tbound`,
+  one with no f0.
 
 - speaker:
 
-  Optional speaker column, carried through as metadata.
+  Optional speaker column, carried through as metadata. Each token takes
+  the most frequent non-empty value among its rows with f0, so a label
+  that changes within a token gives the same result in any row order,
+  with or without rows without f0. A tie goes to the value that comes
+  first in time.
 
 - tone:
 
-  Optional tone column, carried through for later validation.
+  Optional tone column, carried through for later validation. Read per
+  token in the same way as `speaker`.
 
 - n_points:
 

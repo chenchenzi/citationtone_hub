@@ -4,13 +4,13 @@ Vectorised heuristic for picking vowel intervals out of a segmental
 TextGrid tier without knowing the language. A label counts as a vowel
 when, after stripping length marks, stress marks, tone digits/letters,
 superscripts, ties, spaces, and combining diacritics, every remaining
-character is an IPA vowel letter — so long vowels (`aː`), nasalised
+character is an IPA vowel letter. So long vowels (`aː`), nasalised
 vowels (`ã`), and di-/triphthongs (`ai`, `iau`) all match, while
 anything containing a consonant letter (`ang`, `pa`, `n`) does not.
 
 Di- and triphthongs need no special handling: the test applies to
 *every* character of the label, so a label matches when all of its
-letters are vowels – `ai`, `au`, `iau`, `uai`, `ɔi`, `aːi` and `ai̯` all
+letters are vowels: `ai`, `au`, `iau`, `uai`, `ɔi`, `aːi` and `ai̯` all
 pass.
 
 Offglides written as consonant letters are accepted too, since many
@@ -51,7 +51,7 @@ accented Latin vowels, including the pinyin tone-marked forms
 (`ã é ü ā á ǎ à ū ǔ ǖ ǘ ǚ ǜ` ...) in either Unicode normalisation.
 Labels in other schemes (whole pinyin finals such as `ang`, X-SAMPA
 consonant-bearing rhymes) should be selected with explicit labels
-instead — see
+instead: see
 [`filter_interval_rows()`](https://chenchenzi.github.io/citationtone_hub/reference/filter_interval_rows.md).
 
 ## See also

@@ -17,7 +17,7 @@ the Shiny app."><meta property="og:image" content="https://chenchenzi.github.io/
 
     <a class="navbar-brand me-2" href="../index.html">shinytone</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.0.9000</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -167,7 +167,10 @@ many dB below the token's peak intensity. Default <code>15</code>. Ignored when
 <dd><p>One of <code>"s"</code> or <code>"ms"</code>. Default <code>"s"</code>. Inspection is
 meant to run on real-time data; a normalised-time option was removed
 because the physiological rate thresholds below lose their meaning once
-real time is discarded.</p></dd>
+real time is discarded. The unit also sets the gap length in the notes.
+Check it against the data: times in ms read as seconds make every step
+look 1000 times slower, so the rate test then flags almost nothing. A
+median step below 1 within tokens usually means seconds.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -180,10 +183,20 @@ per-token summary statistics.</p></li>
 any sample-level jump, or an unusual overall level for its tone.</p></li>
 <li><p><code>flag_notes</code>: human-readable concatenation of the reasons a sample
 was flagged (e.g. <code>"max too high"</code>, <code>"jump (rise)"</code>,
-<code>"level too high"</code>, <code>"low intensity"</code>).</p></li>
-</ul><p>When <code>tone</code> is <code>NULL</code> the <code>tone</code> column is omitted and the level check is
+<code>"jump (rise) across a 20 ms gap"</code>, <code>"level too high"</code>,
+<code>"low intensity"</code>), or <code>"no f0"</code> for each row of a token with no f0.</p></li>
+</ul><p>The rows come back sorted by token and time. When the input has a
+<code>voiced_run</code> column (from <code><a href="drop_rows_without_f0.html">drop_rows_without_f0()</a></code>), it is kept, after
+the f0 column.</p>
+<p>When <code>tone</code> is <code>NULL</code> the <code>tone</code> column is omitted and the level check is
 not run, so <code>flag_notes</code> never contains <code>"level too high"</code> /
-<code>"level too low"</code> and those checks do not contribute to <code>flagged_token</code>.</p>
+<code>"level too low"</code> and those checks do not contribute to <code>flagged_token</code>.
+When <code>tone</code> is given, the attribute <code>"level_groups"</code> holds one row per
+speaker x tone group, with <code>n_tokens</code> (its tokens with f0) and <code>checked</code>
+(<code>TRUE</code> when <code>n_tokens</code> is at least <code>min_tokens</code>, so the level check ran
+for the group). The attribute <code>"token_groups"</code> holds one row per token
+with f0: its <code>token</code>, <code>speaker</code> and <code>tone</code>, as the level check read them
+(the most frequent non-empty value on the token's rows with f0).</p>
 <p>When <code>intensity</code> is supplied, the result additionally carries the
 <code>intensity</code> column and a sample-level <code>flag_low_intensity</code> logical. The
 low-intensity flag is advisory: it appears in <code>flag_notes</code> but does not by
@@ -202,7 +215,11 @@ token-level (speaker-by-tone) level check (<code>flag_level_high</code>,
 <code>flag_level_low</code>). With <code>tone = NULL</code> this screen is skipped and both
 flags are set to <code>FALSE</code>.</p></li>
 <li><p>Call <code><a href="flag_pitch_jumps.html">flag_pitch_jumps()</a></code> for the sample-level pitch-tracking artefact
-flags (<code>flagged_jump</code>, <code>jump_note</code>).</p></li>
+flags (<code>flagged_jump</code>, <code>jump_note</code>). It compares each sample with the
+next sample that has f0, with the rate scaled by the real time step. A
+jump across a gap (a stretch with no f0) gets <code>" across a N ms gap"</code>
+in its note, and the flag goes on a short run of at most 5 samples cut
+off by the gap; otherwise on the side farther from the token median.</p></li>
 <li><p>Left-join the token-level flags onto the long-format jump output, so
 every sample carries all three kinds of information.</p></li>
 <li><p>Set <code>flagged_token</code> to <code>TRUE</code> for any token that is a speaker-level
@@ -210,7 +227,25 @@ extreme, an unusual level for its tone, or contains at least one
 sample-level jump.</p></li>
 <li><p>Concatenate the human-readable reasons into a single <code>flag_notes</code>
 column for display.</p></li>
-</ol><p>Use the individual functions (<code><a href="flag_outliers.html">flag_outliers()</a></code>, <code><a href="flag_level_outliers.html">flag_level_outliers()</a></code>,
+</ol></div>
+
+<div class="section">
+<h3 id="rows-without-f-">Rows without f0<a class="anchor" aria-label="anchor" href="#rows-without-f-"></a></h3>
+
+
+<p>A row has f0 when its value is above 0 Hz. Rows without f0 (<code>NA</code>, 0 or a
+negative marker such as -1) stay in the output but are never flagged as
+samples: <code>flagged_jump</code> is <code>FALSE</code> on them, and no check uses their
+values. They do carry their token's <code>flagged_token</code> and its token-level
+notes, since the token-level flags are joined by token. So the flags on
+the rows with f0 are the same whether or not the data still have these
+rows (for example after <code><a href="drop_rows_without_f0.html">drop_rows_without_f0()</a></code>). Count shares of
+flagged samples over the samples with f0, as the Inspect tab does, so
+they do not change either.</p>
+<p>A token with no f0 at all cannot be checked. Its flags are all <code>FALSE</code>,
+and each of its rows gets the note <code>"no f0"</code>. It does not count towards
+the size of its speaker x tone group in the level check.</p>
+<p>Use the individual functions (<code><a href="flag_outliers.html">flag_outliers()</a></code>, <code><a href="flag_level_outliers.html">flag_level_outliers()</a></code>,
 <code><a href="flag_pitch_jumps.html">flag_pitch_jumps()</a></code>) if you want only one kind of check or want to combine
 the outputs yourself in a non-standard way.</p>
 </div>
@@ -264,6 +299,11 @@ the three components.</p></li>
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">4</span> dc103雾2s71.2525 0.38   221. jump (fall)</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">5</span> dc103题3s33.4525 0.115  222. jump (fall)</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">6</span> dc103骂3s97.2325 0.08   247. jump (fall)</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Share of flagged samples, over the samples with f0</span></span></span>
+<span class="r-in"><span><span class="va">with_f0</span> <span class="op">&lt;-</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">result</span><span class="op">$</span><span class="va">f0_Hz</span><span class="op">)</span> <span class="op">&amp;</span> <span class="va">result</span><span class="op">$</span><span class="va">f0_Hz</span> <span class="op">&gt;</span> <span class="fl">0</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">result</span><span class="op">$</span><span class="va">flagged_jump</span><span class="op">[</span><span class="va">with_f0</span><span class="op">]</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.0170068</span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>

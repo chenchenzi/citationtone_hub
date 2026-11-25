@@ -2,8 +2,8 @@
 
 ## Launch the app
 
-Run the bundled Shiny UI locally — same interface as the hosted version,
-no upload limits, recordings stay on your machine.
+Run the bundled Shiny UI locally: the same interface as the hosted
+version, with no upload limits, and recordings stay on your machine.
 
 - [`run_app()`](https://chenchenzi.github.io/citationtone_hub/reference/run_app.md)
   : Launch the Shinytone app locally
@@ -11,17 +11,34 @@ no upload limits, recordings stay on your machine.
 ## Read data
 
 Read a CSV in any Unicode encoding, including the UTF-16 files Praat
-saves for non-ASCII text, and read 0 Hz f0 values as missing.
+saves for non-ASCII text. Find the f0 columns in Hz and read their 0 Hz
+values as missing, and find other values that may mark no f0, such as
+-1. Then screen the rows without f0 (at a token’s start or end, or in
+gaps inside it) and remove them, as the app’s Start page does. The gaps
+they leave are kept in a voiced_run column, and the time column shows
+them as longer steps.
 
 - [`read_csv_utf8()`](https://chenchenzi.github.io/citationtone_hub/reference/read_csv_utf8.md)
   : Read a CSV in any Unicode encoding
 - [`zero_hz_to_na()`](https://chenchenzi.github.io/citationtone_hub/reference/zero_hz_to_na.md)
   : Read 0 Hz f0 values as missing
+- [`hz_f0_columns()`](https://chenchenzi.github.io/citationtone_hub/reference/hz_f0_columns.md)
+  : Find the f0 columns in Hz
+- [`suggest_unvoiced()`](https://chenchenzi.github.io/citationtone_hub/reference/suggest_unvoiced.md)
+  : Values that may mark rows without f0 in an f0 column in Hz
+- [`screen_f0_rows()`](https://chenchenzi.github.io/citationtone_hub/reference/screen_f0_rows.md)
+  : Screen f0 data for rows without f0
+- [`drop_rows_without_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/drop_rows_without_f0.md)
+  : Remove rows without f0 and mark the gaps they leave
+- [`flag_f0_tokens()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_f0_tokens.md)
+  : Flag tokens with too few samples with f0, or with points missing
 
 ## Normalisation
 
 By-speaker semitone, z-score or log z-score (LZ) f0 normalisation, plus
-landmark-based time normalisation for multisyllabic words and
+time normalisation from each token’s, or each syllable’s, first f0 to
+its last (whole token, or the syllables in sequence, with or without the
+gap at each TextGrid boundary, for multisyllabic words), and
 auto-detection of time columns that are already on a \[0, 1\] scale.
 
 - [`normalise_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_f0.md)
@@ -29,7 +46,7 @@ auto-detection of time columns that are already on a \[0, 1\] scale.
 - [`normalise_time_landmarks()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_time_landmarks.md)
   : Landmark-normalised time columns
 - [`normalise_time_token()`](https://chenchenzi.github.io/citationtone_hub/reference/normalise_time_token.md)
-  : Whole-token 0-1 time normalisation
+  : Whole-token 0-1 time
 - [`resolve_time_norm()`](https://chenchenzi.github.io/citationtone_hub/reference/resolve_time_norm.md)
   : Per-token normalised time, honouring an already-normalised column
 - [`time_already_normalised()`](https://chenchenzi.github.io/citationtone_hub/reference/time_already_normalised.md)
@@ -63,7 +80,9 @@ only the frames inside chosen intervals (vowel, rhyme, or named labels).
 Trim each token to its voiced span, flag contours with gaps inside the
 measured region, measure how long each contour lasts (per token or per
 landmark segment), and resample every contour to N equidistant points
-for export or cross-token comparison.
+for export or cross-token comparison. The first three still find the
+gaps once the rows without f0 are removed, from voiced_run or from the
+time steps; resampling reads gaps from rows only, so resample first.
 
 - [`trim_to_voiced()`](https://chenchenzi.github.io/citationtone_hub/reference/trim_to_voiced.md)
   : Trim each token to its voiced region

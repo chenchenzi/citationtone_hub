@@ -15,7 +15,8 @@ flag_outliers(
   f0 = "f0",
   token = "token",
   speaker = "speaker",
-  z_threshold = 3
+  z_threshold = 3,
+  time = NULL
 )
 ```
 
@@ -43,6 +44,15 @@ flag_outliers(
   exceeds `+z_threshold` (too high) or its min falls below
   `-z_threshold` (too low). Default `3`.
 
+- time:
+
+  Column name of time, or `NULL` (the default). Used only to break a tie
+  between two speaker values that are equally frequent within a token:
+  the one that comes first in time wins.
+  [`inspect_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/inspect_f0.md)
+  passes its `time`, so it picks the same speaker as
+  [`fit_polynomial()`](https://chenchenzi.github.io/citationtone_hub/reference/fit_polynomial.md).
+
 ## Value
 
 A token-level data frame (one row per token) with columns:
@@ -54,10 +64,15 @@ A token-level data frame (one row per token) with columns:
 
 ### What the function does internally
 
-1.  Drop samples where `f0` is `NA` or `0` (pitch trackers commonly
-    output 0 for unvoiced frames).
+1.  Drop the rows without f0. A row has f0 when its value is above 0 Hz,
+    so `NA`, 0 (pitch trackers commonly output 0 for unvoiced frames)
+    and negative markers such as -1 are all left out.
 
-2.  Compute the per-token maximum, minimum, mean, and SD of `f0`.
+2.  Compute the per-token maximum, minimum, mean, and SD of `f0`. Each
+    token's speaker is the most frequent non-empty value of `speaker` on
+    its rows with f0. A tie goes to the value that comes first in `time`
+    (when given), then to the first in alphabetical (C-locale) order, so
+    neither the row order nor the rows without f0 change it.
 
 3.  Within each speaker, z-score the per-token maxima against each other
     and the per-token minima against each other (so a speaker with
@@ -76,12 +91,12 @@ tones, the opposite tails are occupied by legitimate tone identity
 rather than error (a low ceiling is what a genuine low tone looks like;
 a high floor is what a genuine high tone looks like), so they are
 deliberately not flagged here. The rarer artefacts that do sit in those
-tails — a truncated (abnormally low) maximum or a floored (abnormally
-high) minimum — are deferred to the finer screens
+tails (a truncated, abnormally low maximum or a floored, abnormally high
+minimum) are left to the finer screens
 [`flag_level_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_level_outliers.md)
 (within speaker and tone) and
 [`flag_pitch_jumps()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_pitch_jumps.md)
-(frame level).
+(sample level).
 
 ### Choosing `z_threshold`
 

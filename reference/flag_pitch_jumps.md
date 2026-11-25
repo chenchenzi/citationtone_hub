@@ -3,9 +3,9 @@
 Detects sample-level pitch-tracking artefacts inside each token. Three
 classes of artefact are flagged: rate-of-change violations (faster rises
 or falls than human vocal folds can plausibly produce), octave jumps
-(pitch halving or doubling), and carryover samples that follow a flagged
-frame and stay close enough to the error to be suspected of being part
-of the same artefact.
+(pitch halving or doubling), and carryover samples on either side of a
+flagged sample that stay close enough to the error to be suspected of
+being part of the same artefact.
 
 Used as the sample-level counterpart of
 [`flag_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_outliers.md)
@@ -44,14 +44,18 @@ flag_pitch_jumps(
 
 - time:
 
-  Column name of time. Default `"time"`.
+  Column name of time. Default `"time"`. Use the real time column, not a
+  0-1, `*_tseq` or `*_tbound` axis.
 
 - time_unit:
 
   One of `"s"` or `"ms"`. Default `"s"`. Inspection is meant to run on
   real-time data; a normalised-time option was removed because the
   physiological rate thresholds below lose their meaning once real time
-  is discarded.
+  is discarded. The unit also sets the gap length in the notes. Check it
+  against the data: times in ms read as seconds make every step look
+  1000 times slower, so the rate test then flags almost nothing. A
+  median step below 1 within tokens usually means seconds.
 
 - rise_threshold:
 
@@ -82,21 +86,30 @@ The input data frame with two appended columns:
 
 - `jump_note`: character describing each flag (e.g., `"jump (rise)"`,
   `"jump (fall)"`, `"octave jump"`, `"carryover"`, or compound notes
-  joined by `"; "`).
+  joined by `"; "`). The part for a jump across a gap ends in
+  `" across a N ms gap"`, e.g. `"jump (rise) across a 20 ms gap"`.
+
+The rows come back sorted by token and time, with the token column
+first.
 
 ## Details
 
 ### What the function does internally
 
-1.  Treat f0 = 0 as `NA` (pitch trackers commonly mark unvoiced frames
-    with 0 Hz).
+1.  Set aside the rows without f0 and the rows with no time. A row has
+    f0 when its value is above 0 Hz, so `NA`, 0 and negative markers
+    such as -1 all count as no f0. These rows are never flagged: they
+    get `flagged_jump = FALSE` and an empty note. The check therefore
+    gives the same flags whether or not the data still contain rows
+    without f0, and whatever the row order. Take any share of flagged
+    samples over the samples with f0, so it does not change either.
 
-2.  Within each token, compute the semitone difference between
-    consecutive f0 samples and the Hz ratio between them.
+2.  Within each token, in time order, compare each sample with the next
+    sample that has f0: the semitone difference and the Hz ratio.
 
-3.  Rescale the observed rate of change to a semitones-per-10-ms
-    equivalent using `time_unit`, so the result can be compared to a
-    fixed threshold (Sundberg 1973).
+3.  Rescale the rate of change to a semitones-per-10-ms equivalent using
+    the real time step between the two samples and `time_unit`, so the
+    result can be compared to a fixed threshold (Sundberg 1973).
 
 4.  When a jump is detected between samples *i* and *i + 1*, flag
     whichever side is FARTHER from the token's median f0 (in semitones).
@@ -105,11 +118,44 @@ The input data frame with two appended columns:
     of a token (e.g., an octave doubling on the first frame). The
     median-distance rule reduces to landing-side flagging when the
     landing sample is the outlier and to source-side flagging when the
-    source sample is the outlier.
+    source sample is the outlier. Across a gap a short fragment is
+    flagged instead (see below).
 
 5.  Walk both forward and backward from each flagged sample as a chain
     of carryover frames that stay within `carryover_mult * threshold`
     semitones of the artefact's f0 (adapted from Steffman & Cole 2022).
+    A chain can continue across a gap.
+
+### Gaps inside a token
+
+A gap is a stretch inside a token with no f0. The function finds gaps
+from the time steps between samples with f0, so it finds the same gaps
+whether or not the rows without f0 are still there. A step is a gap when
+it is more than 1.5 times the token's usual step. The usual step is the
+token's median step. A token with fewer than 5 steps uses the file's
+common step instead, when that is smaller.
+
+Gaps are read only when the time grid is regular across the file, as in
+[`screen_f0_rows()`](https://chenchenzi.github.io/citationtone_hub/reference/screen_f0_rows.md).
+It is not regular, for example, when samples are timed at each glottal
+pulse. Times written to the step itself, such as 10 ms frames written to
+2 decimals, are read in whole steps (a step of 0.02 or more is a gap),
+but only when at most 1 step in 100 is not exactly 0.01. When the grid
+is not regular, no gaps are marked, and no note or placement below
+applies. A token where two samples have the same time gets no gaps
+either.
+
+When the two samples of a jump lie on either side of a gap, the note
+says so, for example `"jump (rise) across a 20 ms gap"`. The 20 ms is
+the step minus the usual step, so a one-frame gap in 10 ms frames reads
+as 10 ms. The rate test is still scaled by the real step, and the octave
+test is the same as for any other pair.
+
+Across a gap, the flag goes on the side whose run of samples (the
+samples between gaps) is shorter, when that run has at most 5 samples. A
+short fragment cut off by a gap is the likelier tracking error. When
+both runs have the same length, or both are longer than 5 samples, the
+side farther from the token median is flagged as usual.
 
 ### Choosing the thresholds
 
@@ -124,7 +170,7 @@ more extreme than approximate halving or doubling, the dominant failure
 mode of autocorrelation-based pitch trackers.
 
 Setting `carryover_mult = 0` disables the carryover extension and flags
-only the landing sample of each jump. The default of `1.5` follows
+only the one sample chosen for each jump. The default of `1.5` follows
 Steffman & Cole (2022).
 
 ## References

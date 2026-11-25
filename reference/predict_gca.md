@@ -25,7 +25,10 @@ predict_gca(gca_obj, n = 100)
 
 ## Value
 
-A data frame with columns `time`, `f0_predicted`, `tone`.
+A data frame with columns `time`, `f0_predicted`, `tone`. The attribute
+`time_coverage` is the fit's `time_coverage`: where each tone's fitted
+rows start and end on the time axis, so a curve that is extrapolated to
+0 or 1 can be spotted (`NULL` for a fit made by an earlier version).
 
 ## Details
 

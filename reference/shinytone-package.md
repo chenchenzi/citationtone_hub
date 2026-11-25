@@ -9,10 +9,9 @@ tone numeral summarisation.
 ## Online app
 
 The hosted version of the app is available at
-<https://chenzixu.shinyapps.io/shinytone/>. A local launcher
-([`run_app()`](https://chenchenzi.github.io/citationtone_hub/reference/run_app.md))
-will be added in a future release so the same UI can be served offline
-once the package is installed.
+<https://chenzixu.shinyapps.io/shinytone/>. Run the same UI locally with
+[`run_app()`](https://chenchenzi.github.io/citationtone_hub/reference/run_app.md):
+it has no upload limits, and recordings stay on your machine.
 
 ## Programmatic API
 

@@ -122,7 +122,10 @@ inspect_f0(
   One of `"s"` or `"ms"`. Default `"s"`. Inspection is meant to run on
   real-time data; a normalised-time option was removed because the
   physiological rate thresholds below lose their meaning once real time
-  is discarded.
+  is discarded. The unit also sets the gap length in the notes. Check it
+  against the data: times in ms read as seconds make every step look
+  1000 times slower, so the rate test then flags almost nothing. A
+  median step below 1 within tokens usually means seconds.
 
 ## Value
 
@@ -138,12 +141,24 @@ A long-format data frame containing the original `token`, `time`, `f0`,
   any sample-level jump, or an unusual overall level for its tone.
 
 - `flag_notes`: human-readable concatenation of the reasons a sample was
-  flagged (e.g. `"max too high"`, `"jump (rise)"`, `"level too high"`,
-  `"low intensity"`).
+  flagged (e.g. `"max too high"`, `"jump (rise)"`,
+  `"jump (rise) across a 20 ms gap"`, `"level too high"`,
+  `"low intensity"`), or `"no f0"` for each row of a token with no f0.
+
+The rows come back sorted by token and time. When the input has a
+`voiced_run` column (from
+[`drop_rows_without_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/drop_rows_without_f0.md)),
+it is kept, after the f0 column.
 
 When `tone` is `NULL` the `tone` column is omitted and the level check
 is not run, so `flag_notes` never contains `"level too high"` /
 `"level too low"` and those checks do not contribute to `flagged_token`.
+When `tone` is given, the attribute `"level_groups"` holds one row per
+speaker x tone group, with `n_tokens` (its tokens with f0) and `checked`
+(`TRUE` when `n_tokens` is at least `min_tokens`, so the level check ran
+for the group). The attribute `"token_groups"` holds one row per token
+with f0: its `token`, `speaker` and `tone`, as the level check read them
+(the most frequent non-empty value on the token's rows with f0).
 
 When `intensity` is supplied, the result additionally carries the
 `intensity` column and a sample-level `flag_low_intensity` logical. The
@@ -168,7 +183,11 @@ by itself set `flagged_token`.
 3.  Call
     [`flag_pitch_jumps()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_pitch_jumps.md)
     for the sample-level pitch-tracking artefact flags (`flagged_jump`,
-    `jump_note`).
+    `jump_note`). It compares each sample with the next sample that has
+    f0, with the rate scaled by the real time step. A jump across a gap
+    (a stretch with no f0) gets `" across a N ms gap"` in its note, and
+    the flag goes on a short run of at most 5 samples cut off by the
+    gap; otherwise on the side farther from the token median.
 
 4.  Left-join the token-level flags onto the long-format jump output, so
     every sample carries all three kinds of information.
@@ -179,6 +198,23 @@ by itself set `flagged_token`.
 
 6.  Concatenate the human-readable reasons into a single `flag_notes`
     column for display.
+
+### Rows without f0
+
+A row has f0 when its value is above 0 Hz. Rows without f0 (`NA`, 0 or a
+negative marker such as -1) stay in the output but are never flagged as
+samples: `flagged_jump` is `FALSE` on them, and no check uses their
+values. They do carry their token's `flagged_token` and its token-level
+notes, since the token-level flags are joined by token. So the flags on
+the rows with f0 are the same whether or not the data still have these
+rows (for example after
+[`drop_rows_without_f0()`](https://chenchenzi.github.io/citationtone_hub/reference/drop_rows_without_f0.md)).
+Count shares of flagged samples over the samples with f0, as the Inspect
+tab does, so they do not change either.
+
+A token with no f0 at all cannot be checked. Its flags are all `FALSE`,
+and each of its rows gets the note `"no f0"`. It does not count towards
+the size of its speaker x tone group in the level check.
 
 Use the individual functions
 ([`flag_outliers()`](https://chenchenzi.github.io/citationtone_hub/reference/flag_outliers.md),
@@ -241,4 +277,9 @@ head(result[result$flagged_jump, c("token", "time", "f0_Hz", "flag_notes")])
 #> 4 dc103雾2s71.2525 0.38   221. jump (fall)
 #> 5 dc103题3s33.4525 0.115  222. jump (fall)
 #> 6 dc103骂3s97.2325 0.08   247. jump (fall)
+
+# Share of flagged samples, over the samples with f0
+with_f0 <- !is.na(result$f0_Hz) & result$f0_Hz > 0
+mean(result$flagged_jump[with_f0])
+#> [1] 0.0170068
 ```

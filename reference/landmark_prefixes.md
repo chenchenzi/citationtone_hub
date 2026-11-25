@@ -13,7 +13,8 @@ landmark_prefixes(
   tier_names,
   all_tiers = tier_names,
   reserved = c("token", "time", "f0", "intensity", "f0_corrected", "f0_original",
-    "edited", "token_dropped", "n_missing", "has_gap", "point", "time_prop")
+    "edited", "token_dropped", "n_missing", "has_gap", "point", "time_prop",
+    "voiced_run")
 )
 ```
 
@@ -34,8 +35,9 @@ landmark_prefixes(
 
 - reserved:
 
-  Column names a tier must not take. Defaults to the columns of the f0
-  data.
+  Column names a tier must not take. Defaults to the columns that F0
+  Extraction, F0 Correction and the Start page write into the f0 data,
+  `voiced_run` included.
 
 ## Value
 
@@ -58,7 +60,8 @@ the same prefix, or when a prefix or one of its columns is in
 the others are numbered in the byte order of their names. So tiers
 `syllable`, `Syllable` and `syllable!` give `syllable`, `syllable_2` and
 `syllable_3`, and a tier named `time` gives `time_2`. Columns made later
-from a prefix (`p_t01`, `p_tseq`, `p_f0_dur`) are kept apart too.
+from a prefix (`p_t01`, `p_tseq`, `p_tbound`, `p_f0_dur`) are kept apart
+too.
 
 ## Examples
 

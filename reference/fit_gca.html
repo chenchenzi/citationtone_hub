@@ -29,7 +29,7 @@ directly."><meta property="og:image" content="https://chenchenzi.github.io/citat
 
     <a class="navbar-brand me-2" href="../index.html">shinytone</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.0.9000</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -148,6 +148,12 @@ names).</p></li>
 tables).</p></li>
 <li><p><code>time_prenormalised</code>: logical; was the time column used as-is
 because it was already normalised to <code>[0, 1]</code>?</p></li>
+<li><p><code>time_coverage</code>: per tone, the first and last normalised time over the
+rows the model fits, as a data frame with <code>tone</code>, <code>t_first</code> and
+<code>t_last</code>. On a rescaled axis every tone runs from 0 to 1. On a time
+column used as it is, such as <code>time_prop</code> with no f0 at an end point, a
+tone can stop short of 0 or 1, and <code><a href="predict_gca.html">predict_gca()</a></code> then extrapolates
+its curve to the ends.</p></li>
 <li><p><code>convergence_warning</code>: <code>NULL</code> or the captured warning message.</p></li>
 </ul></div>
     <div class="section level2">
@@ -156,15 +162,28 @@ because it was already normalised to <code>[0, 1]</code>?</p></li>
 <div class="section">
 <h3 id="what-the-function-does-internally">What the function does internally<a class="anchor" aria-label="anchor" href="#what-the-function-does-internally"></a></h3>
 
-<ol><li><p>Within each token, normalise the time axis to <code>[0, 1]</code>. If the time
+<ol><li><p>Within each token, normalise the time axis to <code>[0, 1]</code>, from its first
+f0 (0) to its last f0 (1). If the time
 column is <em>already</em> normalised (e.g. <code>token_t01</code> from
 <code><a href="normalise_time_token.html">normalise_time_token()</a></code>), it is detected with
 <code><a href="time_already_normalised.html">time_already_normalised()</a></code> and used as-is, so tokens whose samples do
 not span the full unit interval are not stretched a second time;
-override with <code>time_normalised</code>.</p></li>
-<li><p>Build orthogonal polynomial terms <code>ot1</code>, <code>ot2</code>, ..., <code>otK</code> on the
-normalised time using <code><a href="https://rdrr.io/r/stats/poly.html" class="external-link">stats::poly()</a></code>, caching the basis
-coefficients so that <code><a href="predict_gca.html">predict_gca()</a></code> can reuse them.</p></li>
+override with <code>time_normalised</code>. A <code>&lt;tier&gt;_tseq</code> (syllables in
+sequence) or <code>&lt;tier&gt;_tbound</code> (in sequence, gap kept) is rescaled per
+token too: a token whose first or last
+syllable has no values on the axis (on a <code>&lt;tier&gt;_tseq</code>, f0 at fewer
+than two times; on a <code>&lt;tier&gt;_tbound</code>, no f0) is stretched, and its
+other syllables fill 0 to 1.</p></li>
+<li><p>Keep the rows the model fits: a finite normalised time, f0 (a
+finite value, above 0 in a column in Hz that <code><a href="hz_f0_columns.html">hz_f0_columns()</a></code>
+finds) and a tone, and a speaker and item where the model has a term
+for them. Build orthogonal polynomial terms
+<code>ot1</code>, <code>ot2</code>, ..., <code>otK</code> on the normalised time of these rows using
+<code><a href="https://rdrr.io/r/stats/poly.html" class="external-link">stats::poly()</a></code>, caching the basis coefficients so that
+<code><a href="predict_gca.html">predict_gca()</a></code> can reuse them. Rows without f0 inside a token then
+leave the coefficients unchanged, and rows with no time (a landmark
+axis outside its tier, or outside a segment's first-to-last f0) are
+left out.</p></li>
 <li><p>Construct an <code>lmer</code> formula of the form
 <code>f0 ~ (ot1 + ... + otK) * tone + (random effects)</code> using the
 options below to decide which random effects to include.</p></li>
